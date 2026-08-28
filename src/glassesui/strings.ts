@@ -19,13 +19,19 @@ const en: Dict = {
   "common.loading": "Loading.",
   "clock.title": "Time",
   "clock.offset": "UTC{{offset}}",
+  // The label on the row that holds all of them, and the words that name the days
+  // *inside* it. Three days on one line is what this row is now — the readings
+  // are two figures and a dash apiece, and three of those fit the column in every
+  // language with room over, where three rows of them would have been half the
+  // screen — so "Today" is no longer a label with a line to itself but the first
+  // word on the forecast's.
+  //
+  // The first day after this one is a word rather than a weekday: "Tomorrow" is
+  // what a reader thinks, where "Sat" is something they have to work out. The
+  // ones after it are the short weekday, because by then the word would be "the
+  // day after tomorrow" and no language says that in the room left on a line.
+  "weather.forecast": "Forecast",
   "weather.today": "Today",
-  // The days after this one, which lo's own weather tile lists under the
-  // readings and this page had no room for until the lines left over were dealt
-  // to it. The first of them is a word rather than a weekday — "Tomorrow" is
-  // what a reader thinks, where "Sat" is something they have to work out — and
-  // the ones after it are the short weekday, because by then the word would be
-  // "the day after tomorrow" and no language says that in ten cells.
   "weather.tomorrow": "Tomorrow",
   "weather.feels": "feels",
   // How much of the day's light is left, written the way the reading beside it
@@ -243,6 +249,7 @@ const ja: Dict = {
   "common.loading": "読み込み中。",
   "clock.title": "時刻",
   "clock.offset": "UTC{{offset}}",
+  "weather.forecast": "予報",
   "weather.today": "今日",
   "weather.tomorrow": "明日",
   "weather.feels": "体感",
@@ -400,6 +407,7 @@ const zh: Dict = {
   "common.loading": "加载中。",
   "clock.title": "时间",
   "clock.offset": "UTC{{offset}}",
+  "weather.forecast": "预报",
   "weather.today": "今天",
   "weather.tomorrow": "明天",
   "weather.feels": "体感",

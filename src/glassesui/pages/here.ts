@@ -15,21 +15,25 @@
 // hand — one read answers the whole of it (see feeds.ts) — so the figures cost
 // nothing but the lines they are written on.
 //
-// **What is left over goes to the days ahead.** Everything above answers a
-// question about the minute the reader is standing in; lo's weather tile also
-// lists the two days after this one, and up here they are written into whatever
-// lines nothing else wanted — which is one of them on an ordinary day and none
-// at all under a warning. That is the only way this page can say more without
-// ever saying it on a second screenful, and a second screenful is the one thing
-// it may not have: the count of everything else on the app is on the last line
-// of this one, and a count a flick away is a count nobody reads.
+// **The days ahead are a line, not a row apiece.** Everything else here answers
+// a question about the minute the reader is standing in; lo's weather tile also
+// lists the two days after this one, and a range is short enough — `Today
+// 19-28°` is a word and six characters — that today and both of them fit on one
+// line in every language with room over. They were dealt the lines nothing else
+// wanted while each of them was a row, and the arithmetic that did the dealing
+// is gone with the rows: seven lines is one screenful, this page's most is
+// seven, and a second screenful is the one thing it may not have — the count of
+// everything else on the app is on the last line of this one, and a count a
+// flick away is a count nobody reads.
 //
 // Nothing here is asked of a server except the place, its weather and the
 // warnings: the bearing and the speed are the handset's own instruments, the
 // clock is the device's, and the light left in the day is the two ends of it
-// subtracted from the hour. A row whose reading is not in yet is left off rather
-// than left blank — a page with five lines on it is a page that knows five
-// things, where a column of empty labels would be five promises it cannot keep.
+// subtracted from the hour. Every line is cut to its column by dropping whole
+// readings off it rather than by cutting the last one in half (see fitted), and
+// a row whose reading is not in yet is left off rather than left blank — a page
+// with five lines on it is a page that knows five things, where a column of
+// empty labels would be five promises it cannot keep.
 
 import {
   formatAccuracy,
@@ -40,8 +44,9 @@ import {
   joined as line,
   localClockTime,
 } from "../format";
+import { textWidth } from "../metrics";
 import { weatherLabelKey } from "../strings";
-import { BODY_LINES } from "../theme";
+import { READING_VALUES } from "../theme";
 import { placeTitle, zoneOf } from "./chrome";
 import type { PageContext, PageDefinition, PageView, ReadingRow } from "./types";
 
@@ -166,12 +171,28 @@ function whenRow(context: PageContext): ReadingRow {
       ? t("clock.offset", { offset: formatOffset(weather?.timezone?.offsetSeconds) })
       : "");
 
-  const sunrise = localClockTime(weather?.today?.sunrise);
-  const sunset = localClockTime(weather?.today?.sunset);
+  // The sun, in one event rather than two. This line used to carry `↑05:12
+  // ↓18:20` — both ends of the day, whichever of them had already happened — and
+  // it now carries the one that has not, with how long there is until it beside
+  // it. The reading it makes room for is worth more than the time it drops: at
+  // two in the afternoon the hour the sun came up is a fact about this morning,
+  // where `↓18:20 · light 3h48m` is the answer to the question a reader looking
+  // at this line is actually asking (see sunReading).
+  const [sun, span] = sunReading(context);
 
+  // And the clock time of that event is the first thing off the line when it will
+  // not fit, rather than the span or the zone. Wherever the server named the zone
+  // — which is nearly everywhere — all four readings fit in all three languages
+  // with four to eighty-six pixels over. It is the offset standing in for a name
+  // that fills the line: `9月30日周三 · UTC+09:00 · ↑05:13 · 日出 13小时20分钟` is
+  // sixty-two pixels past the end of the column, and the same line without the
+  // hour is nineteen inside it. What the span says is how long the reader has;
+  // the hour it lands on is the same fact told a second way, and the second way
+  // is the one that can go.
+  const whole = line(date, named, sun, span);
   return {
     label: t("clock.title"),
-    value: line(date, named, sunrise && sunset ? `↑${sunrise} ↓${sunset}` : ""),
+    value: textWidth(whole) <= READING_VALUES.width ? whole : line(date, named, span),
   };
 }
 
@@ -248,21 +269,28 @@ function fixRow(context: PageContext): ReadingRow | null {
 }
 
 /**
- * How much of the day's light is left — the one reading on this page that is
- * neither the server's nor an instrument's, but the two clocks either side of
- * the reader subtracted from each other.
+ * The sun: the next thing it is going to do, and how long there is until it —
+ * the one reading on this page that is neither the server's nor an instrument's,
+ * but the two clocks either side of the reader subtracted from each other.
  *
- * Three answers to what is really one question, and which one is true is decided
- * by where the hour falls between the two:
+ * Two strings rather than one because the line above may only have room for the
+ * second of them, and the second is the one worth keeping (see whenRow). What
+ * they say is decided by where the hour falls between the day's two ends:
  *
- *   • Before the sun is up: how long until it is.
- *   • While it is up: how long there is left of it, which is the figure this was
- *     added for. A reader deciding whether to walk the long way home is asking
- *     exactly this, and the sunset time alone makes them do the subtraction in
- *     their head against an hour that is in the far corner of the screen.
- *   • After dark: how long until tomorrow's, which is the one that has to cross
- *     midnight — the minutes left of tonight plus the minutes into tomorrow that
- *     the sun comes back.
+ *   • Before the sun is up: when it comes up, and how long until it does.
+ *   • While it is up: when it goes down, and how long there is left of it —
+ *     which is the figure this was added for. A reader deciding whether to walk
+ *     the long way home is asking exactly this, and the sunset time alone makes
+ *     them do the subtraction in their head against an hour that is in the far
+ *     corner of the screen.
+ *   • After dark: tomorrow's sunrise, and how long until it — the one that has
+ *     to cross midnight, which is the minutes left of tonight plus the minutes
+ *     into tomorrow that the sun comes back.
+ *
+ * The event named is always the one that has not happened yet, so the hour on
+ * this line and the stretch beside it are the same moment written twice. Both
+ * ends of the day used to be here and neither of them was: at two in the
+ * afternoon `↑05:12` is a fact about a morning that is over.
  *
  * Tomorrow's own sunrise where the forecast reaches that far, which it does: lo
  * asks Open-Meteo for three days and hands over the two after this one. Today's
@@ -271,25 +299,57 @@ function fixRow(context: PageContext): ReadingRow | null {
  *
  * Nothing at all inside the polar circles in their season, where Open-Meteo
  * answers with no sunrise and no sunset because there is none: a reading with
- * nothing behind it is a line this page leaves off.
+ * nothing behind it is a reading this page leaves off.
  */
-function lightReading(context: PageContext): string {
+function sunReading(context: PageContext): [at: string, span: string] {
   const { weather, t } = context;
-  const rise = minutesOfClock(localClockTime(weather?.today?.sunrise));
-  const set = minutesOfClock(localClockTime(weather?.today?.sunset));
-  if (rise == null || set == null) return "";
+  const rising = localClockTime(weather?.today?.sunrise);
+  const setting = localClockTime(weather?.today?.sunset);
+  const rise = minutesOfClock(rising);
+  const set = minutesOfClock(setting);
+  if (rise == null || set == null) return ["", ""];
 
   const now = clockMinutes(context);
-  if (now >= rise && now < set) return t("weather.daylight", { span: formatSpan(set - now, t) });
+  if (now >= rise && now < set) {
+    return [`↓${setting}`, t("weather.daylight", { span: formatSpan(set - now, t) })];
+  }
 
-  const tomorrow = minutesOfClock(localClockTime(weather?.upcoming?.[0]?.sunrise)) ?? rise;
-  const until = now < rise ? rise - now : DAY_MINUTES - now + tomorrow;
-  return t("weather.sunrise", { span: formatSpan(until, t) });
+  const next = localClockTime(weather?.upcoming?.[0]?.sunrise);
+  const tomorrow = minutesOfClock(next) ?? rise;
+  const before = now < rise;
+  return [
+    `↑${before ? rising : next || rising}`,
+    t("weather.sunrise", { span: formatSpan(before ? rise - now : DAY_MINUTES - now + tomorrow, t) }),
+  ];
 }
 
-/** The two weather lines: what it is out there now, and what the day is doing. */
+/**
+ * A line of readings cut to its column by dropping whole readings off the end,
+ * rather than by cutting the last of them in half.
+ *
+ * The body is clipped in pixels wherever it overruns (see layout.ts), and that
+ * is the right answer for a sentence, a place name or a headline — the words are
+ * one thing and half of it is still most of it. A row of readings is not one
+ * thing. Clip that and the line ends in `61…`, which is a figure with its unit
+ * taken off and no way to tell that from a figure; and what pushed it over is
+ * always the *widest* reading on it, so the one that gets mangled is chosen by
+ * the length of a translated word rather than by what it says.
+ *
+ * So the readings that may go are named as such and go whole, from the end. What
+ * comes back always fits or is down to the ones that may not go, and those are
+ * the paint's to clip in the ordinary way.
+ */
+function fitted(kept: string[], optional: string[]): string {
+  for (let take = optional.length; take > 0; take--) {
+    const text = line(...kept, ...optional.slice(0, take));
+    if (textWidth(text) <= READING_VALUES.width) return text;
+  }
+  return line(...kept);
+}
+
+/** The two weather lines: what it is out there now, and what the days ahead are doing. */
 function skyRows(context: PageContext): ReadingRow[] {
-  const { weather, t } = context;
+  const { weather, locale, t } = context;
   const current = weather?.current;
   if (!current) return [];
 
@@ -304,28 +364,71 @@ function skyRows(context: PageContext): ReadingRow[] {
   const rows: ReadingRow[] = [
     {
       label: t("weather.title"),
-      value: line(
-        temperature != null ? `${temperature}${unit}` : NONE,
-        // The lowercase short form, because this is the second thing on a line
-        // rather than the label of a row of its own.
-        apparent != null ? `${t("weather.feels")} ${apparent}°` : "",
-        t(weatherLabelKey(current.weatherCode)),
+      // The humidity and the wind belong on *this* line and not the one under
+      // it, because they are readings of the same minute the temperature is:
+      // Open-Meteo sends all four in the `current` block, and a forecast day
+      // carries a range, a code and the two ends of the light and no aggregate
+      // of either of these (see LoWeatherDay). A 61% under a label that says
+      // "Today" is a claim about the whole day that nothing measured.
+      //
+      // They are also the two that give way when the line is full, and in that
+      // order. Three readings and a condition fitted the column in every
+      // language with room over; five of them do not, and it is the longest
+      // conditions that put it past the end — `Severe thunderstorm with hail`
+      // spends the whole line on its own. What is out there is worth more than
+      // how much water is in it, and both are worth more than a mangled word, so
+      // the wind goes first, the humidity after it, and the temperature and the
+      // sky stay whatever the weather is called (see fitted).
+      value: fitted(
+        [
+          temperature != null ? `${temperature}${unit}` : NONE,
+          // The lowercase short form, because this is the second thing on a line
+          // rather than the label of a row of its own.
+          apparent != null ? `${t("weather.feels")} ${apparent}°` : "",
+          t(weatherLabelKey(current.weatherCode)),
+        ],
+        [
+          humidity != null ? `${humidity}%` : "",
+          wind != null ? `${wind} ${weather?.units?.wind ?? "km/h"}` : "",
+        ],
       ),
     },
   ];
 
-  // The day's own line, and the light left in it on the end of it. The sun
-  // belongs here rather than beside the hour above: the clock line already
-  // carries the date, the zone and both ends of the day, and what is left of the
-  // light is a fact about *this day* — which is what this row is — rather than
-  // about what time it is.
-  const today = line(
-    high != null && low != null ? `${low}-${high}°` : "",
-    humidity != null ? `${humidity}%` : "",
-    wind != null ? `${wind} ${weather?.units?.wind ?? "km/h"}` : "",
-    lightReading(context),
-  );
-  if (today) rows.push({ label: t("weather.today"), value: today });
+  // And under it the forecast: today and the days after it on one line, each of
+  // them a name and a range.
+  //
+  // One row rather than the two or three this used to be dealt, and that is what
+  // a range costs to write down: `Today 19-28°` is a word and six characters, and
+  // three of them fit the column in every language with room over. Three rows of
+  // the same figures would have been half the screen for a table with one column
+  // in it — and the arithmetic that dealt them the lines nothing else wanted is
+  // gone with them, because a page whose forecast is a single line has a line for
+  // everything else whatever the weather is doing.
+  //
+  // What the day is *called* is not on it. `Light rain` is as wide as two more
+  // days, and a row that had it for tomorrow and not for the day after would be a
+  // row a reader has to be told the shape of. What it is doing out there now is
+  // on the line above, in the words this one cannot spare.
+  const ahead = (weather?.upcoming ?? []).map((day, index) => {
+    const top = round(day.tempMax);
+    const bottom = round(day.tempMin);
+    // A day with no range is not a reading, and it is not a gap either: the days
+    // are named as they are written, so a missing tomorrow leaves the row reading
+    // `Today … · Sun …` rather than putting an empty word where a day should be.
+    if (top == null || bottom == null) return "";
+    const named = index === 0 ? t("weather.tomorrow") : dayName(day.date, locale);
+    return named ? `${named} ${bottom}-${top}°` : "";
+  });
+
+  // Today is the one that may not go — a forecast whose first day is tomorrow is
+  // a forecast with a hole where the reader is standing — and the days after it
+  // go from the end as the column runs out (see fitted). Which is where the
+  // widest of them are anyway: a name and a range are the same width every day,
+  // so what decides how many fit is the language and how cold it is, and both are
+  // the same for all three of them.
+  const forecast = fitted([high != null && low != null ? `${t("weather.today")} ${low}-${high}°` : ""], ahead);
+  if (forecast) rows.push({ label: t("weather.forecast"), value: forecast });
   return rows;
 }
 
@@ -336,47 +439,6 @@ function dayName(date: string | undefined, locale: string): string {
   // formatter disagree by an hour, and nothing anywhere is twelve hours out.
   const noon = Date.parse(`${date}T12:00:00`);
   return Number.isNaN(noon) ? "" : new Intl.DateTimeFormat(locale, { weekday: "short" }).format(noon);
-}
-
-/**
- * The days after this one, in as many lines as the page has left over.
- *
- * lo's weather tile lists them under its readings and this page has never had
- * the room, because every other line here answers a question about the minute
- * the reader is standing in and the forecast does not. That is exactly why it is
- * the thing that gives way: it takes the lines nothing else wanted, so a
- * screen with a warning in force over it is a screen with no forecast on it and
- * still one screenful — where a row added unconditionally would have paginated
- * the opening page and put the count of everything else a flick away.
- *
- * A day with no range is not a line. The condition on its own is a word without
- * a figure, and this row exists to be read at a glance against the one above it.
- */
-function aheadRows(context: PageContext, room: number): ReadingRow[] {
-  const { weather, locale, t } = context;
-  if (room <= 0) return [];
-
-  const rows: ReadingRow[] = [];
-  for (const day of weather?.upcoming ?? []) {
-    if (rows.length >= room) break;
-    const high = round(day.tempMax);
-    const low = round(day.tempMin);
-    if (high == null || low == null) continue;
-    rows.push({
-      // The nearest day is a word and the ones after it are weekdays: "Tomorrow"
-      // is what the reader is already thinking, and by the day after that the
-      // word for it is longer than any margin here.
-      label: rows.length === 0 ? t("weather.tomorrow") : dayName(day.date, locale),
-      value: line(
-        `${low}-${high}°`,
-        // Nothing for a day the forecast gave no code for, where the current
-        // weather above says "Unknown": that line has a temperature to hang the
-        // admission on and this one would be a whole reading of it.
-        day.weatherCode != null ? t(weatherLabelKey(day.weatherCode)) : "",
-      ),
-    });
-  }
-  return rows;
 }
 
 /**
@@ -517,30 +579,24 @@ export const herePage: PageDefinition = {
       return { ...heading, block: { kind: "note", text: t("glasses.noFix") } };
     }
 
-    // What is standing here now, in the order it is read: the day, the fix, the
-    // sky, then whatever is in force overhead and the count of the two pages
-    // after this one. Every one of them is about the minute the reader is in.
+    // What is standing here, in the order it is read: the day, the fix, the sky
+    // and the days after it, then whatever is in force overhead and the count of
+    // the two pages after this one.
+    //
+    // Seven of them at the very most — the day, the fix, two of weather, a
+    // warning and two of tally — which is the whole of the arithmetic now that
+    // the forecast is a line rather than a row a day. There used to be a sum
+    // here, dealing whatever lines were left over to the days ahead so that a
+    // screen under a warning could not paginate; a page that cannot overrun in
+    // the first place does not need one.
     const rows: ReadingRow[] = [whenRow(context)];
     const fix = fixRow(context);
     if (fix) rows.push(fix);
     rows.push(...skyRows(context));
 
     const warning = warningRow(context);
-    const rest = warning ? [warning, ...tallyRows(context)] : tallyRows(context);
-
-    // And then the forecast, in however many lines are left once everything that
-    // is about now has been written down. It is dealt the leftovers rather than
-    // given a line of its own for the reason the whole page is one screenful: a
-    // seventh row is the count of what is on the other two pages, and a reader
-    // who had to flick past tomorrow's weather to find out whether anything is
-    // waiting for them would flick once and stop coming back. This is the same
-    // arithmetic the two list pages do with their groups, done between subjects
-    // rather than within one (see stack.ts).
-    //
-    // It is the last thing decided and lands in the middle of the page all the
-    // same: tomorrow belongs under today, not under the tally of the newswire.
-    rows.push(...aheadRows(context, BODY_LINES - rows.length - rest.length));
-    rows.push(...rest);
+    if (warning) rows.push(warning);
+    rows.push(...tallyRows(context));
 
     return { ...heading, block: { kind: "readings", rows } };
   },

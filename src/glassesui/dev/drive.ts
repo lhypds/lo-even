@@ -144,13 +144,21 @@ while (display.current() !== "here") {
   await settle();
 }
 calls.length = 0;
-// A minute turning over is the same page with one different line in it — the
-// clock in the corner of the heading, and nothing else on the standing page.
+// A minute turning over is the same page with two different lines in it: the
+// clock in the corner of the heading, and the column of readings underneath it,
+// because the light left in the day is counted to the minute and rides on the
+// standing page's first line (see sunReading in here.ts).
+//
+// Two writes rather than one, and that is the whole of what this checks — the
+// signature of the page has not changed, so what goes out is the two columns
+// that did rather than the eight containers that did not. It said one write
+// until the daylight countdown was added and has meant "not a rebuild" all
+// along: the day this becomes `rebuild(8)` is the day a tick costs a whole page.
 display.render(context({ now: new Date("2026-08-28T14:33:00+09:00") }));
 await settle();
 check(
-  "a minute tick is one update, not a rebuild",
-  calls.length === 1 && calls[0].startsWith("upgrade"),
+  "a minute tick is two updates, not a rebuild",
+  calls.length === 2 && calls.every((call) => call.startsWith("upgrade")),
   calls.join(" ") || "(nothing written)",
 );
 
