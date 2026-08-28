@@ -2,7 +2,7 @@
   "package_id": "com.gcc3.lo",
   "edition": "202601",
   "name": "lo",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "min_app_version": "2.2.9",
   "min_sdk_version": "0.0.14",
   "entrypoint": "index.html",
@@ -10,11 +10,7 @@
     {
       "name": "network",
       "desc": "lo uses your phone location to load nearby information and publish your saved places and spoken posts.",
-      "whitelist": [
-        "https://lo.gcc3.com",
-        "https://cli.simple-ai.io",
-        "https://api.openai.com"
-      ]
+      "whitelist": ["https://lo.gcc3.com", "https://cli.simple-ai.io", "https://api.openai.com"]
     },
     {
       "name": "g2-microphone",
@@ -23,4 +19,3 @@
   ],
   "supported_languages": ["en", "ja", "zh"]
 }
-
