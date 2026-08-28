@@ -38,6 +38,18 @@
 // double tap as a press of its own, so a tap here waits to find out whether a
 // second one is coming (see main.ts).
 //
+// **And a hold says it again.** A transcriber mishears and there is no keyboard
+// here to correct it with, so the commonest thing wrong with the words on this
+// screen is that they are not the ones that were said — and the answer to that is
+// the gesture that got them in the first place. It replaces the draft rather than
+// standing beside it: the reader is saying the same thing over, not adding to it.
+//
+// It is the one gesture on this screen that is *not* written on it, and that is
+// the rule the line below keeps rather than an exception to it. The wheel and the
+// tap are spelled out because they do something here they do nowhere else. A hold
+// opens the microphone on every screen in the app, this one included, and a hint
+// that said so would be teaching the reader the one thing they already know.
+//
 // **What the preview is for.** It shows the words as the chosen answer would
 // actually send them, which is not the same string three times: lo takes 48
 // characters as the name of a mark, 500 as the words of a post and 1000 as the

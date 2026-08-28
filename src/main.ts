@@ -829,13 +829,33 @@ async function main() {
     }
 
     if (eventType === OsEventTypeList.LONG_PRESS_EVENT) {
-      // The hold opens the microphone, and that is now the whole of what it does.
-      // It used to say yes at both ends of a dictation; the composer answers with
-      // taps now, and a hold there is ignored rather than made a second way to
-      // save — a reader who holds again is reaching for the gesture that records,
-      // and starting a new sentence over the one still standing would throw away
-      // exactly what they were about to be asked about.
-      if (draft) return;
+      // The hold opens the microphone, and that is the whole of what it does —
+      // including on the screen that is already asking about a sentence. A reader
+      // who holds while a draft is standing is reaching for the gesture that
+      // records, and what they almost always mean by it is that the words on the
+      // screen are not the ones they meant to say. A transcriber mishears, and
+      // this one has no keyboard behind it to correct with.
+      //
+      // So it says it again, over the top. The alternative the reader has is two
+      // taps to throw it away and then a hold, which is the same thing done in two
+      // gestures and with a moment in between where the sentence is gone and the
+      // microphone is not open yet.
+      //
+      // The old sentence goes first, and `discard` is what takes it: it drops the
+      // draft, takes the composer down and — the part that matters here — clears
+      // the tap that may already be sitting in the timer waiting to send it. A
+      // hold that arrived half a second after a tap would otherwise send the very
+      // sentence it was replacing.
+      //
+      // A reply says it again to the same person. The composer has the display, so
+      // there is no open letter to read the address off any more; the draft is
+      // carrying it, which is what makes it the thing to ask.
+      if (draft) {
+        const again = draft.kind === "reply" ? draft.to : "";
+        discard();
+        void startRecording(again);
+        return;
+      }
       // And a step in that has not been taken yet is dropped rather than left to
       // land in the middle of the recording it interrupted.
       disarmEnter();

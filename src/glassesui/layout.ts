@@ -48,7 +48,6 @@ import {
   PROSE,
   READING_LABELS,
   READING_VALUES,
-  cellsIn,
   footLineRect,
   itemRect,
   titleCells,
@@ -249,10 +248,24 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
   // the place would push the place off the screen just when something is
   // happening to it. What it may not run into is the path in the corner beyond
   // it, so it is cut to whatever that has left it (see theme.ts).
+  //
+  // Cut to the pixel, like the body and unlike the heading. This line used to be
+  // measured in cells, and a cell is the widest glyph there is — so a line of
+  // Latin was charged about a fifth more than it costs and lost five or six
+  // characters off a line it fitted on. `● Recording — release to stop.` is 271
+  // pixels and the narrowest footer in the app is 324, and it was arriving as
+  // `● Recording — release to st…`.
+  //
+  // The over-estimate is what the heading wants and this line does not, and the
+  // difference is what each is cut *against*. The title is cut against a corner
+  // laid over its own rect, so charging too much is the whole of the air between
+  // them. This rect already ends a cell short of the trail's — `footLineRect`
+  // subtracts one — so the air is in the geometry, and charging for it twice only
+  // shortens the sentence.
   const path = chrome.path ?? "";
   const footLine = footLineRect(path);
   const foot = chrome.status || view.context || chrome.place;
-  panels.push(panel(CONTAINER.footLine, footLine, clipCells(foot, cellsIn(footLine.width)), MUTED, 3));
+  panels.push(panel(CONTAINER.footLine, footLine, clip(foot, footLine.width), MUTED, 3));
 
   // Where the reader is standing in the app, and how far through it. Faint,
   // because it is the one thing on the screen that is about the app rather than

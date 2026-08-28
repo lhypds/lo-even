@@ -482,10 +482,11 @@ export function noteRect(lines: string[]): Rect {
 }
 
 /**
- * How wide a plain container is, in character cells. The body is not cut this
- * way any more — it is cut to the pixel, against the rect itself (see
- * metrics.ts) — and what is left here is the two lines of chrome that are cut
- * against the corner beside them rather than against the frame.
+ * How wide a plain container is, in character cells. Neither the body nor the
+ * footer is cut this way any more — both have an edge of their own and are cut
+ * to the pixel against it (see metrics.ts) — and what is left is the heading,
+ * which is cut against a corner laid over its own rect and has nowhere but this
+ * over-estimate to get the air between them from.
  */
 export function cellsIn(width: number): number {
   return Math.max(1, Math.floor(width / CHAR_WIDTH));

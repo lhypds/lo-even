@@ -189,11 +189,15 @@ export function clip(value: string, slot: number): string {
 }
 
 /**
- * The same cut, measured in cells, and it belongs to the two lines of chrome
- * alone: the title in the heading and the place name in the footer, both of
- * which are cut against the corner beside them rather than against the frame.
- * Over-estimating there buys air between two strings; over-estimating in the
- * body only left the body short (see above).
+ * The same cut, measured in cells, and it belongs to one line: the title in the
+ * heading, which is cut against a corner laid over its own rect rather than
+ * against anything with an edge of its own. Over-estimating there *is* the air
+ * between the two strings, and there is nowhere else for that air to come from.
+ *
+ * The footer used to be cut this way as well and is not any more. It has an edge
+ * of its own — its rect stops a cell short of the trail's, so the air is in the
+ * geometry — and being charged for it twice cost a line of Latin five or six
+ * characters it had the room for (see chromePanels in layout.ts).
  */
 export function clipCells(value: string, width: number): string {
   const text = value.trim();

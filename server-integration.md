@@ -281,7 +281,9 @@ few. A sentence said out here is a mark when it is a note to yourself and a post
 when it is left for whoever comes past, the difference is the whole of what those
 two endpoints are, and nothing in the words themselves says which. So the hold
 records and stops there, and the screen asks: the wheel picks between the two, a
-tap sends it, two taps throw it away (see `src/glassesui/pages/compose.ts`).
+tap sends it, two taps throw it away, and a hold says it again over the top — a
+transcriber mishears and there is no keyboard up here to correct it with (see
+`src/glassesui/pages/compose.ts`).
 
 Those two endpoints take the same shape of body — the fix, the time, and what was
 said — and both look the place up themselves rather than trusting a name from here,

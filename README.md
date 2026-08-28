@@ -184,12 +184,22 @@ answered on the phone.
 - **Scroll**, while that question is up — the other answer, where there are two.
 - **Single tap**, while that question is up — send it as the answer you are on.
 - **Double tap**, while that question is up — throw it away.
+- **Press and hold**, while that question is up — say it again, over the top of
+  what is there. A transcriber mishears and there is no keyboard up here to
+  correct it with, so the answer to the wrong words is the gesture that got them.
+  A reply said again goes to the same person.
 - **Single tap**, while a recording or a transcript is still in the air — throw it
   away.
 
 The tap saves and two taps drop only on that one screen, and the swap is the point:
 everywhere else a tap costs nothing, but a sentence you have already said is worth
 something, and throwing it away should take a gesture you had to mean.
+
+The hold is the one gesture that means the same thing on that screen as on every
+other, and it is the only one of the four not written on it. The wheel and the taps
+are spelled out there because they do something they do nowhere else; a hold opens
+the microphone everywhere, and a line saying so would be teaching you the one thing
+you already know.
 
 A tap waits about half a second before it is taken as a tap, because the host
 reports the first press of a double tap as a press of its own and the two now mean
