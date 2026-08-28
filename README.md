@@ -47,11 +47,19 @@ edge: a corner that resized with the dictionary would make the heading a differe
 width in Japanese than in English.
 
 **1 · Where you are standing.** The heading is the place and the hour there, with
-the bearing beside it while the compass is on. Under it: the day, the daylight and
-the zone; the fix, how sure it is and how high; what it is like out and what the
-day is doing; whatever is in force overhead — and then two lines counting what is
-waiting on the other two pages, so a flick is never spent finding out there was
-nothing there.
+the bearing beside it while the compass is on. Under it: the day, the two ends of
+its light and the zone; the fix, how sure it is, how high and how fast if the
+phone is actually moving; what it is like out; what the day is doing and how much
+of its light is left; whatever is in force overhead — and then two lines counting
+what is waiting on the other two pages, so a flick is never spent finding out
+there was nothing there.
+
+Whatever lines are left over after all that go to the days ahead — tomorrow's
+range and weather, then the day after's — which is one line on an ordinary day and
+none at all under a warning. The forecast is the only thing on this page that is
+not about the minute you are standing in, so it is the thing that gives way: the
+alternative was a page that spilled onto a second screenful, and the count of
+everything else in the app is on the last line of the first one.
 
 **2 · Who is here.** The last word of each exchange waiting in the inbox, the
 latest posts left on this street, what is on within walking distance, and the

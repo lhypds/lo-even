@@ -15,26 +15,54 @@
 // hand — one read answers the whole of it (see feeds.ts) — so the figures cost
 // nothing but the lines they are written on.
 //
+// **What is left over goes to the days ahead.** Everything above answers a
+// question about the minute the reader is standing in; lo's weather tile also
+// lists the two days after this one, and up here they are written into whatever
+// lines nothing else wanted — which is one of them on an ordinary day and none
+// at all under a warning. That is the only way this page can say more without
+// ever saying it on a second screenful, and a second screenful is the one thing
+// it may not have: the count of everything else on the app is on the last line
+// of this one, and a count a flick away is a count nobody reads.
+//
 // Nothing here is asked of a server except the place, its weather and the
-// warnings: the bearing and the speed are the handset's own instruments, and the
-// clock is the device's. A row whose reading is not in yet is left off rather
+// warnings: the bearing and the speed are the handset's own instruments, the
+// clock is the device's, and the light left in the day is the two ends of it
+// subtracted from the hour. A row whose reading is not in yet is left off rather
 // than left blank — a page with five lines on it is a page that knows five
 // things, where a column of empty labels would be five promises it cannot keep.
 
 import {
   formatAccuracy,
+  formatAge,
   formatCoords,
   formatOffset,
+  formatSpan,
   joined as line,
   localClockTime,
-  relativeTime,
 } from "../format";
 import { weatherLabelKey } from "../strings";
+import { BODY_LINES } from "../theme";
 import { placeTitle, zoneOf } from "./chrome";
 import type { PageContext, PageDefinition, PageView, ReadingRow } from "./types";
 
 /** A dash, rather than a zero that would read as a reading. */
 const NONE = "—";
+
+/** Minutes in a day, for the one reading that counts across midnight. */
+const DAY_MINUTES = 24 * 60;
+
+// Under this the phone is standing still and saying so badly. A GPS fix wanders
+// by metres while a hand is held out, and the speed it derives from that wander
+// is a tenth of a metre a second of nothing at all — so a line that printed
+// every reading would say the reader was walking while they stood at a crossing.
+// Half a metre a second is a third of a walking pace: past it something is
+// actually happening.
+const MOVING_MS = 0.5;
+
+// Past this a fix is old enough to say so. Two minutes because the app takes one
+// on the minute beat: a reading a minute old is the newest there has ever been,
+// and a line that announced its age would be announcing that the app is working.
+const STALE_MS = 120_000;
 
 // Eight points is as fine as a name is worth: a phone in a hand wanders further
 // than sixteen of them are apart.
@@ -87,6 +115,37 @@ function round(value: number | null | undefined): number | null {
   return Number.isFinite(value) ? Math.round(value as number) : null;
 }
 
+/** `05:12` as minutes since midnight, and null for anything that is not one. */
+function minutesOfClock(face: string): number | null {
+  const [hours, minutes] = face.split(":").map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : null;
+}
+
+/**
+ * The clock where the reader is standing, as minutes since its own midnight.
+ *
+ * Everything about the sun on this page is arithmetic between two wall clocks,
+ * and this is what makes it arithmetic rather than timezone work: Open-Meteo
+ * writes sunrise as the place's own local time with no offset on it
+ * ("2026-08-28T05:12"), so a `Date` made of it would be re-read as the handset's
+ * zone — right for a reader at home and an hour or two wrong for one who has
+ * just landed. Two numbers of minutes taken in the same zone subtract correctly
+ * without either of them ever having been a date.
+ *
+ * `en-GB` because this is arithmetic rather than anything anybody reads: the
+ * reader's own locale would set this hour in whatever numerals and order it
+ * writes an hour in, and it is being taken apart on a colon two lines below.
+ */
+function clockMinutes(context: PageContext): number {
+  const face = new Intl.DateTimeFormat("en-GB", {
+    timeZone: zoneOf(context),
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(context.now);
+  return minutesOfClock(face) ?? 0;
+}
+
 /** The day and the daylight — everything about the time but the hour, which is in the heading. */
 function whenRow(context: PageContext): ReadingRow {
   const { now, weather, locale, t } = context;
@@ -123,8 +182,8 @@ function fixRow(context: PageContext): ReadingRow | null {
 
   // How high, from whichever of the two knows: the device's own altitude where the
   // GPS gives one, and the terrain the forecast was made for where it does not —
-  // which on the glasses is always, because the Even bridge hands over a fix with
-  // no altitude in it.
+  // which on the glasses is nearly always, because the fix the Even bridge hands
+  // over may carry an altitude and mostly does not (see main.ts).
   //
   // Written bare, as a figure. The two are not quite the same claim — Open-Meteo's
   // elevation is a model cell several kilometres wide, right about the valley and
@@ -139,16 +198,98 @@ function fixRow(context: PageContext): ReadingRow | null {
   // How old the fix is, and only once it is old enough to matter: a reading taken
   // this minute has nothing to say about its own age, and "just now" on every
   // line of every page is a word that stops being read.
-  const age = fixAt && Date.now() - fixAt > 120_000 ? relativeTime(new Date(fixAt).toISOString(), locale, t) : "";
+  //
+  // Spelled with the word that says it is an age, which no other line in the app
+  // needs: this one already has two lengths in metres on it, and "39 m · 39m" is
+  // a height and three quarters of an hour told apart by a space (see formatAge).
+  const age = fixAt && Date.now() - fixAt > STALE_MS ? formatAge(new Date(fixAt).toISOString(), locale, t) : "";
 
+  // How fast over the ground, and only while that is a fact rather than a jitter
+  // (see MOVING_MS). It is the GPS's own figure and never the accelerometer's —
+  // that instrument measures force, and steady movement has none, so a speed
+  // taken off it is nought on a train doing two hundred. In metres a second,
+  // which is what lo's own compass card says: the same reading in the same units
+  // on both screens.
+  //
+  // Never beside the age, and that is about honesty rather than about the width
+  // it buys back: a speed is a reading off the fix like any other, so a fix three
+  // quarters of an hour old that says 1.4 m/s is saying the reader is walking
+  // *now* on the strength of where they were walking then. The line either says
+  // how fast this is or how old it is, and once it is old enough to have to say
+  // so, that is the only one of the two that is still true.
+  //
+  // Left off far more often than it is drawn in any case: most fixes carry no
+  // speed at all, and the Even bridge's often carries none even while the phone
+  // is moving. A row that said "0.0 m/s" for all of that would be a claim about
+  // the reader made out of a field nobody filled in.
+  const speed =
+    !age && Number.isFinite(coords.speed) && (coords.speed as number) >= MOVING_MS
+      ? `${(coords.speed as number).toFixed(1)} m/s`
+      : "";
+
+  // Where, how sure, how high, and then whichever of the last two is true. The
+  // ± comes off with the speed once there is an age to write, and for a plainer
+  // reason than the speed's: this line is four readings and a limit, and at
+  // three quarters of an hour old the answer to "how well does this screen know
+  // where I am standing" is the age rather than the metres. `35.6580°N
+  // 139.7016°E · ±12 m · 39 m · 39分钟前` is four pixels past the end of the
+  // column in Chinese — it would arrive with its last character clipped — and
+  // the reading that has to go is the one the age has already answered over.
   return {
     label: t("location.fix"),
-    value: line(formatCoords(coords.latitude, coords.longitude), formatAccuracy(coords.accuracy), height, age),
+    value: line(
+      formatCoords(coords.latitude, coords.longitude),
+      age ? "" : formatAccuracy(coords.accuracy),
+      height,
+      speed,
+      age,
+    ),
   };
 }
 
+/**
+ * How much of the day's light is left — the one reading on this page that is
+ * neither the server's nor an instrument's, but the two clocks either side of
+ * the reader subtracted from each other.
+ *
+ * Three answers to what is really one question, and which one is true is decided
+ * by where the hour falls between the two:
+ *
+ *   • Before the sun is up: how long until it is.
+ *   • While it is up: how long there is left of it, which is the figure this was
+ *     added for. A reader deciding whether to walk the long way home is asking
+ *     exactly this, and the sunset time alone makes them do the subtraction in
+ *     their head against an hour that is in the far corner of the screen.
+ *   • After dark: how long until tomorrow's, which is the one that has to cross
+ *     midnight — the minutes left of tonight plus the minutes into tomorrow that
+ *     the sun comes back.
+ *
+ * Tomorrow's own sunrise where the forecast reaches that far, which it does: lo
+ * asks Open-Meteo for three days and hands over the two after this one. Today's
+ * stands in where it somehow does not, and it is wrong by the minute or two the
+ * sunrise moves in a day — worth saying, rather than saying nothing.
+ *
+ * Nothing at all inside the polar circles in their season, where Open-Meteo
+ * answers with no sunrise and no sunset because there is none: a reading with
+ * nothing behind it is a line this page leaves off.
+ */
+function lightReading(context: PageContext): string {
+  const { weather, t } = context;
+  const rise = minutesOfClock(localClockTime(weather?.today?.sunrise));
+  const set = minutesOfClock(localClockTime(weather?.today?.sunset));
+  if (rise == null || set == null) return "";
+
+  const now = clockMinutes(context);
+  if (now >= rise && now < set) return t("weather.daylight", { span: formatSpan(set - now, t) });
+
+  const tomorrow = minutesOfClock(localClockTime(weather?.upcoming?.[0]?.sunrise)) ?? rise;
+  const until = now < rise ? rise - now : DAY_MINUTES - now + tomorrow;
+  return t("weather.sunrise", { span: formatSpan(until, t) });
+}
+
 /** The two weather lines: what it is out there now, and what the day is doing. */
-function skyRows({ weather, t }: PageContext): ReadingRow[] {
+function skyRows(context: PageContext): ReadingRow[] {
+  const { weather, t } = context;
   const current = weather?.current;
   if (!current) return [];
 
@@ -173,12 +314,68 @@ function skyRows({ weather, t }: PageContext): ReadingRow[] {
     },
   ];
 
+  // The day's own line, and the light left in it on the end of it. The sun
+  // belongs here rather than beside the hour above: the clock line already
+  // carries the date, the zone and both ends of the day, and what is left of the
+  // light is a fact about *this day* — which is what this row is — rather than
+  // about what time it is.
   const today = line(
     high != null && low != null ? `${low}-${high}°` : "",
     humidity != null ? `${humidity}%` : "",
     wind != null ? `${wind} ${weather?.units?.wind ?? "km/h"}` : "",
+    lightReading(context),
   );
   if (today) rows.push({ label: t("weather.today"), value: today });
+  return rows;
+}
+
+/** The short weekday a forecast day falls on, off a date that has no time in it. */
+function dayName(date: string | undefined, locale: string): string {
+  // Noon rather than midnight, which is lo's own way of naming these days: a
+  // date read as midnight lands on the day before wherever the parse and the
+  // formatter disagree by an hour, and nothing anywhere is twelve hours out.
+  const noon = Date.parse(`${date}T12:00:00`);
+  return Number.isNaN(noon) ? "" : new Intl.DateTimeFormat(locale, { weekday: "short" }).format(noon);
+}
+
+/**
+ * The days after this one, in as many lines as the page has left over.
+ *
+ * lo's weather tile lists them under its readings and this page has never had
+ * the room, because every other line here answers a question about the minute
+ * the reader is standing in and the forecast does not. That is exactly why it is
+ * the thing that gives way: it takes the lines nothing else wanted, so a
+ * screen with a warning in force over it is a screen with no forecast on it and
+ * still one screenful — where a row added unconditionally would have paginated
+ * the opening page and put the count of everything else a flick away.
+ *
+ * A day with no range is not a line. The condition on its own is a word without
+ * a figure, and this row exists to be read at a glance against the one above it.
+ */
+function aheadRows(context: PageContext, room: number): ReadingRow[] {
+  const { weather, locale, t } = context;
+  if (room <= 0) return [];
+
+  const rows: ReadingRow[] = [];
+  for (const day of weather?.upcoming ?? []) {
+    if (rows.length >= room) break;
+    const high = round(day.tempMax);
+    const low = round(day.tempMin);
+    if (high == null || low == null) continue;
+    rows.push({
+      // The nearest day is a word and the ones after it are weekdays: "Tomorrow"
+      // is what the reader is already thinking, and by the day after that the
+      // word for it is longer than any margin here.
+      label: rows.length === 0 ? t("weather.tomorrow") : dayName(day.date, locale),
+      value: line(
+        `${low}-${high}°`,
+        // Nothing for a day the forecast gave no code for, where the current
+        // weather above says "Unknown": that line has a temperature to hang the
+        // admission on and this one would be a whole reading of it.
+        day.weatherCode != null ? t(weatherLabelKey(day.weatherCode)) : "",
+      ),
+    });
+  }
   return rows;
 }
 
@@ -320,13 +517,30 @@ export const herePage: PageDefinition = {
       return { ...heading, block: { kind: "note", text: t("glasses.noFix") } };
     }
 
+    // What is standing here now, in the order it is read: the day, the fix, the
+    // sky, then whatever is in force overhead and the count of the two pages
+    // after this one. Every one of them is about the minute the reader is in.
     const rows: ReadingRow[] = [whenRow(context)];
     const fix = fixRow(context);
     if (fix) rows.push(fix);
     rows.push(...skyRows(context));
+
     const warning = warningRow(context);
-    if (warning) rows.push(warning);
-    rows.push(...tallyRows(context));
+    const rest = warning ? [warning, ...tallyRows(context)] : tallyRows(context);
+
+    // And then the forecast, in however many lines are left once everything that
+    // is about now has been written down. It is dealt the leftovers rather than
+    // given a line of its own for the reason the whole page is one screenful: a
+    // seventh row is the count of what is on the other two pages, and a reader
+    // who had to flick past tomorrow's weather to find out whether anything is
+    // waiting for them would flick once and stop coming back. This is the same
+    // arithmetic the two list pages do with their groups, done between subjects
+    // rather than within one (see stack.ts).
+    //
+    // It is the last thing decided and lands in the middle of the page all the
+    // same: tomorrow belongs under today, not under the tally of the newswire.
+    rows.push(...aheadRows(context, BODY_LINES - rows.length - rest.length));
+    rows.push(...rest);
 
     return { ...heading, block: { kind: "readings", rows } };
   },

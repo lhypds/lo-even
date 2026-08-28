@@ -64,7 +64,14 @@ const ctx: PageContext = {
     elevation: 38,
     current: { temperature: 23.4, apparent: 24.1, humidity: 61, weatherCode: 2, windSpeed: 12.3, isDay: true },
     today: { date: "2026-08-28", weatherCode: 2, tempMax: 27.8, tempMin: 19.2, sunrise: "2026-08-28T05:12", sunset: "2026-08-28T18:20" },
-    upcoming: [],
+    // The two days lo hands over with every forecast, which the standing page
+    // writes into whatever lines the rest of it did not want. The sunrise on the
+    // first of them is what the light reading counts to after dark, so it has to
+    // be here for the evening half of that line to be checkable at all.
+    upcoming: [
+      { date: "2026-08-29", weatherCode: 61, tempMax: 26.1, tempMin: 20.4, sunrise: "2026-08-29T05:13", sunset: "2026-08-29T18:19" },
+      { date: "2026-08-30", weatherCode: 3, tempMax: 24.9, tempMin: 19.8, sunrise: "2026-08-30T05:14", sunset: "2026-08-30T18:17" },
+    ],
     units: { temperature: "°C", wind: "km/h" },
   },
   components: ["nearby", "events", "trends", "warnings"],
@@ -365,6 +372,43 @@ for (const page of PAGES) {
     console.log(`\n╔══ ${pathOf(page)}${total > 1 ? ` (screen ${screen + 1}/${total})` : ""} ${"═".repeat(Math.max(0, 40 - page.id.length))}`);
     console.log(raster(panels));
   }
+}
+
+// The standing page in the two states the fixture above cannot reach, which are
+// the states most of the world's afternoon is actually in.
+//
+// **Nothing in force overhead.** The fixture has three warnings out over
+// Shibuya, and a warning takes the line the days ahead would otherwise have had:
+// the page is seven lines, everything about the minute the reader is standing in
+// is written first, and the forecast is dealt whatever is left (see aheadRows in
+// pages/here.ts). So that row exists and this sheet never drew it.
+//
+// **And a fix that has gone stale.** The fixture's is forty-five seconds old,
+// which is the state the app is in whenever it is working; past two minutes the
+// row says its age instead of its speed, and drops the ± as well to make room
+// for saying so (see fixRow). Two lines of the fixture changed rather than a
+// fixture of its own: it is the same screen an hour later with the warnings
+// lifted, which is the comparison worth having beside the one above.
+{
+  const page = PAGES[0];
+  const clear: PageContext = {
+    ...ctx,
+    fixAt: Date.now() - 39 * 60_000,
+    warnings: { status: "ready", data: { covered: true, items: [] } },
+  };
+  const view = page.render(clear);
+  const panels = layout(view, 0, {
+    place: formatPlace(clear.place),
+    time: clockFace(clear),
+    status: "",
+    unread: clear.unread,
+    mail: t("mail.badge"),
+    path: pathOf(page),
+    index: 1,
+    total: steps.length,
+  });
+  console.log(`\n╔══ ${pathOf(page)} nothing in force, stale fix ${"═".repeat(14)}`);
+  console.log(raster(panels));
 }
 
 // What is under those pages. A list screen is drawn once per group, focused on

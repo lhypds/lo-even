@@ -80,6 +80,67 @@ export function relativeTime(iso: string | null | undefined, locale: string, t: 
 }
 
 /**
+ * The same age with the word that says it is one: "39m ago" where the form above
+ * says "39m", and 39分前 / 39分钟前 where it says 39分 / 39分钟.
+ *
+ * There are two of these because there is one line in the app where a bare unit
+ * is not safe. Everywhere the narrow form is used it stands beside a name —
+ * `@mari · 39m` — and nothing near it is a measurement. The fix row is the
+ * exception: it reads `35.6580°N 139.7016°E · ±12 m · 39 m · 39m`, and the last
+ * two of those are a height in metres and an age in minutes written with the
+ * same letter. A reader standing 39 metres up, 39 minutes after their last fix,
+ * is looking at the same figure twice and can only tell them apart by knowing
+ * which order this file writes them in.
+ *
+ * `Intl.RelativeTimeFormat` rather than the dictionary, because it is lo's own
+ * way of saying this on the phone and because the word is the language's
+ * business: 前 goes after the figure and "ago" after the unit, and neither of
+ * them is something this file should be deciding. Narrow, because the row it
+ * goes on has about a hundred pixels to spare — the long form ("39 minutes
+ * ago") is fifty over the end of it, and the short one is twenty-five over.
+ *
+ * The thresholds are the narrow form's, so the two never disagree about which
+ * unit an age is in.
+ */
+export function formatAge(iso: string | null | undefined, locale: string, t: Translate): string {
+  if (!iso) return "";
+  const time = Date.parse(iso);
+  if (Number.isNaN(time)) return "";
+  const seconds = Math.round((Date.now() - time) / 1000);
+  if (seconds < 60) return t("time.now");
+  if (seconds >= 604800) return new Date(time).toLocaleDateString(locale, { month: "short", day: "numeric" });
+
+  const [unit, size]: [Intl.RelativeTimeFormatUnit, number] =
+    seconds < 3600 ? ["minute", 60] : seconds < 86400 ? ["hour", 3600] : ["day", 86400];
+  // "auto" is what turns a day ago into "yesterday" — the wording lo's own rows
+  // use, and one fewer figure on a line already full of them.
+  return new Intl.RelativeTimeFormat(locale, { numeric: "auto", style: "narrow" }).format(
+    -Math.floor(seconds / size),
+    unit,
+  );
+}
+
+/**
+ * A stretch of time in the narrow forms above — "3h48m", "48m" — for a reading
+ * that is a length rather than an age. `relativeTime` answers "how long ago" and
+ * rounds to one unit, which is right for a post and wrong for the light left in
+ * the day: "3h" is anything from three hours to four, and a reader deciding
+ * whether to walk home wants the minutes as well.
+ *
+ * The units are the reader's own, taken from the same two keys the trail column
+ * uses, and set hard against each other: "3時間48分" is how Japanese writes it,
+ * and a space between the two would be a space in the middle of one figure.
+ */
+export function formatSpan(minutes: number, t: Translate): string {
+  const whole = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(whole / 60);
+  const rest = whole % 60;
+  if (hours === 0) return t("time.minutes", { n: rest });
+  if (rest === 0) return t("time.hours", { n: hours });
+  return `${t("time.hours", { n: hours })}${t("time.minutes", { n: rest })}`;
+}
+
+/**
  * When a feed item is, which is not always in the past. A news story happened
  * and reads as "2h"; a listing has not happened yet, and `relativeTime` would
  * make "just now" of every one of them — a negative age falls under a minute and

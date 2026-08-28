@@ -302,6 +302,14 @@ async function main() {
           latitude: location.latitude,
           longitude: location.longitude,
           accuracy: location.accuracy,
+          // The two the bridge is allowed to carry and usually does not. Passed
+          // on rather than dropped because both are read the same way at the far
+          // end — a reading, or nothing — and a fix that did come with an
+          // altitude on it was arriving here and being thrown away for a model's
+          // ground elevation that is right about the valley and silent about
+          // which storey you are on (see pages/here.ts).
+          altitude: location.altitude,
+          speed: location.speed,
         };
       }
     } catch {

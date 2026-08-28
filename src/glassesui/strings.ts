@@ -20,7 +20,21 @@ const en: Dict = {
   "clock.title": "Time",
   "clock.offset": "UTC{{offset}}",
   "weather.today": "Today",
+  // The days after this one, which lo's own weather tile lists under the
+  // readings and this page had no room for until the lines left over were dealt
+  // to it. The first of them is a word rather than a weekday — "Tomorrow" is
+  // what a reader thinks, where "Sat" is something they have to work out — and
+  // the ones after it are the short weekday, because by then the word would be
+  // "the day after tomorrow" and no language says that in ten cells.
+  "weather.tomorrow": "Tomorrow",
   "weather.feels": "feels",
+  // How much of the day's light is left, written the way the reading beside it
+  // is: a word and a figure, no verb. After dark it turns into the other half of
+  // the same question — how long until it comes back — which is the one form of
+  // it that has to say what it is counting to, because a stretch of hours on a
+  // dark evening could be either.
+  "weather.daylight": "light {{span}}",
+  "weather.sunrise": "sunrise in {{span}}",
   "weather.title": "Weather",
   "location.title": "Here",
   "posts.title": "Posts",
@@ -230,7 +244,13 @@ const ja: Dict = {
   "clock.title": "時刻",
   "clock.offset": "UTC{{offset}}",
   "weather.today": "今日",
+  "weather.tomorrow": "明日",
   "weather.feels": "体感",
+  // 日の出 alone rather than 日の出まで: the line it goes on is the fullest of the
+  // three languages' — every reading on it is a figure and a unit — and the まで
+  // is two characters the row cannot spare for a claim the units already make.
+  "weather.daylight": "日照 {{span}}",
+  "weather.sunrise": "日の出 {{span}}",
   "weather.title": "天気",
   "location.title": "現在地",
   "posts.title": "posts",
@@ -381,7 +401,10 @@ const zh: Dict = {
   "clock.title": "时间",
   "clock.offset": "UTC{{offset}}",
   "weather.today": "今天",
+  "weather.tomorrow": "明天",
   "weather.feels": "体感",
+  "weather.daylight": "日照 {{span}}",
+  "weather.sunrise": "日出 {{span}}",
   "weather.title": "天气",
   "location.title": "此处",
   "posts.title": "posts",
