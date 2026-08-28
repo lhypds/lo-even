@@ -12,9 +12,10 @@
 // rather than about where there was room. What is on tonight within walking
 // distance is a fact about this street on this evening; the newswire and the
 // trends are facts about the country, and a reader looking up from the pavement
-// wants the first kind. The order the four are in is the order they are that:
-// who is here, what they left here, what is on here — and then the letters, which
-// are the one thing on the page that is not about here at all.
+// wants the first kind. The letters lead because they are the one thing on the
+// page addressed to the reader by name, and the rest follow it outwards: what
+// has been left on this street, what is on within walking distance, and who is
+// about.
 //
 // The people, the posts and the listings arrive without being asked: they come
 // back with the fix on the one read this app makes of it, and the presence trade
@@ -26,12 +27,12 @@
 // mark: a mark is yours and stays on your own map, a post is left on the ground
 // for whoever comes past it.
 //
-// This page is a summary of a list, and the list is behind it: a tap steps into
-// the same three groups with two lines apiece and no summary to fit around, and
-// another tap opens whichever of them the reader is on. What is still not here
-// is anything that writes — the website's rows open the post *and its replies*,
-// and a reply needs a keyboard — so the deepest this goes is reading, and the
-// answering stays on the phone.
+// This page is a summary of four lists, and the four are behind it: a tap puts a
+// box round one of the groups, another opens it — the same rows with two lines
+// apiece and no summary to fit around — and a third opens whichever entry the
+// reader is on. What is still not here is anything that writes: the website's
+// rows open the post *and its replies*, and a reply needs a keyboard, so the
+// deepest this goes is reading and the answering stays on the phone.
 
 import {
   distanceMeters,
@@ -187,6 +188,7 @@ export const nearbyPage: PageDefinition = {
     // they are the group with nothing on any other screen to fall back on.
     const groups: Group[] = [
       {
+        id: "messages",
         label: t("messages.title"),
         lines: (messages.data ?? []).map(
           // The disc is the dot lo draws on the letter in its top bar: something
@@ -198,6 +200,7 @@ export const nearbyPage: PageDefinition = {
         max: 3,
       },
       {
+        id: "posts",
         label: t("posts.title"),
         lines: (posts.data ?? []).map(
           // A photo with no words is a whole post; where it was taken stands in
@@ -212,6 +215,7 @@ export const nearbyPage: PageDefinition = {
     // What is on within walking distance, and only where lo has somewhere to ask.
     if (components.includes("events")) {
       groups.push({
+        id: "events",
         label: t("events.title"),
         lines: (events.data ?? []).map((item) => item.title),
         note: feedWord(events, t, WORDS.events),
@@ -224,6 +228,7 @@ export const nearbyPage: PageDefinition = {
     // three names is what a street usually has, and a row apiece would spend
     // half the page on a column of distances.
     groups.push({
+      id: "people",
       label: t("people.title"),
       lines: peopleLine(context),
       note: feedWord(people, t, WORDS.people),

@@ -216,14 +216,45 @@ export const HEAD_META: Rect = {
  * counter says at the moment, so the box does not move as the reader walks a
  * list. The path is fixed for as long as they are on one level, and `00/00` is
  * the widest a counter gets.
+ *
+ * This is the width the string is padded out to, which is no longer the width of
+ * the box it is written in: the box is a cell wider and holds that cell empty
+ * (see TRAIL_SLACK).
  */
 export function trailSlot(path: string): number {
   return path ? textWidth(`${path} · `) + PAGER_SLOT : 0;
 }
 
+// The pager is the one string on this screen that lands hard against the border,
+// and the two numbers below are what pull it off it.
+//
+// Everything else in a corner has room to spare. The hour is right-aligned inside
+// a slot measured off `msg (99+) · 00:00`, which is wider than any hour it
+// actually says, so it floats several pixels clear. The pager does not: its slot
+// is `${path} · ` plus the width of `00/00`, and a counter of narrower digits
+// falls short of that by very nearly a whole number of spaces — `lo/ · 3/3` is
+// four spaces short of its slot and pads out to it exactly, with nothing left
+// over. Its last digit ends on the border itself.
+//
+// Which is worse than it looks, and is why this is a cell and not a hair. Right
+// alignment on this display is spaces, and how many is worked out from this
+// file's own advance table (see metrics.ts) — measured on the simulator, not on
+// glass. A face a pixel or two wider anywhere in `lo/ · 3/3` and the padded line
+// no longer fits the box it is written in: it wraps, and a wrapped line in a box
+// one line tall is a scroll bar with the pager hidden behind it. A corner that
+// disappears now and then is that.
+//
+// So the box is a cell wider than the widest string it can hold and the string is
+// still padded to the slot rather than to the box (see layout.ts) — the cell
+// stays empty, and it is the room the pager needs to be drawn at all. The three
+// pixels beyond it are an eye's answer rather than an arithmetic one: type this
+// close to a border wants daylight even when it fits.
+const TRAIL_NUDGE = 3;
+const TRAIL_SLACK = CHAR_WIDTH;
+
 export function trailRect(path: string): Rect {
-  const slot = trailSlot(path);
-  return { x: INNER_RIGHT - slot, y: FOOT_Y, width: slot, height: LINE_HEIGHT };
+  const width = trailSlot(path) + TRAIL_SLACK;
+  return { x: INNER_RIGHT - TRAIL_NUDGE - width, y: FOOT_Y, width, height: LINE_HEIGHT };
 }
 
 /**
@@ -234,11 +265,13 @@ export function trailRect(path: string): Rect {
  * name with a path written over the end of it.
  */
 export function footLineRect(path: string): Rect {
-  const slot = trailSlot(path);
+  // Measured off where the trail's box actually starts rather than off its slot,
+  // so the cell of air between the two is a cell whatever the trail is doing with
+  // its own edges.
   return {
     x: EDGE,
     y: FOOT_Y,
-    width: INNER_WIDTH - (slot > 0 ? slot + CHAR_WIDTH : 0),
+    width: path ? trailRect(path).x - CHAR_WIDTH - EDGE : INNER_WIDTH,
     height: LINE_HEIGHT,
   };
 }
@@ -253,6 +286,23 @@ export function footLineRect(path: string): Rect {
 // this file thinks it is, and it is not (see CHAR_WIDTH). A column that starts
 // where its container starts lands where it is meant to whatever face the
 // firmware is setting.
+//
+// **Where a line of the body ends**, and it is the same answer for all three
+// shapes of body: on the inside of the border, not on the gutter the line
+// started from. That is the edge the badge, the hour and the pager are hung from
+// (see INNER_RIGHT), so a reading, a list entry or a line of a post that runs
+// the whole width is cut off level with the clock above it rather than a cell
+// short of it — one line down the screen instead of two a cell apart.
+//
+// Nothing is set against that edge, which is what makes it the body's to take.
+// These are left-aligned columns: their right-hand end is where the text is cut
+// and not a margin type has to clear, so the gutter the body used to keep there
+// was room held for a line that is never drawn from that side.
+//
+// It is a real edge rather than a nominal one, and that is the other half of it:
+// the body is cut in pixels (see metrics.ts), so a line with more to say ends on
+// this edge rather than the fifty-odd pixels inside it that a cell's rounding
+// used to leave. Move it and a reading moves with it.
 const LABEL_CELLS = 10;
 const READING_GAP = EDGE + LABEL_CELLS * CHAR_WIDTH + CHAR_WIDTH;
 
@@ -265,12 +315,18 @@ export const READING_LABELS: Rect = {
 export const READING_VALUES: Rect = {
   x: READING_GAP,
   y: BODY_Y,
-  width: SCREEN_WIDTH - EDGE - READING_GAP,
+  // To the inside of the border, which is where a line of the body ends
+  // whatever shape the body is (see above).
+  width: INNER_RIGHT - READING_GAP,
   height: BODY_HEIGHT,
 };
 
-/** How wide a line of the body is — what a note is wrapped against. */
-export const BODY_WIDTH = INNER_WIDTH;
+/**
+ * How wide a line of the body is: the gutter it starts on to the inside of the
+ * border it is cut at (see above). What a note and a post are wrapped against,
+ * and how wide an entry of a list is drawn.
+ */
+export const BODY_WIDTH = INNER_RIGHT - EDGE;
 
 // The body of a *list* screen, which is the other shape a body comes in: three
 // big rows instead of seven small ones.
@@ -297,7 +353,7 @@ export function itemRect(slot: number): Rect {
   return {
     x: EDGE,
     y: BODY_Y + slot * (ITEM_HEIGHT + ITEM_GAP),
-    width: INNER_WIDTH,
+    width: BODY_WIDTH,
     height: ITEM_HEIGHT,
   };
 }
@@ -307,7 +363,79 @@ export function itemRect(slot: number): Rect {
  * them. Left against the margin where the labels start, not centred like a note:
  * this is the words themselves, and words are read from a left edge.
  */
-export const PROSE: Rect = { x: EDGE, y: BODY_Y, width: INNER_WIDTH, height: BODY_HEIGHT };
+export const PROSE: Rect = { x: EDGE, y: BODY_Y, width: BODY_WIDTH, height: BODY_HEIGHT };
+
+// The box round whatever the wheel is pointing at: a group on a summary page, an
+// entry on a list. The one piece of ink in this app that is not the frame and not
+// type.
+//
+// **Why a box at all, when there is brightness.** Brightness is this display's
+// only weight and much the cheaper mark — but a summary row is a quiet word in
+// the margin beside a bright reading, two columns which are two containers, and
+// a container is one brightness for all seven of its lines. There is no way to
+// light one row of a column. The box exists because that screen needed a pointer
+// and brightness could not be one.
+//
+// **And why it then follows the reader down**, onto the list screen, where every
+// entry is a container of its own and brightness would have done. Because it is
+// the same gesture. The reader picks a group out of a page, taps, and goes on
+// picking — an entry out of a list — and a pointer that changed its shape half
+// way through that would be two pointers to learn instead of one. The brightness
+// is still there underneath it, saying the same thing twice on the one screen
+// that can afford to.
+//
+// It is drawn a hair outside the rows rather than round them exactly, out of the
+// twelve pixels of air the body keeps from the heading and the footer, so the box
+// has somewhere to be that is not on top of the type.
+//
+// All three of those pixels below it and none above, and the lopsidedness is the
+// point. A line of this face is not ink from top to bottom: the type is set six
+// pixels down from the top of the line and runs to the bottom of it (see
+// docs/Screen.md), so a box drawn evenly round a line is a box with all its
+// daylight above the letters and none under them. The air has to come off the top
+// for the two gaps to look like one another, and how much is an eye's answer
+// rather than an arithmetic one — read off the panel a pixel at a time, which is
+// the only way there is to settle it.
+//
+// There is one pixel left in this direction and then no more. A box round one row
+// is thirty pixels now, and twenty-nine is the least a bordered box can be before
+// the line inside it grows a scroll bar and clips the row the box was pointing
+// at. Past that the bottom edge has to come down with the top.
+const SELECT_AIR = 3;
+const SELECT_AIR_TOP = 0;
+
+// And sideways it stands half way between the frame and the first character of
+// the line, which is the only place it can stand without reading as something
+// else. Against the frame it would be a second line a pixel inside the first —
+// two borders that close together are one thick border with a fault in it — and
+// against the text it would be a box the type is touching.
+const SELECT_X = Math.round((INSET + FRAME_BORDER_WIDTH + EDGE) / 2);
+
+/**
+ * The box, round whatever is being pointed at. It runs the width of the screen
+ * wherever it appears, because the thing being chosen is the whole row: the word
+ * in the margin and the reading beside it are one answer, and a box round half
+ * of it would be a box round half an answer.
+ */
+function boxAround(y: number, height: number): Rect {
+  return {
+    x: SELECT_X,
+    y: y - SELECT_AIR_TOP,
+    width: SCREEN_WIDTH - 2 * SELECT_X,
+    height: height + SELECT_AIR_TOP + SELECT_AIR,
+  };
+}
+
+/** Round `count` rows of a summary page, starting at `first` — one whole group. */
+export function selectRect(first: number, count: number): Rect {
+  return boxAround(BODY_Y + first * LINE_HEIGHT, count * LINE_HEIGHT);
+}
+
+/** Round one entry of a list, which is a block of two lines rather than rows. */
+export function selectItemRect(slot: number): Rect {
+  const { y, height } = itemRect(slot);
+  return boxAround(y, height);
+}
 
 /**
  * A sentence where a page would otherwise be empty, in the middle of the screen.
@@ -339,7 +467,12 @@ export function noteRect(lines: string[]): Rect {
   };
 }
 
-/** How wide a plain container is, in character cells. */
+/**
+ * How wide a plain container is, in character cells. The body is not cut this
+ * way any more — it is cut to the pixel, against the rect itself (see
+ * metrics.ts) — and what is left here is the two lines of chrome that are cut
+ * against the corner beside them rather than against the frame.
+ */
 export function cellsIn(width: number): number {
   return Math.max(1, Math.floor(width / CHAR_WIDTH));
 }
@@ -397,4 +530,13 @@ export const CONTAINER = {
   prose: 6,
   /** The three entries of a list, standing where all of those do. */
   items: [6, 7, 8],
+  // The box round whatever the wheel is pointing at, which is the one container
+  // in the app that holds nothing and is laid over the rest rather than standing
+  // beside it. It cannot borrow a body id the way the others do — on a list
+  // screen all three are spoken for — so it takes the heading's spare one, which
+  // is spare on exactly the screens a box can appear on: a page with something to
+  // say about itself in its heading is the standing page or a screen being read,
+  // and neither of those has anything to point at. Give a page with groups a
+  // `meta` and this is the line that has to change.
+  select: 2,
 } as const;

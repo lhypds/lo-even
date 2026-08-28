@@ -1,5 +1,5 @@
-// The two screens behind every page: the list a page is a summary of, and one
-// entry of that list, read.
+// The two screens behind a group: the list of everything in it, and one entry of
+// that list, read.
 //
 // **Why there is anything behind a page at all.** The three pages are a
 // dashboard, and a dashboard's whole trick is that it fits: every group is cut
@@ -8,27 +8,28 @@
 // wrong one to "what did they say" — and until now the second question had no
 // answer up here except to take the glasses off and open the phone.
 //
-// So a tap steps into the page under the reader. The same rows, no longer
-// competing for the screen with anything else: two lines each, three at a time,
-// and the whole of any one of them a tap further in. The wheel means the same
-// thing at every depth — the next thing along — and a double tap is the way back
-// out of all of them.
+// So the reader picks a group out on the page itself, and a tap opens it: the
+// same rows, no longer competing for the screen with three other groups — two
+// lines each, three at a time, and the whole of any one of them a tap further in.
+// The wheel means the same thing at every depth — the next thing along — and a
+// double tap is the way back out of all of them (see glasses.ts).
 //
-// **What a page owes this file.** Nothing but its entries, in the order it lists
-// its groups in, so that a reader who has just read a summary finds its list in
-// the order they read it (see `items` on PageDefinition). The two screens here
-// are the same two for every page, which is the point: there is one list screen
-// in this app and one reading screen, and learning either of them is learning
-// both of the pages that have one.
+// **What a page owes this file.** Nothing but its entries, each stamped with the
+// group it came out of, in the order the page lists its groups in — so that a
+// reader who has just read a summary finds its lists in the order they read it
+// (see `items` on PageDefinition). The two screens here are the same two for
+// every group of every page, which is the point: there is one list screen in
+// this app and one reading screen, and learning either of them is learning all
+// six of the groups that have one.
 
 import type { Translate } from "../strings";
 import type { Item, ItemRef, PageView } from "./types";
 
 /**
- * A page's own list. The heading is the group the reader is standing in rather
- * than the place they are standing in — the place is on the footer of every
- * screen anyway, and up here the useful thing to know is that the wheel has just
- * carried you out of the posts and into the letters.
+ * One group's own list. The heading is the group rather than the place the
+ * reader is standing in — the place is on the footer of every screen anyway, and
+ * the group's name is what they chose a moment ago and what the path beside it
+ * is now spelling.
  *
  * Which entry is under the reader is not in the view: it is the screen number,
  * because a list of nine entries is a page nine screenfuls deep as far as
@@ -61,8 +62,9 @@ export function readView(item: Item): PageView {
  * is (see glasses.ts) — an index into a list that moved is how a reader ends up
  * reading something they never scrolled to.
  *
- * A gone entry falls back to the first of its own group rather than to the top
- * of the list: the reader was reading the posts, and the posts are still there.
+ * A gone entry falls back to the first of its own group rather than to the top:
+ * the group is the one thing the reader definitely chose, and the fallback should
+ * not undo a choice to fix a position.
  */
 export function locate(items: Item[], at: ItemRef | null): number {
   if (!at) return 0;

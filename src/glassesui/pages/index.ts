@@ -17,10 +17,11 @@
 // who had learned where they were, so what a country cannot feed is a line or a
 // group left off a page instead.
 //
-// Two of the three have a list behind them, and the list is where the answer
-// stops being a summary: a tap steps into it, the wheel walks its entries two
-// lines at a time, another tap opens one of them whole, and a double tap comes
-// back out. The pages are still what the app *is* — a reader who never taps is
+// Two of the three have lists behind them — one per group — and a list is where
+// the answer stops being a summary. A tap puts a box round one of the groups on
+// the page, another opens it, the wheel walks its entries two lines at a time, a
+// third tap opens one of them whole, and a double tap comes back out of each in
+// turn. The pages are still what the app *is* — a reader who never taps is
 // reading the same dashboard as before — and the depth is there for the moment
 // the dashboard has said "posts 4" and the reader wants to know which four (see
 // pages/list.ts, and glasses.ts for the walking of it).

@@ -23,6 +23,13 @@
 import type { ReadingRow } from "./types";
 
 export interface Group {
+  /**
+   * What this group is called where it is not being read out loud: the key its
+   * words are under in the dictionary, the last part of its path, and what the
+   * reader picks when they choose a group on this page (see chrome.ts, and
+   * `spans` below).
+   */
+  id: string;
   /** The word in the margin, written on this group's first line only. */
   label: string;
   /** What this group would show, in the order it wants it shown. */
@@ -51,6 +58,44 @@ export function stack(groups: Group[], room: number): ReadingRow[] {
 
   return groups.flatMap((group, index) => {
     const lines = group.lines.length > 0 ? group.lines.slice(0, taken[index]) : [group.note];
-    return lines.map((value, line) => ({ label: line === 0 ? group.label : "", value }));
+    return lines.map((value, line) => ({
+      label: line === 0 ? group.label : "",
+      value,
+      group: group.id,
+    }));
   });
+}
+
+/**
+ * Which rows belong to which group, read back off the rows themselves.
+ *
+ * The dealing above is the only thing that knows a group turned into three lines
+ * rather than one, and two screens need that back: the one that draws a box round
+ * the group the reader is choosing, and the one that decides what the wheel is
+ * choosing between (see layout.ts and glasses.ts). Reading it back off the rows
+ * rather than returning it alongside them keeps a page's answer one thing — a
+ * list of lines — and keeps the two in step, because the box is drawn round the
+ * rows that are actually there.
+ */
+export interface Span {
+  id: string;
+  /** Where the group starts, counting rows from the top of what is on screen. */
+  first: number;
+  /** How many rows it got. */
+  count: number;
+}
+
+export function spans(rows: ReadingRow[]): Span[] {
+  const found: Span[] = [];
+  rows.forEach((row, index) => {
+    if (!row.group) return;
+    const last = found[found.length - 1];
+    // Same group and no gap: one more line of the one before. A page that listed
+    // a group twice would get two spans, which is the truthful answer — the box
+    // goes round the block the reader can see, not round every row that shares a
+    // name with it.
+    if (last && last.id === row.group && last.first + last.count === index) last.count += 1;
+    else found.push({ id: row.group, first: index, count: 1 });
+  });
+  return found;
 }

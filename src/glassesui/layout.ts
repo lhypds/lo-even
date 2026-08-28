@@ -32,13 +32,14 @@
 // where the reason a gap between two boxes on this screen cannot be held still is
 // written down.
 
-import { clip, padLeft, wrap } from "./metrics";
+import { clip, clipCells, padLeft, wrap } from "./metrics";
 import {
   BODY_LINES,
   BODY_WIDTH,
   CONTAINER,
   FAINT,
   FRAME,
+  FRAME_PADDING,
   HEAD_META,
   HEAD_TIME,
   INK,
@@ -52,11 +53,14 @@ import {
   itemRect,
   titleCells,
   noteRect,
+  selectItemRect,
+  selectRect,
   trailRect,
   trailSlot,
   type Rect,
 } from "./theme";
-import type { Block, Item, PageView } from "./pages/types";
+import { spans } from "./pages/stack";
+import type { Block, Item, PageView, ReadingRow } from "./pages/types";
 
 /** One text container, ready to be created or updated. */
 export interface Panel {
@@ -64,8 +68,20 @@ export interface Panel {
   rect: Rect;
   text: string;
   brightness: number;
-  /** The frame draws the one box there is; everything else floats inside it. */
+  /**
+   * Whether this container draws a box. Two do: the frame round the screen, and
+   * the one round the group the reader is choosing on a summary page.
+   */
   bordered: boolean;
+  /**
+   * The gutter it keeps inside its own edges, charged on all four sides. Only the
+   * frame wants one — a body column is placed where it is meant to be and padding
+   * would shift it off the grid the columns share — and the selection box must
+   * not have one at any price: padding comes out of the content box, a content
+   * box shorter than a line grows a scroll bar, and a box round one row is
+   * exactly one line tall (see docs/Screen.md).
+   */
+  padding: number;
   zOrder: number;
 }
 
@@ -89,7 +105,7 @@ export function screens(view: PageView): number {
     case "items":
       return Math.max(1, view.block.items.length);
     case "prose":
-      return Math.max(1, Math.ceil(wrap(view.block.text, cellsIn(BODY_WIDTH)).length / BODY_LINES));
+      return Math.max(1, Math.ceil(wrap(view.block.text, BODY_WIDTH).length / BODY_LINES));
     default:
       return Math.max(1, Math.ceil(view.block.rows.length / BODY_LINES));
   }
@@ -154,8 +170,9 @@ function panel(
   brightness: number,
   zOrder: number,
   bordered = false,
+  padding = 0,
 ): Panel {
-  return { id, rect, text, brightness, bordered, zOrder };
+  return { id, rect, text, brightness, bordered, padding, zOrder };
 }
 
 /** The frame, the heading and the footer, which every page wears identically. */
@@ -170,7 +187,7 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
     // laid over the far end of this same line, and a title measured against the
     // box it is written in is a place name that runs underneath the clock (see
     // titleCells in theme.ts).
-    panel(CONTAINER.frame, FRAME, clip(view.title, titleCells()), INK, 0, true),
+    panel(CONTAINER.frame, FRAME, clipCells(view.title, titleCells()), INK, 0, true, FRAME_PADDING),
   ];
 
   // The corner, on every page: how much is waiting to be read, then the hour,
@@ -207,7 +224,7 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
   const path = chrome.path ?? "";
   const footLine = footLineRect(path);
   const foot = chrome.status || view.context || chrome.place;
-  panels.push(panel(CONTAINER.footLine, footLine, clip(foot, cellsIn(footLine.width)), MUTED, 3));
+  panels.push(panel(CONTAINER.footLine, footLine, clipCells(foot, cellsIn(footLine.width)), MUTED, 3));
 
   // Where the reader is standing in the app, and how far through it. Faint,
   // because it is the one thing on the screen that is about the app rather than
@@ -242,27 +259,59 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
  * it is not (see CHAR_WIDTH); a column that starts where its container starts
  * lands where it is meant to whatever face the firmware is setting.
  */
+/** Which of a page's rows this screenful of it is showing. */
+function shownRows(block: Extract<Block, { kind: "readings" }>, screen: number): ReadingRow[] {
+  return block.rows.slice(screen * BODY_LINES, screen * BODY_LINES + BODY_LINES);
+}
+
 function readingPanels(block: Extract<Block, { kind: "readings" }>, screen: number): Panel[] {
-  const rows = block.rows.slice(screen * BODY_LINES, screen * BODY_LINES + BODY_LINES);
+  const rows = shownRows(block, screen);
   if (rows.length === 0) return [];
-  const labelCells = cellsIn(READING_LABELS.width);
-  const valueCells = cellsIn(READING_VALUES.width);
   return [
     panel(
       CONTAINER.labels,
       READING_LABELS,
-      rows.map((row) => clip(row.label, labelCells)).join("\n"),
+      rows.map((row) => clip(row.label, READING_LABELS.width)).join("\n"),
       MUTED,
       5,
     ),
     panel(
       CONTAINER.values,
       READING_VALUES,
-      rows.map((row) => clip(row.value, valueCells)).join("\n"),
+      rows.map((row) => clip(row.value, READING_VALUES.width)).join("\n"),
       INK,
       6,
     ),
   ];
+}
+
+/**
+ * The one mark in this app that is not brightness: a box round whatever the
+ * wheel is pointing at. It is laid over what is already on the screen rather
+ * than replacing any of it — nothing about a row or an entry changes when the
+ * box arrives, which is the whole point of a pointer.
+ *
+ * It holds a space rather than nothing at all. There is no text to put in it —
+ * the words are already on the screen underneath — and a container with a
+ * genuinely empty string is the one thing on this display nobody has held a
+ * screenshot up to (see docs/Screen.md); a space is a string, and it draws no
+ * ink.
+ */
+function box(rect: Rect): Panel {
+  return panel(CONTAINER.select, rect, " ", MUTED, 8, true);
+}
+
+/**
+ * The box round the group the reader is choosing, on a summary page.
+ *
+ * A group that is not on this screenful gets no box rather than a box at the
+ * edge. In practice every summary page fits in one screenful and there is no
+ * such group, and a page that grew an eighth row should paginate rather than
+ * point at something the reader cannot see.
+ */
+function selectPanel(rows: ReadingRow[], select: number): Panel[] {
+  const span = spans(rows)[select];
+  return span ? [box(selectRect(span.first, span.count))] : [];
 }
 
 /**
@@ -271,12 +320,17 @@ function readingPanels(block: Extract<Block, { kind: "readings" }>, screen: numb
  * **A container each, rather than two columns.** Everywhere else on this display
  * a row is a quiet word beside a bright reading, because one container is one
  * brightness and that is the only weight there is. Here the unit is the entry
- * rather than the line, so the entry is the container — which is what buys the
- * one thing a list actually needs and a table of readings does not: the entry
- * under the reader is written in ink and the two beside it are muted. No marker,
- * no cursor, no character spent saying which one is which. It is simply the
- * bright one, and `●` is left to mean what it means on the row it appears in,
- * which is that nobody has read this yet.
+ * rather than the line, so the entry is the container — which buys something a
+ * table of readings cannot have: the entry under the reader written in ink with
+ * the two beside it muted.
+ *
+ * **And the box as well.** Brightness alone was enough to say which entry the
+ * wheel is on, and it is still doing that; what it could not do is say that this
+ * is the *same gesture* as the one a level up. The reader picked a group out of
+ * the page with a box round it, tapped, and is now picking an entry out of a
+ * list — one motion, and it should not change its mark half way through. So the
+ * box follows them down, and `●` is left to mean the only thing it means on
+ * these screens, which is that nobody has read this yet.
  *
  * **The window.** The reader is kept in the middle where there is a middle to be
  * in, so there is always the next entry to move onto and the last one to come
@@ -285,9 +339,9 @@ function readingPanels(block: Extract<Block, { kind: "readings" }>, screen: numb
  * cursor centred would be two blank rows and a reader wondering what went.
  */
 function itemPanels(items: Item[], focus: number): Panel[] {
-  const width = cellsIn(itemRect(0).width);
+  const width = itemRect(0).width;
   const start = Math.max(0, Math.min(focus - 1, items.length - ITEMS_PER_SCREEN));
-  return items.slice(start, start + ITEMS_PER_SCREEN).map((item, slot) =>
+  const panels = items.slice(start, start + ITEMS_PER_SCREEN).map((item, slot) =>
     panel(
       CONTAINER.items[slot],
       itemRect(slot),
@@ -296,6 +350,10 @@ function itemPanels(items: Item[], focus: number): Panel[] {
       5 + slot,
     ),
   );
+  if (focus >= start && focus < start + panels.length) {
+    panels.push(box(selectItemRect(focus - start)));
+  }
+  return panels;
 }
 
 /**
@@ -309,7 +367,7 @@ function itemPanels(items: Item[], focus: number): Panel[] {
  * one screen in the app that has exactly what the reader asked for.
  */
 function prosePanels(block: Extract<Block, { kind: "prose" }>, screen: number): Panel[] {
-  const lines = wrap(block.text, cellsIn(BODY_WIDTH)).slice(
+  const lines = wrap(block.text, BODY_WIDTH).slice(
     screen * BODY_LINES,
     screen * BODY_LINES + BODY_LINES,
   );
@@ -323,7 +381,7 @@ function prosePanels(block: Extract<Block, { kind: "prose" }>, screen: number): 
  * lines that turned out to be (see theme.ts).
  */
 function notePanels(block: Extract<Block, { kind: "note" }>): Panel[] {
-  const lines = wrap(block.text, cellsIn(BODY_WIDTH), BODY_LINES);
+  const lines = wrap(block.text, BODY_WIDTH, BODY_LINES);
   return [panel(CONTAINER.note, noteRect(lines), lines.join("\n"), MUTED, 7)];
 }
 
@@ -332,8 +390,12 @@ function notePanels(block: Extract<Block, { kind: "note" }>): Panel[] {
  * page the reader has got to, and each shape of body reads it as the thing it
  * counts in — the screenful of a long page, the entry of a list, the screenful
  * again of something being read (see `screens`).
+ *
+ * `select` is the one thing on top of all that: which group of a summary page has
+ * a box round it, where the reader is choosing between them. Left off everywhere
+ * else, which is every screen but that one.
  */
-export function layout(view: PageView, screen: number, chrome: Chrome): Panel[] {
+export function layout(view: PageView, screen: number, chrome: Chrome, select?: number): Panel[] {
   const panels = chromePanels(view, chrome);
   const { block } = view;
   panels.push(
@@ -345,6 +407,9 @@ export function layout(view: PageView, screen: number, chrome: Chrome): Panel[] 
           ? prosePanels(block, screen)
           : readingPanels(block, screen)),
   );
+  if (select != null && block.kind === "readings") {
+    panels.push(...selectPanel(shownRows(block, screen), select));
+  }
   return panels;
 }
 
@@ -356,8 +421,8 @@ export function layout(view: PageView, screen: number, chrome: Chrome): Panel[] 
  */
 export function signature(panels: Panel[]): string {
   return panels
-    .map(({ id, rect, brightness, bordered, zOrder }) =>
-      [id, rect.x, rect.y, rect.width, rect.height, brightness, bordered ? 1 : 0, zOrder].join(","),
+    .map(({ id, rect, brightness, bordered, padding, zOrder }) =>
+      [id, rect.x, rect.y, rect.width, rect.height, brightness, bordered ? 1 : 0, padding, zOrder].join(","),
     )
     .join("|");
 }

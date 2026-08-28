@@ -264,41 +264,59 @@ check(
 );
 
 await roll(1);
-check("and the second of them is where the list is", display.path() === "lo/nearby", display.path());
+check("and the second of them is where the groups are", display.path() === "lo/nearby", display.path());
+
+// A tap picks a group out on the page itself rather than leaving it: the reader
+// is choosing where to go, and the path says they have not gone yet. What
+// changes on the screen is a box, which is the one thing this check cannot see —
+// what it can see is that the wheel has stopped walking pages.
 display.enter();
 await settle();
-check("which a tap steps into, at the first group", display.path() === "lo/nearby/msg", display.path());
+check("a tap picks out a group without leaving the page", display.path() === "lo/nearby", display.path());
 
-// One entry per exchange, per post, per listing and per person — and a group
-// with nothing in it still keeps one, so the wheel can always walk to it. Asked
-// of the page rather than written down here: the point of the check is that a
-// lap of the list is a lap of the list, whatever is on the street today.
-const nearbyPage = PAGES.find((page) => page.id === "nearby");
-const ENTRIES = nearbyPage?.items?.(busy()).length ?? 0;
-const walked: string[] = [];
-for (let step = 0; step < ENTRIES; step += 1) {
-  if (walked[walked.length - 1] !== display.path()) walked.push(display.path());
+// Four groups on this page, walked in the page's own order. Which one is boxed is
+// read off the path it opens onto rather than off the box.
+async function opens(): Promise<string> {
+  display.enter();
+  await settle();
+  const path = display.path();
+  display.back();
+  await settle();
+  return path;
+}
+
+const groups: string[] = [];
+for (let step = 0; step < 4; step += 1) {
+  groups.push(await opens());
   await roll(1);
 }
 check(
   "the wheel walks the groups in the page's own order",
-  ENTRIES === 2 + 16 + 2 + 2 &&
-    walked.join(" ") === "lo/nearby/msg lo/nearby/posts lo/nearby/events lo/nearby/people",
-  `${ENTRIES} entries: ${walked.join(" ")}`,
+  groups.join(" ") === "lo/nearby/msg lo/nearby/posts lo/nearby/events lo/nearby/people",
+  groups.join(" "),
 );
 
-// A lap has brought the reader back to the first letter. Two more steps is the
-// first of the posts, and a tap opens it.
-await roll(2);
+// A lap has brought the reader back to the letters. One step on is the posts, and
+// a tap opens the list of them.
+await roll(1);
 display.enter();
 await settle();
-check("a tap on an entry reads it", display.path() === "lo/nearby/posts", display.path());
+check("a second tap opens that group's own list", display.path() === "lo/nearby/posts", display.path());
 
-// Which is a screen the wheel does not leave: it pages what is being read, where
-// one more flick at the depth above would have carried the reader off the end of
-// the posts and into the listings.
-await roll(16);
-check("and the wheel inside it stays inside it", display.path() === "lo/nearby/posts", display.path());
+// Sixteen posts and nothing else: the wheel stays inside the group the reader
+// chose, where before it would have carried them on into the listings.
+const nearbyPage = PAGES.find((page) => page.id === "nearby");
+const POSTS = nearbyPage?.items?.(busy()).filter((item) => item.group === "posts").length ?? 0;
+await roll(POSTS + 3);
+check(
+  "and the wheel stays inside it",
+  POSTS === 16 && display.path() === "lo/nearby/posts",
+  `${POSTS} posts, ${display.path()}`,
+);
+
+display.enter();
+await settle();
+check("a third tap reads one of them", display.path() === "lo/nearby/posts", display.path());
 
 // The list is rebuilt on every paint, and the reader is held to the entry rather
 // than to its position: four posts deleted from under them is the same group,
@@ -311,21 +329,24 @@ check(
   display.path(),
 );
 
-// Two levels down, so two double taps out — the first back to the list it was
-// read from, still standing in the posts, and the second to the page itself.
+// Three levels down, so three double taps out — back to the list it was read
+// from, back to the page with the group still boxed, and back to the dashboard.
 check("a double tap comes back to the list", display.back() && display.path() === "lo/nearby/posts", display.path());
 await settle();
-check("and the next one to the page", display.back() && display.path() === "lo/nearby", display.path());
+check("and the next to the page", display.back() && display.path() === "lo/nearby", display.path());
+await settle();
+check("and the next out of the choosing", display.back() && display.path() === "lo/nearby", display.path());
 await settle();
 check("where it is the way out of the app instead", display.back() === false, display.path());
 check("and the reader is on the page they stepped in from", display.current() === "nearby", String(display.current()));
 
-// A group with nothing in it is one entry saying which kind of nothing, so the
-// list is still four entries long and the wheel still walks the same route —
-// and stepping back in lands on the group the reader was last in rather than at
-// the top, which is the same anchor holding across a page they left and a page
-// that emptied while they were away.
+// A group with nothing in it still keeps its place among the four, so the wheel
+// walks the same route — and stepping back in picks out the group the reader was
+// last in rather than the first, which is the same anchor holding across a page
+// they left and a page that emptied while they were away.
 display.render(context({ posts: { status: "ready", data: [] } }));
+await settle();
+display.enter();
 await settle();
 display.enter();
 await settle();
@@ -334,10 +355,12 @@ check(
   display.path() === "lo/nearby/posts",
   display.path(),
 );
-// And there is nothing behind that sentence to open.
+// And there is nothing behind the sentence that group is showing.
 display.enter();
 await settle();
-check("but a group with nothing in it cannot be opened", display.path() === "lo/nearby/posts", display.path());
+check("but a group with nothing in it cannot be read", display.path() === "lo/nearby/posts", display.path());
+display.back();
+await settle();
 display.back();
 await settle();
 

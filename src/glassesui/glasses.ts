@@ -1,4 +1,4 @@
-// The dashboard, as the glasses see it, and the two levels underneath it.
+// The dashboard, as the glasses see it, and the three levels underneath it.
 //
 // This is the whole of what main.ts talks to: hand it everything that is known
 // right now and it draws the screenful the reader is looking at; tell it the
@@ -14,23 +14,33 @@
 // the rest of one — but a page that did overflow would contribute a second screen
 // rather than lose the difference (see layout.ts).
 //
-// **The three levels.** A dashboard fits by cutting, and what it cuts is the ends
+// **The four levels.** A dashboard fits by cutting, and what it cuts is the ends
 // of sentences. That is the right trade for the question "what is going on here"
 // and no answer at all to "what did they say", so under two of the three pages
-// there is the list the page is a summary of, and under each entry of that the
-// whole of what it says (see pages/list.ts).
+// there is the group the reader picks out of it, under that the whole of that
+// group, and under that one entry of it, read (see pages/list.ts).
 //
 //   `lo/` `lo/nearby` `lo/info`     the three pages, one flick apart
-//   `lo/nearby/msg · 2/4`           the second of the four letters waiting
+//   `lo/nearby · 1/4`               the same page, with a box round one group
+//   `lo/nearby/msg · 2/4`           that group's own list, the second letter
 //   `lo/nearby/msg · 1/2`           that letter, whole, over two screenfuls
 //
-// Each page carries its own name, and the group appears the moment the reader
-// steps in — so the path changes under them as the wheel carries them out of the
-// letters and into the posts, which is the one thing the heading cannot say
-// twice. What the counter counts is whatever the path has just named: which page
-// of the three, which letter of the four, which screenful of the letter.
+// The middle level is the one that would not be obvious from the outside. The
+// step from a page to a list could have been one tap, and it is two because the
+// page has four things on it: a tap that opened *a* list would have to guess
+// which, and the wheel would then have to carry the reader across group
+// boundaries to correct the guess. So the choosing happens where the reader can
+// already see all four — on the page itself, with a box round one of them (see
+// theme.ts on why a box and not brightness) — and the tap after it opens the one
+// they chose, which is the only list the wheel then walks.
 //
-// The wheel means the same thing at all three levels: the next thing along,
+// Each page carries its own name, and the group joins the path only once it has
+// been opened: while the reader is still choosing they have not gone anywhere,
+// and the corner says so. What the counter counts is whatever the path has just
+// named — which page of the three, which group of the four, which letter, which
+// screenful of it.
+//
+// The wheel means the same thing at all four levels: the next thing along,
 // rounding at the end rather than stopping. A tap goes in, a double tap comes
 // back out, and at the top a double tap is the way out of the app it always was.
 //
@@ -46,12 +56,23 @@ import type { EvenAppBridge } from "@evenrealities/even_hub_sdk";
 import { offeredPages } from "./pages";
 import type { Item, ItemRef, PageContext, PageDefinition, PageView } from "./pages/types";
 import { listView, locate as locateItem, readView } from "./pages/list";
+import { spans, type Span } from "./pages/stack";
 import { formatPlace } from "./format";
 import { ROOT, clockFace, pathOf } from "./pages/chrome";
 import { layout, screens, type Chrome, type Panel } from "./layout";
 import { createPainter, type Painter } from "./paint";
-import { BODY_LINES, BODY_WIDTH, FRAME, INK, CONTAINER, MUTED, cellsIn, frameCells, noteRect } from "./theme";
-import { clip, wrap } from "./metrics";
+import {
+  BODY_LINES,
+  BODY_WIDTH,
+  CONTAINER,
+  FRAME,
+  FRAME_PADDING,
+  INK,
+  MUTED,
+  frameCells,
+  noteRect,
+} from "./theme";
+import { clipCells, wrap } from "./metrics";
 
 /**
  * A screen that is not part of the sequence and takes the display over while it
@@ -110,22 +131,36 @@ interface Anchor {
 }
 
 /**
- * How deep in: the dashboard, a page's own list, or one entry of it. A number
- * rather than three shapes of state, because the page it is all under is the
- * same one at every depth — the anchor is never disturbed by going in, so coming
- * back out is a subtraction and the reader is where they left off.
+ * How deep in: the dashboard, a group of the page picked out on the page itself,
+ * that group's own list, or one entry of it read whole. A number rather than four
+ * shapes of state, because the page it is all under is the same one at every
+ * depth — the anchor is never disturbed by going in, so coming back out is a
+ * subtraction and the reader is where they left off.
  */
-type Depth = 0 | 1 | 2;
+type Depth = 0 | 1 | 2 | 3;
+
+const CHOOSING = 1;
+const LISTING = 2;
+const READING = 3;
 
 /** One screenful of what is underneath a page, and everything the wheel needs to leave it. */
 interface Inside {
   view: PageView;
   screen: number;
+  /** Which group has a box round it, on the screen where the reader is choosing one. */
+  select?: number;
   chrome: Chrome;
-  items: Item[];
-  focus: number;
-  /** How many steps of the wheel there are at this depth — entries, or screenfuls. */
+  /**
+   * Where the wheel is standing at this depth and how many places there are to
+   * stand — which group, which entry, or which screenful of one thing. The same
+   * pair whatever the depth, so one line of arithmetic turns the wheel at all
+   * three of them.
+   */
+  step: number;
   total: number;
+  /** The groups of the page, and the entries of the one the reader has chosen. */
+  groups: Span[];
+  items: Item[];
 }
 
 /**
@@ -157,14 +192,15 @@ function locate(steps: Step[], anchor: Anchor): number {
 
 /** The screen before there is anything to put on it. */
 function bootPanels(message: string): Panel[] {
-  const lines = wrap(message, cellsIn(BODY_WIDTH), BODY_LINES);
+  const lines = wrap(message, BODY_WIDTH, BODY_LINES);
   return [
     {
       id: CONTAINER.frame,
       rect: FRAME,
-      text: clip("lo", frameCells()),
+      text: clipCells("lo", frameCells()),
       brightness: INK,
       bordered: true,
+      padding: FRAME_PADDING,
       zOrder: 0,
     },
     {
@@ -173,6 +209,7 @@ function bootPanels(message: string): Panel[] {
       text: lines.join("\n"),
       brightness: MUTED,
       bordered: false,
+      padding: 0,
       zOrder: 7,
     },
   ];
@@ -189,9 +226,11 @@ export async function createGlassesDisplay(
   // On the dashboard, which is where every launch starts and where a double tap
   // eventually returns everybody.
   let depth: Depth = 0;
-  // Which entry of the page's list the reader is on, and which screenful of that
-  // entry. Both kept across a step out and back in, so a reader who left the
-  // letters to check the time comes back to the letters.
+  // Which group of the page the reader has picked out, which entry of it they are
+  // on, and which screenful of that entry. All three are kept across a step out
+  // and back in, so a reader who left the letters to check the time comes back to
+  // the letter they were reading rather than to the top of the app.
+  let chosen: string | null = null;
   let at: ItemRef | null = null;
   let reading = 0;
   let latest: PageContext | null = null;
@@ -212,55 +251,95 @@ export async function createGlassesDisplay(
     };
   }
 
+  /** The groups a page is offering to be chosen between, in the order it lists them. */
+  function groupsOf(view: PageView): Span[] {
+    return view.block.kind === "readings" ? spans(view.block.rows) : [];
+  }
+
   /**
    * The screenful under the page the anchor names, or `null` where there is no
    * longer anything under it — a country that stopped feeding this page, a
-   * sign-out that emptied every list. Nothing here throws the reader out on its
-   * own; the caller does that, and it does it by drawing the dashboard instead.
+   * sign-out that emptied every list.
+   *
+   * It is also the one place that knows whether the level the reader is on still
+   * exists, so it is the one place allowed to move them up a level: a group whose
+   * entries have all gone, or a sentence with nothing behind it, leaves them
+   * standing one step further out rather than on a screen with nothing on it.
+   * Going further out than that is the caller's, and it does it by drawing the
+   * dashboard instead.
    */
   function inside(context: PageContext): Inside | null {
     const page = offeredPages(context).find(({ id }) => id === anchor.pageId);
-    const items = page?.items?.(context) ?? [];
-    if (!page || items.length === 0) return null;
+    if (!page) return null;
+    const view = page.render(context);
+    const groups = groupsOf(view);
+    if (groups.length === 0) return null;
+
+    // Which group, by name. A group that has gone — a country that stopped
+    // feeding its listings — leaves the reader on the first of what is left
+    // rather than on a number that now points at something else.
+    let picked = groups.findIndex((group) => group.id === chosen);
+    if (picked === -1) picked = 0;
+    chosen = groups[picked].id;
+
+    // Everything filed under it. Only that group: the reader chose it one level
+    // up, and a wheel that carried them out of the letters and into the posts
+    // would be undoing the choice they had just made.
+    const items =
+      depth > CHOOSING ? (page.items?.(context) ?? []).filter((item) => item.group === chosen) : [];
+    if (depth > CHOOSING && items.length === 0) depth = CHOOSING;
+
+    if (depth === CHOOSING) {
+      // The page as it always was, with a box round one group of it. The path is
+      // still the page's own — the reader has not gone anywhere yet, they are
+      // deciding where — and the counter is which of the groups on offer.
+      return {
+        view,
+        screen: 0,
+        select: picked,
+        chrome: { ...surround(context), path: pathOf(page), index: picked + 1, total: groups.length },
+        step: picked,
+        total: groups.length,
+        groups,
+        items,
+      };
+    }
 
     const focus = locateItem(items, at);
     const item = items[focus];
     // Written back, so that an entry the reader only reached by falling back is
     // the one the next flick of the wheel moves on from.
     at = { group: item.group, key: item.key };
+    // Nothing behind a sentence saying a group is empty, so a reader who is
+    // somehow standing behind one is put back in front of it.
+    if (depth === READING && !item.body) depth = LISTING;
 
-    if (depth === 1) {
-      // The counter counts what the path has just named, which is the group
-      // rather than the list: `lo/nearby/posts · 3/16` is the third of sixteen
-      // posts. The wheel still walks the whole list — that is how a reader gets
-      // from the last letter to the first post — so what changes at a boundary
-      // is both ends of this line at once, the name and the denominator.
-      const first = items.findIndex((entry) => entry.group === item.group);
-      const of = items.filter((entry) => entry.group === item.group).length;
+    if (depth === LISTING) {
       return {
         view: listView(items, focus, context.t),
         screen: focus,
         chrome: {
           ...surround(context),
           path: pathOf(page, item.group),
-          index: focus - first + 1,
-          total: of,
+          index: focus + 1,
+          total: items.length,
         },
-        items,
-        focus,
+        step: focus,
         total: items.length,
+        groups,
+        items,
       };
     }
 
-    const view = readView(item);
-    const total = screens(view);
+    const read = readView(item);
+    const total = screens(read);
     // A post that was four screenfuls when the reader stepped into it and is two
     // now — because the language changed under it, or because this is a repaint
     // of something that has been edited — leaves them on the last of what is
     // left rather than on a screen that is no longer there.
     reading = Math.min(Math.max(reading, 0), total - 1);
     return {
-      view,
+      view: read,
       screen: reading,
       chrome: {
         ...surround(context),
@@ -268,9 +347,10 @@ export async function createGlassesDisplay(
         index: reading + 1,
         total,
       },
-      items,
-      focus,
+      step: reading,
       total,
+      groups,
+      items,
     };
   }
 
@@ -291,7 +371,7 @@ export async function createGlassesDisplay(
       const step = inside(latest);
       if (step) {
         shownPath = step.chrome.path ?? ROOT;
-        painter.paint(layout(step.view, step.screen, step.chrome));
+        painter.paint(layout(step.view, step.screen, step.chrome, step.select));
         return;
       }
       // What was under the reader is not there any more. The page it was under
@@ -349,12 +429,13 @@ export async function createGlassesDisplay(
       if (depth > 0) {
         const step = inside(latest);
         if (step) {
-          if (depth === 1) {
-            const next = (step.focus + direction + step.total) % step.total;
-            at = { group: step.items[next].group, key: step.items[next].key };
-          } else {
-            reading = (step.screen + direction + step.total) % step.total;
-          }
+          // One turn of the wheel, wherever the reader is standing: the next
+          // group, the next entry, the next screenful. What that means is the
+          // only thing that changes with the depth.
+          const next = (step.step + direction + step.total) % step.total;
+          if (depth === CHOOSING) chosen = step.groups[next].id;
+          else if (depth === LISTING) at = { group: step.items[next].group, key: step.items[next].key };
+          else reading = next;
           draw();
           return;
         }
@@ -373,21 +454,28 @@ export async function createGlassesDisplay(
 
       if (depth === 0) {
         const page = offeredPages(latest).find(({ id }) => id === anchor.pageId);
-        // Nothing behind the standing page, and nothing behind a page whose
-        // country feeds none of its groups. A tap that opened an empty list
-        // would be a step the reader has to take back.
-        if (!page?.items?.(latest).length) return;
-        depth = 1;
+        // Nothing behind the standing page, which is instruments rather than a
+        // list of anything, and nothing behind a page whose country feeds none
+        // of its groups. A tap that boxed a group that was not there would be a
+        // step the reader has to take back.
+        if (!page || groupsOf(page.render(latest)).length === 0) return;
+        depth = CHOOSING;
         draw();
         return;
       }
 
-      if (depth === 1) {
+      if (depth === CHOOSING) {
+        depth = LISTING;
+        draw();
+        return;
+      }
+
+      if (depth === LISTING) {
         const step = inside(latest);
         // A group with nothing in it is one entry saying so, and there is
         // nothing behind that sentence but itself (see pages/list.ts).
-        if (!step?.items[step.focus].body) return;
-        depth = 2;
+        if (!step?.items[step.step]?.body) return;
+        depth = READING;
         reading = 0;
         draw();
       }
@@ -397,7 +485,7 @@ export async function createGlassesDisplay(
       // The composer answers its own double tap, and it answers it by throwing a
       // sentence away — which is not a step out of anywhere (see main.ts).
       if (taken || depth === 0) return false;
-      depth = depth === 2 ? 1 : 0;
+      depth = (depth - 1) as Depth;
       draw();
       return true;
     },

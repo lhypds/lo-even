@@ -187,16 +187,51 @@ and one from the simulator's changelog rather than the SDK: a text container's
 content is capped at **999 bytes**.
 
 Eight text containers is the budget the whole layout is drawn against, and it is
-spent to the last one: five go on the chrome — the frame with the heading in it,
+spent to the last one. Five go on the chrome — the frame with the heading in it,
 whatever the screen says about itself, the badge and clock in one corner, the
-footer line, and the path in the other corner — and the three left over are the
-body. That is why a summary page is a column of labels beside a column of
-readings rather than a grid, why a list screen shows three entries and not four,
-and why a list names its group in the heading rather than in a margin of its own:
-there was no ninth container to put one in.
+footer line, and the path in the other corner — and three are the body. That is
+why a summary page is a column of labels beside a column of readings rather than
+a grid, why a list screen shows three entries and not four, and why a list names
+its group in the heading rather than in a margin of its own: there was no ninth
+container to put one in.
+
+The box round whatever the wheel is pointing at is the eighth on the screens that
+have one, and it gets there by taking the id of the container that says what a
+screen has to say about itself — which is free on exactly those screens, a page
+with something in that corner being one with nothing to point at. A list screen
+is therefore four of chrome, three entries and the box: eight exactly, with
+nothing left over.
 
 A ninth would not be refused, either. The protocol drops it, so it goes missing
 on glass and nowhere else — which is what `npm run glasses:check` counts.
+
+### The one thing here that is not measured
+
+The box drawn round whatever the wheel is pointing at — a group on a summary page,
+an entry on a list — is a bordered container with a single space in it and no
+padding (`boxAround` in [theme.ts](../src/glassesui/theme.ts)). Everything else on
+this page was read off a screenshot; this was not, because it was added after the
+probe was last run. Three things about it are assumptions rather than
+measurements:
+
+- that a container with no text draws its border at all;
+- that a border is drawn on the rectangle itself, so the box lands where
+  `selectRect` puts it rather than inset by anything;
+- that `paddingLength: 0` on a bordered box behaves — the note above about
+  `borderRadius: 9` putting text 9 px in is the reason to doubt it, though with a
+  radius of 0 and nothing to place there is nothing for it to move.
+
+The content height is inside the rule regardless. The box takes three pixels of
+air below what it covers and none above — lopsided because the ink of a line sits
+six pixels down from the top of it and runs to the bottom, so a box drawn evenly
+round a line has all its daylight above the letters — which makes a one-row box
+30 px, and 30 less a 1 px border top and bottom leaves 28 for a 27 px line. A
+two-line entry on a list comes to 57 and leaves 55 for 54.
+
+Both are clear of the threshold, but only just, and the one-row box is what runs
+out first: **29 px is the least it can be**, per the table above. One more pixel
+off the top is the last one available; after that the bottom edge has to come down
+with it. Put the probe back on the rest of this before trusting it on glass.
 
 
 ## Simulator versions

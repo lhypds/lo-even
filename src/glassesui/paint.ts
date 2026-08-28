@@ -33,13 +33,7 @@ import {
   type EvenAppBridge,
 } from "@evenrealities/even_hub_sdk";
 import { signature, type Panel } from "./layout";
-import {
-  CONTAINER,
-  FRAME_BORDER_COLOR,
-  FRAME_BORDER_RADIUS,
-  FRAME_BORDER_WIDTH,
-  FRAME_PADDING,
-} from "./theme";
+import { CONTAINER, FRAME_BORDER_COLOR, FRAME_BORDER_RADIUS, FRAME_BORDER_WIDTH } from "./theme";
 
 export interface Painter {
   /** Put this on the glasses. Returns at once; the writing is queued. */
@@ -75,11 +69,13 @@ function toProperty(panel: Panel): TextContainerProperty {
     borderWidth: panel.bordered ? FRAME_BORDER_WIDTH : 0,
     borderColor: panel.bordered ? FRAME_BORDER_COLOR : 0,
     borderRadius: panel.bordered ? FRAME_BORDER_RADIUS : 0,
-    // Only the frame keeps a gutter of its own; a body column is placed where it
-    // is meant to be and padding would shift it off the grid the columns share.
-    // It is charged on the top and the bottom as well as the sides, which is what
-    // decides where the heading's line sits (see theme.ts).
-    paddingLength: panel.bordered ? FRAME_PADDING : 0,
+    // Whatever gutter the panel asked for, which is nothing for all but the
+    // frame: a body column is placed where it is meant to be and padding would
+    // shift it off the grid the columns share. It is charged on the top and the
+    // bottom as well as the sides, which is what decides where the heading's line
+    // sits — and why the box round a chosen group asks for none, a bordered box
+    // one line tall having no room to give away (see theme.ts and layout.ts).
+    paddingLength: panel.padding,
     containerID: panel.id,
     containerName: nameFor(panel.id),
     content: panel.text,

@@ -17,6 +17,16 @@
 // the glasses the heading's corner is 158 pixels sized off the widest it can ever
 // be, and the footer's is cut against the path beside it (see theme.ts).
 //
+// The body is past what it can show for the same reason, and this is new: the
+// body is now cut to its container in pixels rather than in cells, so a line of
+// Latin holds about a fifth more characters than a grid of widest-glyph cells
+// has columns for. Fifty-six characters fit in the five hundred and sixty-four
+// pixels of a body line; forty-six is all this sheet can draw. A line that runs
+// out of grid ends in an ellipsis here — the same mark the corners use when they
+// collide — and it means "more than this can show" rather than "cut off on the
+// glasses". Which lines fill and where a column ends is still worth reading off
+// this; how much of a long one survives is not.
+//
 // The half-line of air between the entries of a list is the other thing it
 // cannot draw. Three entries of two lines leave 28 pixels over and it is dealt
 // between them, which rounds to nothing for the first gap here and to a whole
@@ -25,12 +35,13 @@
 import { PAGES } from "../pages/index";
 import { composeView, type DraftKind } from "../pages/compose";
 import { listView, readView } from "../pages/list";
+import { spans } from "../pages/stack";
 import type { PageContext } from "../pages/types";
 import { layout, screens } from "../layout";
 import { translator } from "../strings";
 import { localeFor, formatPlace } from "../format";
 import { clockFace, pathOf } from "../pages/chrome";
-import { CHAR_WIDTH, LINE_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH } from "../theme";
+import { CHAR_WIDTH, CONTAINER, LINE_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH } from "../theme";
 import { cells } from "../metrics";
 import { args } from "./host";
 
@@ -130,6 +141,11 @@ const ctx: PageContext = {
 function raster(panels: ReturnType<typeof layout>): string {
   const grid: string[][] = Array.from({ length: ROWS }, () => Array<string>(COLS).fill(" "));
   const box: boolean[][] = Array.from({ length: ROWS }, () => Array<boolean>(COLS).fill(false));
+  // The rows the box round a chosen group covers. Kept apart from the frame's,
+  // because the two land in the same columns here — the selection runs the whole
+  // width of the screen, inside the frame by a pixel — and a proof sheet that
+  // drew them with the same character would not be showing the selection at all.
+  const picked = Array.from({ length: ROWS }, () => false);
 
   for (const panel of panels) {
     const col0 = Math.round(panel.rect.x / CHAR_WIDTH);
@@ -138,6 +154,7 @@ function raster(panels: ReturnType<typeof layout>): string {
     if (panel.bordered) {
       const rows = Math.max(1, Math.round(panel.rect.height / LINE_HEIGHT));
       for (let r = row0; r < row0 + rows && r < ROWS; r += 1) {
+        if (panel.id !== CONTAINER.frame) picked[r] = true;
         for (let c = col0; c < col0 + Math.round(panel.rect.width / CHAR_WIDTH) && c < COLS; c += 1) {
           box[r][c] = true;
         }
@@ -167,7 +184,16 @@ function raster(panels: ReturnType<typeof layout>): string {
       let col = line.length > text.length ? right - cells(text) : col0 + inset;
       let written = -1;
       for (const ch of text) {
-        if (col >= COLS) break;
+        // The last column belongs to the frame, and a line that reaches it has
+        // outrun the grid rather than the screen: the body is cut in pixels and
+        // this is drawn in cells, so a full line of Latin has ten more characters
+        // than there are columns to put them in. Ended with the same ellipsis a
+        // collision gets, because a proof that drops what it cannot fit in
+        // silence is the one thing worse than a proof that is a cell out.
+        if (col >= COLS - 1) {
+          if (written >= 0) grid[row][written] = "…";
+          break;
+        }
         if (col >= 0) {
           // Whoever got here first keeps the cell, and the one that arrives
           // second stops and says so. Two strings can want the same column here
@@ -199,8 +225,12 @@ function raster(panels: ReturnType<typeof layout>): string {
       // corner is measured from. What is left between them is 46, which is what
       // `frameCells` says the heading has to fit in (see theme.ts).
       if (box[r][0]) {
-        row[0] = "│";
-        row[COLS - 1] = "│";
+        // Heavy where the group under the reader is boxed, light where it is only
+        // the frame. The real box has a top and a bottom as well, half a line
+        // above and below the rows it covers, and half a line is not something a
+        // grid of whole lines can draw.
+        row[0] = picked[r] ? "┃" : "│";
+        row[COLS - 1] = picked[r] ? "┃" : "│";
       }
       return row.join("").replace(/\s+$/, "").padEnd(COLS, " ");
     })
@@ -265,48 +295,50 @@ for (const page of PAGES) {
 // above, because a list is not a page of the dashboard (see pages/list.ts).
 for (const page of PAGES) {
   if (!page.offered(ctx)) continue;
+  const view = page.render(ctx);
   const items = page.items?.(ctx) ?? [];
-  const groups = [...new Set(items.map((item) => item.group))];
-  for (const group of groups) {
-    const focus = items.findIndex((item) => item.group === group);
-    const path = pathOf(page, group);
-    const list = layout(listView(items, focus, t), focus, {
+  const groups = view.block.kind === "readings" ? spans(view.block.rows) : [];
+
+  groups.forEach((group, picked) => {
+    const path = pathOf(page, group.id);
+    const chrome = {
       place: formatPlace(ctx.place),
       time: clockFace(ctx),
       status: "",
       unread: ctx.unread,
-      path,
-      index: 1,
-      total: items.filter((item) => item.group === group).length,
-    });
+    };
+
+    // The page itself with a box round this group, which is what the first tap
+    // does. Drawn for every group rather than only the first, because the box is
+    // the one thing here whose height comes out of the dealing — a group that got
+    // one line and a group that got three are two different boxes (see stack.ts).
+    const choose = layout(view, 0, { ...chrome, path: pathOf(page), index: picked + 1, total: groups.length }, picked);
+    console.log(
+      `\n╔══ ${pathOf(page)} choosing ${group.id} ${"═".repeat(Math.max(0, 24 - group.id.length))}`,
+    );
+    console.log(raster(choose));
+
+    const mine = items.filter((item) => item.group === group.id);
+    if (mine.length === 0) return;
+    const list = layout(listView(mine, 0, t), 0, { ...chrome, path, index: 1, total: mine.length });
     console.log(`\n╔══ ${path} (the list) ${"═".repeat(Math.max(0, 26 - path.length))}`);
     console.log(raster(list));
 
-    // The longest entry of the group rather than the one the list is focused on:
-    // this is the only screen in the app that can run past its own bottom edge,
-    // and the whole point of drawing it here is to see what happens when it does.
-    const item = items
-      .filter((entry) => entry.group === group)
-      .reduce((longest, entry) => (entry.body.length > longest.body.length ? entry : longest));
-    if (!item.body) continue;
-    const view = readView(item);
-    const total = screens(view);
+    // The longest entry of the group rather than the first: this is the only
+    // screen in the app that can run past its own bottom edge, and the whole
+    // point of drawing it here is to see what happens when it does.
+    const item = mine.reduce((longest, entry) => (entry.body.length > longest.body.length ? entry : longest));
+    if (!item.body) return;
+    const read = readView(item);
+    const total = screens(read);
     for (let screen = 0; screen < total; screen += 1) {
-      const panels = layout(view, screen, {
-        place: formatPlace(ctx.place),
-        time: clockFace(ctx),
-        status: "",
-        unread: ctx.unread,
-        path,
-        index: screen + 1,
-        total,
-      });
+      const panels = layout(read, screen, { ...chrome, path, index: screen + 1, total });
       console.log(
         `\n╔══ ${path} (read${total > 1 ? `, screen ${screen + 1}/${total}` : ""}) ${"═".repeat(Math.max(0, 24 - path.length))}`,
       );
       console.log(raster(panels));
     }
-  }
+  });
 }
 
 // The composer, which is not one of the pages and is not in the count above: it

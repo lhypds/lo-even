@@ -19,10 +19,24 @@
 // rounding was five characters of daylight between the clock and the corner it
 // was supposed to be in.
 //
-// So: cut columns by the cell, and place anything measured — a corner, a centred
-// sentence — by the pixel. Cutting by the pixel too would buy about a fifth more
-// text on every line, and costs the margin that keeps a line from wrapping if the
-// firmware's face turns out to be a shade wider than the simulator's.
+// So: the body is cut by the pixel, and so is anything that has to *land*
+// somewhere — a corner, a centred sentence. Cutting by the cell was the older
+// answer here and it was leaving about a fifth of every line on the table: a cell
+// is the widest glyph there is against a face that averages ten pixels, so a
+// reading cut to its last cell stopped fifty-odd pixels inside the frame while
+// the clock above it ended on it. That is not a margin, it is a column that looks
+// like it failed to fill.
+//
+// Two lines of chrome are still cut by the cell, and by decision rather than by
+// omission: the heading's title and the footer's place name are cut against a
+// *neighbour* — the corner the clock is in, the path beside them — rather than
+// against the frame. There the cell's over-estimate is the air between two
+// strings, which is worth keeping, instead of daylight at the edge of the screen.
+//
+// What cutting by the pixel spends is the margin that kept a line from wrapping
+// if the firmware's face turns out to be a shade wider than the simulator's, and
+// a wrapped line in a container cut this close is a scroll bar and a row nobody
+// sees. The table below is what to re-measure on glass if that ever shows up.
 
 // One character cell, which is what everything laid out in columns is measured
 // in. It lives here rather than in theme.ts because it is a fact about the face
@@ -149,12 +163,39 @@ export function textWidth(value: string): number {
 }
 
 /**
- * The same string cut to fit, with an ellipsis where anything was taken off.
- * The ellipsis costs a cell of its own, so what comes back is never wider than
- * asked for — which is the whole point of it: a column that overruns by one
- * cell is a column that has stopped being a column.
+ * The same string cut to fit its container, with an ellipsis where anything was
+ * taken off. Measured in pixels, which is what the display sets and therefore
+ * the only measure that fills a column to the width it was given (see above).
+ *
+ * The ellipsis costs its own width rather than a cell, so what comes back is
+ * never wider than the slot asked for — which is the whole point of it: a line
+ * that overruns its container wraps, and a wrapped line in a body cut to the
+ * screen is a scroll bar and a row nobody sees.
  */
-export function clip(value: string, width: number): string {
+export function clip(value: string, slot: number): string {
+  const text = value.trim();
+  if (slot <= 0) return "";
+  if (textWidth(text) <= slot) return text;
+  const room = slot - textWidth("…");
+  let kept = "";
+  let used = 0;
+  for (const character of text) {
+    const width = textWidth(character);
+    if (used + width > room) break;
+    kept += character;
+    used += width;
+  }
+  return `${kept.trimEnd()}…`;
+}
+
+/**
+ * The same cut, measured in cells, and it belongs to the two lines of chrome
+ * alone: the title in the heading and the place name in the footer, both of
+ * which are cut against the corner beside them rather than against the frame.
+ * Over-estimating there buys air between two strings; over-estimating in the
+ * body only left the body short (see above).
+ */
+export function clipCells(value: string, width: number): string {
   const text = value.trim();
   if (width <= 0) return "";
   if (cells(text) <= width) return text;
@@ -186,47 +227,30 @@ export function clip(value: string, width: number): string {
  * into empty screen.
  */
 export function padLeft(value: string, slot: number): string {
-  const text = clipTo(value, slot);
+  const text = clip(value, slot);
   const spaces = Math.floor((slot - textWidth(text)) / textWidth(" "));
   return " ".repeat(Math.max(0, spaces)) + text;
-}
-
-/**
- * The same cut as `clip`, measured in pixels rather than cells. It belongs with
- * the right-aligned strings alone: they are sized against a slot that was itself
- * measured, and cutting them by the cell would take a character off a clock that
- * fits perfectly well.
- */
-function clipTo(value: string, slot: number): string {
-  const text = value.trim();
-  if (textWidth(text) <= slot) return text;
-  const room = slot - textWidth("…");
-  let kept = "";
-  let used = 0;
-  for (const character of text) {
-    const width = textWidth(character);
-    if (used + width > room) break;
-    kept += character;
-    used += width;
-  }
-  return `${kept.trimEnd()}…`;
 }
 
 /**
  * Broken onto as many lines as it takes, breaking between words where there are
  * words to break between and mid-string where there are not — which is most of
  * the time in Japanese and Chinese, neither of which puts spaces anywhere.
+ *
+ * Broken against the container in pixels, like everything else in the body: a
+ * line broken by the cell came up a fifth short of the width it was given, which
+ * on a post is a line of type and a half thrown away per screenful.
  */
-export function wrap(value: string, width: number, maxLines = Infinity): string[] {
+export function wrap(value: string, slot: number, maxLines = Infinity): string[] {
   const text = value.trim().replace(/\s+/g, " ");
-  if (!text || width <= 0) return [];
+  if (!text || slot <= 0) return [];
   const lines: string[] = [];
   let line = "";
 
   /** Cut short rather than run on, and say so on the last line that survives. */
   const elide = (): string[] => {
     const kept = lines.slice(0, maxLines);
-    kept[kept.length - 1] = clip(`${kept[kept.length - 1]}…`, width);
+    kept[kept.length - 1] = clip(`${kept[kept.length - 1]}…`, slot);
     return kept;
   };
 
@@ -238,7 +262,7 @@ export function wrap(value: string, width: number, maxLines = Infinity): string[
   for (const word of text.split(" ")) {
     if (!word) continue;
     const candidate = line ? `${line} ${word}` : word;
-    if (cells(candidate) <= width) {
+    if (textWidth(candidate) <= slot) {
       line = candidate;
       continue;
     }
@@ -246,14 +270,14 @@ export function wrap(value: string, width: number, maxLines = Infinity): string[
     // A single run longer than the line — a Japanese sentence, or a URL — is cut
     // wherever the width runs out, because there is nowhere else to cut it.
     let rest = word;
-    while (cells(rest) > width) {
+    while (textWidth(rest) > slot) {
       let piece = "";
       let used = 0;
       for (const character of rest) {
-        const size = codePointCells(character.codePointAt(0) ?? 0);
-        if (used + size > width) break;
+        const width = textWidth(character);
+        if (used + width > slot) break;
         piece += character;
-        used += size;
+        used += width;
       }
       if (!piece) break;
       lines.push(piece);

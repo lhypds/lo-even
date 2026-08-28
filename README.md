@@ -69,47 +69,67 @@ priority, and it is the same order the wheel walks the list in one level down. S
 
 A dashboard fits by cutting, and what it cuts is the ends of sentences. That is
 the right answer to "what is going on here" and no answer at all to "what did
-they say", so **a tap steps into the page you are on** — the same groups, no
-longer competing for the screen with anything else. Entries get two lines apiece
-and three are on screen at a time, the one you are on written in ink and the two
-beside it muted. Another tap opens it whole, and a long post is read a screenful
-at a time rather than cut off.
+they say", so there are three taps under each of the two pages that have groups
+on them:
 
-The corner of the footer says where you are and how far through it. Every page
-carries its own name, and the group appears the moment you step in:
+1. **A tap puts a box round one of the groups**, on the page itself. The wheel
+   moves the box: Messages, Posts, Events, People. Nothing else changes — you are
+   choosing where to go, and you have not gone yet.
+2. **A tap on the boxed group opens it.** Only that group: its entries get two
+   lines apiece and three are on screen at a time, the box round the one you are
+   on and that one written in ink.
+3. **A tap on an entry reads it whole**, a screenful at a time if it runs long.
+
+The choosing is a step of its own because the page has four things on it. A tap
+that opened *a* list would have to guess which, and the wheel would then have to
+carry you across group boundaries to correct the guess — so the choice is made
+where all four are already in front of you.
+
+The corner of the footer says where you are and how far through it:
 
 ```
 lo/ · 1/3              where you are standing
 lo/nearby · 2/3        who and what is around you
 lo/info · 3/3          what is being said about the wider place
 
-lo/nearby/msg · 2/4    the second of the four letters waiting
-lo/nearby/posts · 3/16 the third of the sixteen posts on this street
+lo/nearby · 1/4        the same page, choosing the first of its four groups
+lo/nearby/msg · 2/4    that group opened: the second of four letters waiting
 lo/nearby/msg · 1/2    that letter, whole, over two screenfuls
 ```
 
-So the path changes under you as the wheel carries you out of the letters and
-into the posts — the one thing the heading, which names the group you are in,
-cannot say twice — and the counter beside it counts whatever the path has just
-named. The four things under `lo/nearby` are `msg`, `posts`, `events` and
-`people`, in that order; the two under `lo/info` are `news` and `trends`.
+Every page carries its own name; the group joins the path only once it is open.
+The counter beside it counts whatever the path has just named. The four groups
+under `lo/nearby` are `msg`, `posts`, `events` and `people`, in that order; the
+two under `lo/info` are `news` and `trends`.
 
-The wheel means the same thing at all three depths — the next thing along,
+The wheel means the same thing at all four depths — the next thing along,
 rounding at the end rather than stopping — and a double tap comes back out of
-each in turn. Every group keeps its place in the list even when it is empty, with
-one entry saying which kind of empty it is, so the wheel always walks the same
-route; there is simply nothing behind that sentence to open. The standing page is
+each in turn. Every group keeps its place on the page even when it is empty, with
+one line saying which kind of empty it is, so the wheel always walks the same
+route; there is simply nothing behind that sentence to read. The standing page is
 instruments rather than a list of anything, and a tap on it does nothing.
+
+The box is the only mark in the app that is not brightness, and it exists because
+brightness could not reach the screen that needed a pointer first: a summary row
+is a quiet word in the margin beside a bright reading, which is two containers,
+and a container is one brightness for all seven of its lines. It then follows you
+down onto the lists, where every entry is a container of its own and brightness
+alone would have done, because picking a group and picking an entry are one
+gesture and a pointer that changed shape half way through would be two things to
+learn. On a list you get both: the box, and the entry written in ink with the two
+beside it muted.
 
 What is still not here is anything that writes. lo's own rows open a post *and
 its replies*, and a reply needs a keyboard; the newswire's rows are links out to
 the article. What lo was told is what can be read up here, and the rest is on the
 phone.
 
-- **Scroll up/down** — the next page, entry or screenful, or the previous one.
-- **Single tap** — into the list under this page, or into the entry you are on.
-- **Double tap** — back out. At the top there is nowhere to come back from, and
-  it is the standard Even exit confirmation it has always been.
+- **Scroll up/down** — the next page, group, entry or screenful, or the previous
+  one.
+- **Single tap** — one step in: pick out a group, open the one you picked, read
+  the entry you are on.
+- **Double tap** — one step back out. At the top there is nowhere to come back
+  from, and it is the standard Even exit confirmation it has always been.
 - **Press and hold** — record from the glasses microphone. Release to stop, and
   what you said comes back as words on the screen with one question under it:
   **mark** or **post**?
@@ -204,9 +224,11 @@ npm run glasses:check            # drive the display against a fake bridge
 ```
 
 `glasses:preview` renders every screen in the app to a character grid the shape of
-the panel — the three pages, then each page's list at every group boundary, then
-the longest entry of each group read whole — so the columns can be read the way
-the wearer would read them. Pass `ja` or `zh` — a column measured in characters
+the panel — the three pages, then for each group: the page with that group boxed,
+the group's own list, and its longest entry read whole — so the columns can be
+read the way the wearer would read them. The selection box shows as `┃` down both
+edges of the rows it covers; its top and bottom are half a line above and below
+them, which a grid of whole lines cannot draw. Pass `ja` or `zh` — a column measured in characters
 rather than cells fits English and clips Japanese, and that is only visible side
 by side. Pass `many` to lengthen the posts and watch the lines they are given get
 dealt out differently, or `bare` for a country lo can feed none of.
@@ -220,12 +242,12 @@ trusting it on glass.
 `glasses:check` drives the real display against a bridge that records what it was
 asked to do, and asserts the things the typechecker cannot see: that scrolling
 walks every page and holds its place when the ground changes underneath it; that
-a tap steps into the list and a double tap comes back out of each depth in turn,
-leaving the reader on the page they started from; that the wheel walks a page's
-groups in the page's own order and holds onto the entry rather than its position
-when the list shrinks; and that a repaint writes as little as it can — one line
-for a minute of the clock, nothing at all when nothing moved, one rebuild rather
-than four writes when a whole page turns.
+three taps go in and three double taps come back out, leaving the reader on the
+page they started from; that the wheel walks a page's groups in the page's own
+order, then stays inside the one that was opened, and holds onto the entry rather
+than its position when the list shrinks under it; and that a repaint writes as
+little as it can — one line for a minute of the clock, nothing at all when
+nothing moved, one rebuild rather than four writes when a whole page turns.
 
 
 Release

@@ -31,7 +31,7 @@
 // is choosing between the two things on offer rather than between two words.
 
 import { markLabel, postBody } from "../../services/api";
-import { cellsIn, READING_VALUES } from "../theme";
+import { READING_VALUES } from "../theme";
 import { wrap } from "../metrics";
 import type { Translate } from "../strings";
 import type { Coordinates } from "../../types";
@@ -64,7 +64,7 @@ const SAID_LINES = 3;
 function said(draft: Draft): string[] {
   const kept = draft.kind === "mark" ? markLabel(draft.text) : postBody(draft.text);
   const whole = draft.text.trim();
-  return wrap(kept === whole ? kept : `${kept}…`, cellsIn(READING_VALUES.width), SAID_LINES);
+  return wrap(kept === whole ? kept : `${kept}…`, READING_VALUES.width, SAID_LINES);
 }
 
 /**

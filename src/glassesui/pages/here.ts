@@ -229,14 +229,14 @@ function warningRow({ warnings, components, t }: PageContext): ReadingRow | null
  * columns, and a page where one line is spaced differently from the six above it
  * is a page the eye has to be told about.
  *
- * The dot itself comes from the dictionary, because this line runs to within a
- * cell of the end of the screen in the language that needs the most room:
- * `ニュース 3 · イベント 2 · トレンド 3` is one cell too wide and loses the last
- * count to the clipper, where `ニュース 3・イベント 2・トレンド 3` fits — and a
- * tight interpunct is what Japanese writes a list with anyway. Counts that run to
- * two digits will still take a line past the end, and always could: the clipper is
- * the backstop, and `npm run glasses:preview -- ja` is where to look before any of
- * these words is made longer.
+ * The dot itself comes from the dictionary, and it is taste now where it started
+ * as arithmetic. It was chosen when this line was cut by the cell and
+ * `ニュース 3 · イベント 2 · トレンド 3` came out a cell too wide to survive that
+ * cut, where `ニュース 3・イベント 2・トレンド 3` fitted. The body is cut to the
+ * pixel now (see metrics.ts) and both of them fit with room over — but a tight
+ * interpunct is what Japanese writes a list with anyway, so it stays. The clipper
+ * is still the backstop, and `npm run glasses:preview -- ja` is still where to
+ * look before any of these words is made longer.
  */
 function counted(join: string, pairs: Array<[string, number | null]>): string {
   return pairs

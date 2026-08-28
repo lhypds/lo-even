@@ -71,6 +71,7 @@ export const infoPage: PageDefinition = {
 
     if (components.includes("nearby")) {
       groups.push({
+        id: "news",
         label: t("news.title"),
         lines: (news.data ?? []).map((item) => item.title),
         note: feedWord(news, t, NEWS),
@@ -80,6 +81,7 @@ export const infoPage: PageDefinition = {
 
     if (components.includes("trends")) {
       groups.push({
+        id: "trends",
         label: t("trends.title"),
         lines: (trends.data ?? []).map((item) =>
           // A search word seldom explains itself, so where the feed carries the

@@ -96,6 +96,12 @@ export interface PageContext {
 export interface ReadingRow {
   label: string;
   value: string;
+  /**
+   * Which group this row was dealt to, where it was dealt by one (see stack.ts).
+   * It is what a box can be drawn round and what a tap can open; the rows the
+   * standing page builds by hand have none, and that page has nothing to open.
+   */
+  group?: string;
 }
 
 /**
