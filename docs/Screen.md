@@ -34,6 +34,20 @@ rightmost lit pixel — which is enough to recover every number here. The glasse
 canvas is drawn in one colour on transparency, so a pixel counts as ink when its
 alpha is set.
 
+The app itself can be driven instead of a probe page, which is how the screens
+that only exist a few taps in get measured. `POST /api/input` is the touchpad:
+
+```bash
+curl -s -X POST -H 'Content-Type: application/json' \
+     -d '{"action":"click"}' http://127.0.0.1:9899/api/input
+```
+
+`action` is one of `up`, `down`, `click`, `double_click`, `long_press`,
+`long_press_release`, `context_menu` — the wheel, the tap, the double tap and the
+hold, which between them reach every screen in this app. Point the simulator at
+`http://localhost:5173/` rather than at the probe, wait for the session to come
+back, and step in.
+
 **Advances** cannot be read off one glyph, because ink is not advance: the span of
 one `M` is its ink, not the step to the next character. Ten copies span nine
 advances plus one ink width, and one copy spans the ink width alone, so
@@ -205,33 +219,36 @@ nothing left over.
 A ninth would not be refused, either. The protocol drops it, so it goes missing
 on glass and nowhere else — which is what `npm run glasses:check` counts.
 
-### The one thing here that is not measured
+### The box round a selection
 
 The box drawn round whatever the wheel is pointing at — a group on a summary page,
-an entry on a list — is a bordered container with a single space in it and no
-padding (`boxAround` in [theme.ts](../src/glassesui/theme.ts)). Everything else on
-this page was read off a screenshot; this was not, because it was added after the
-probe was last run. Three things about it are assumptions rather than
-measurements:
+an entry on a list — is a bordered container holding a single space, with no
+padding (`boxAround` in [theme.ts](../src/glassesui/theme.ts)). Three things about
+it were assumptions until the app was driven through `/api/input` and the result
+read off a screenshot. All three hold:
 
-- that a container with no text draws its border at all;
-- that a border is drawn on the rectangle itself, so the box lands where
-  `selectRect` puts it rather than inset by anything;
-- that `paddingLength: 0` on a bordered box behaves — the note above about
-  `borderRadius: 9` putting text 9 px in is the reason to doubt it, though with a
-  radius of 0 and nothing to place there is nothing for it to move.
+- **A container with no text draws its border.** A single space is enough; the
+  container is not skipped for having nothing to draw inside it.
+- **The border is drawn on the rectangle itself.** Measured on a two-line entry
+  at `y` 117, `height` 57: the top border landed on row 117 and the bottom on row
+  173, and the horizontal borders were 564 px wide against a `width` of 564. No
+  inset, no rounding.
+- **`paddingLength: 0` behaves** on a bordered box. Nothing moved.
 
-The content height is inside the rule regardless. The box takes three pixels of
-air below what it covers and none above — lopsided because the ink of a line sits
-six pixels down from the top of it and runs to the bottom, so a box drawn evenly
-round a line has all its daylight above the letters — which makes a one-row box
-30 px, and 30 less a 1 px border top and bottom leaves 28 for a 27 px line. A
-two-line entry on a list comes to 57 and leaves 55 for 54.
+The content height is inside the rule as well: a one-row box is 30 px, and 30 less
+a 1 px border top and bottom leaves 28 for a 27 px line; a two-line entry comes to
+57 and leaves 55 for 54.
 
-Both are clear of the threshold, but only just, and the one-row box is what runs
-out first: **29 px is the least it can be**, per the table above. One more pixel
-off the top is the last one available; after that the bottom edge has to come down
-with it. Put the probe back on the rest of this before trusting it on glass.
+**What the air actually comes to.** Measured inside that same two-line box: five
+clear pixels between the top border and the first ink, and two between the last
+ink and the bottom border. The asymmetry is the line's own — the face sets its
+type six pixels down from the top of a line and runs it to the bottom — so a box
+that hugs the row is a box with all its daylight above the letters, and the
+constant that answers it is not the one that looks obvious. Shrinking the box from
+the top is nearly out of room (29 px is the least a one-row box can be before it
+grows a scroll bar). Moving the *whole* box down a pixel is not: it costs nothing
+in height, and takes the pair to four above and three below, which is as even as a
+pixel grid gets.
 
 
 ## Simulator versions
