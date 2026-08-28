@@ -7,17 +7,24 @@
 // lands here only approximately. The columns are what this is for; for where a
 // measured string actually falls, take a screenshot (see docs/Screen.md).
 //
-// The right-hand end of the heading is past what this can show at all now that
-// the unread badge stands there beside the clock. A cell is the widest glyph
-// there is, and that corner is made of the narrowest — `1` is seven pixels and
-// `:` is four, where the grid charges twelve for each — so the two strings model
-// as wider than the space they are actually given, and the second of them loses
-// its last character to the first. On the glasses that corner is 158 pixels of
-// room, sized off the widest it can ever be. A clock reading `14:3` here is this
-// file being coarse, not the layout being wrong.
+// Both right-hand corners are past what this can show at all. A cell is the
+// widest glyph there is, and those corners are made of the narrowest — `1` is
+// seven pixels and `:` is four, where the grid charges twelve for each — so the
+// strings model as wider than the room they are actually given, and whichever
+// gets there second loses its tail to the first. A clock reading `14:3`, or a
+// deep path missing from the footer entirely because the place name reached its
+// column first, is this file being coarse rather than the layout being wrong: on
+// the glasses the heading's corner is 158 pixels sized off the widest it can ever
+// be, and the footer's is cut against the path beside it (see theme.ts).
+//
+// The half-line of air between the entries of a list is the other thing it
+// cannot draw. Three entries of two lines leave 28 pixels over and it is dealt
+// between them, which rounds to nothing for the first gap here and to a whole
+// blank row for the second. On the glasses the two gaps are the same.
 
 import { PAGES } from "../pages/index";
 import { composeView, type DraftKind } from "../pages/compose";
+import { listView, readView } from "../pages/list";
 import type { PageContext } from "../pages/types";
 import { layout, screens } from "../layout";
 import { translator } from "../strings";
@@ -56,7 +63,11 @@ const ctx: PageContext = {
       { id: 9, time: new Date(Date.now() - 3 * 60_000).toISOString(), latitude: 35.6582, longitude: 139.7019, body: "ラーメン美味しかった、行列は20分くらい", username: "kenji", comments: 2 },
       { id: 8, time: new Date(Date.now() - 42 * 60_000).toISOString(), latitude: 35.6601, longitude: 139.6990, body: "Great little second-hand bookshop tucked behind the station", username: "mari", comments: 0 },
       { id: 7, time: new Date(Date.now() - 5 * 3600_000).toISOString(), latitude: 35.6700, longitude: 139.7100, body: "", place: "Yoyogi Park", username: "tom", comments: 5 },
-      { id: 6, time: new Date(Date.now() - 26 * 3600_000).toISOString(), latitude: 35.6400, longitude: 139.7400, body: "桜が咲いた", username: "yuki", comments: 1 },
+      // Long on purpose, and not much longer than lo will take: a post is 500
+      // characters, which is more than three screenfuls of this display. It is
+      // the one thing on these pages that can overrun the screen it is read on,
+      // so the proof sheet has to carry one (see the prose block in layout.ts).
+      { id: 6, time: new Date(Date.now() - 26 * 3600_000).toISOString(), latitude: 35.6400, longitude: 139.7400, body: "桜が咲いた。代々木公園の南門から入ってすぐの並木がいちばん早くて、もう七分咲きくらいになっている。朝のうちは人もまばらで、ベンチに座って十五分ほど眺めていた。屋台はまだ出ていないけれど、来週の週末には出るらしい。夜はライトアップもあるという話を近くの人に聞いた。花見の場所取りをするなら参道側より池のほうが空いているし、コンビニも駅の反対側まで行かずに済む。去年は満開の三日後に雨が降って一気に散ってしまったので、今年は早めに来てよかったと思う。", username: "yuki", comments: 1 },
     ],
   },
   people: {
@@ -140,7 +151,11 @@ function raster(panels: ReturnType<typeof layout>): string {
       // would land a cell or two off. Hung from the container's right edge
       // instead, which is where the display puts it.
       const text = line.trimStart();
-      const right = Math.round((panel.rect.x + panel.rect.width) / CHAR_WIDTH);
+      // Floored rather than rounded: this is the last whole cell a right-aligned
+      // line can end in, and these boxes now run to the inside of the border,
+      // whose own pixel shares a cell with them. Rounded up, the last character
+      // of the clock would be laid in the cell the frame is drawn in and lost.
+      const right = Math.floor((panel.rect.x + panel.rect.width) / CHAR_WIDTH);
       // Hung from the container's right edge, and allowed to start left of the
       // container's own left edge to get there. That is not the display being
       // described wrongly, it is this grid being too coarse to describe it: the
@@ -150,9 +165,25 @@ function raster(panels: ReturnType<typeof layout>): string {
       // right of the screen instead, and a proof that drops what it cannot fit is
       // the one thing worse than a proof that is a cell out.
       let col = line.length > text.length ? right - cells(text) : col0 + inset;
+      let written = -1;
       for (const ch of text) {
         if (col >= COLS) break;
-        if (col >= 0) grid[row][col] = ch;
+        if (col >= 0) {
+          // Whoever got here first keeps the cell, and the one that arrives
+          // second stops and says so. Two strings can want the same column here
+          // while standing forty pixels apart on the glasses — the bearing ends
+          // at 396 and the corner begins at 437 — because a cell is the widest
+          // glyph there is and both of those are made of narrower type than that.
+          // Writing over would splice them into one unreadable word; carrying on
+          // into the next free cell would print `127° S` for a bearing that says
+          // SE, which is a proof telling a lie rather than being coarse.
+          if (grid[row][col] !== " ") {
+            if (written >= 0) grid[row][written] = "…";
+            break;
+          }
+          grid[row][col] = ch;
+          written = col;
+        }
         col += cells(ch);
       }
     });
@@ -226,6 +257,56 @@ for (const page of PAGES) {
   }
 }
 
+// What is under those pages. A list screen is drawn once per group, focused on
+// the first entry of it — which is what the reader sees a flick after the wheel
+// has carried them over the boundary into it — and then the reading screen that
+// entry opens onto. Both of them are one page's own; neither is in the count
+// above, because a list is not a page of the dashboard (see pages/list.ts).
+for (const page of PAGES) {
+  if (!page.offered(ctx)) continue;
+  const items = page.items?.(ctx) ?? [];
+  const groups = [...new Set(items.map((item) => item.group))];
+  for (const group of groups) {
+    const focus = items.findIndex((item) => item.group === group);
+    const list = layout(listView(items, focus, t), focus, {
+      place: formatPlace(ctx.place),
+      time: clockFace(ctx),
+      status: "",
+      unread: ctx.unread,
+      path: `lo/${page.id}`,
+      index: focus + 1,
+      total: items.length,
+    });
+    console.log(`\n╔══ lo/${page.id} at ${group} ${"═".repeat(Math.max(0, 32 - page.id.length - group.length))}`);
+    console.log(raster(list));
+
+    // The longest entry of the group rather than the one the list is focused on:
+    // this is the only screen in the app that can run past its own bottom edge,
+    // and the whole point of drawing it here is to see what happens when it does.
+    const item = items
+      .filter((entry) => entry.group === group)
+      .reduce((longest, entry) => (entry.body.length > longest.body.length ? entry : longest));
+    if (!item.body) continue;
+    const view = readView(item);
+    const total = screens(view);
+    for (let screen = 0; screen < total; screen += 1) {
+      const panels = layout(view, screen, {
+        place: formatPlace(ctx.place),
+        time: clockFace(ctx),
+        status: "",
+        unread: ctx.unread,
+        path: `lo/${page.id}/${group}`,
+        index: screen + 1,
+        total,
+      });
+      console.log(
+        `\n╔══ lo/${page.id}/${group}${total > 1 ? ` (screen ${screen + 1}/${total})` : ""} ${"═".repeat(Math.max(0, 30 - page.id.length - group.length))}`,
+      );
+      console.log(raster(panels));
+    }
+  }
+}
+
 // The composer, which is not one of the pages and is not in the count above: it
 // takes the display over while a dictation is waiting to be told what it is. Both
 // answers are drawn, because the two are not the same screenful — the sentence is
@@ -246,4 +327,10 @@ for (const kind of ["mark", "post"] as DraftKind[]) {
   console.log(raster(panels));
 }
 
-console.log(`\n${steps.length} screenfuls and the composer, ${COLS}x${ROWS} cells\n`);
+const entries = PAGES.filter((page) => page.offered(ctx)).reduce(
+  (total, page) => total + (page.items?.(ctx).length ?? 0),
+  0,
+);
+console.log(
+  `\n${steps.length} screenfuls of dashboard over ${entries} entries, and the composer, ${COLS}x${ROWS} cells\n`,
+);

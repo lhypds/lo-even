@@ -21,16 +21,21 @@ const SAMPLE_RATE = 16_000;
 const MIN_RECORDING_MS = 250;
 const MAX_RECORDING_MS = 60_000;
 const SCROLL_COOLDOWN_MS = 380;
-// How long the composer sits on a tap before taking it as the answer. The host
-// reports the first press of a double tap as a press of its own, so on the one
-// screen where a tap saves and two taps throw away, the two gestures begin
-// identically and the first of them cannot be acted on yet. Everywhere else a
-// tap is answered the moment it lands: nothing else here is undone by waiting.
+// How long a tap sits before it is taken as a tap. The host reports the first
+// press of a double tap as a press of its own, so wherever a tap and a double
+// tap mean different things the two gestures begin identically and the first of
+// them cannot be acted on yet.
+//
+// That is now everywhere the reader can go rather than only the composer. A tap
+// steps into what is under them and a double tap steps back out, and acting on
+// the tap at once would make every step out a step in and then a step out of
+// *that* — the reader would ask to leave the list and be left standing in it,
+// one level down from where they meant to be. So the tap waits, and the double
+// tap cancels it on its way past (see `armEnter`).
 //
 // The number is the one this app already learned, back when a tap wrote a mark
 // and had to be told apart from the double tap that leaves — long enough for the
-// second press to have come over BLE, and it is spent on the one screen where a
-// reader is deciding anyway.
+// second press to have come over BLE.
 const DOUBLE_TAP_MS = 650;
 // What the composer is called where the display has to name what is in front of
 // the reader. It is not a page and it is not in the sequence (see glasses.ts).
@@ -94,6 +99,7 @@ async function main() {
   let audioChunks: Uint8Array[] = [];
   let audioBytes = 0;
   let tapTimer = 0;
+  let navTimer = 0;
   let lastScrollAt = 0;
   let sensorPaintAt = 0;
 
@@ -140,9 +146,13 @@ async function main() {
   // The page in front of the reader is the one worth paying for, and there is
   // exactly one read that works that way now: the inbox, which has nothing to do
   // with where anybody is standing and so is not worth asking for until the page
-  // that shows it is up. Called after every paint and every scroll; the feed
-  // store decides whether that is actually a new question (see feeds.ts) and does
-  // nothing when it is not.
+  // that shows it is up. Called after every paint, every scroll and every step in
+  // or out; the feed store decides whether that is actually a new question (see
+  // feeds.ts) and does nothing when it is not.
+  //
+  // `current` answers with the page rather than the path, which is what this
+  // wants: the letters are on the second page, in the list under it and on the
+  // screen under that, and all three of them are `nearby`.
   function ensureVisible(): void {
     if (display.current() === "nearby" && api.signedIn) feeds.inbox();
   }
@@ -380,6 +390,31 @@ async function main() {
     }, DOUBLE_TAP_MS);
   }
 
+  /* --------------------------------------------------- stepping in and out */
+
+  /**
+   * A tap on a screen with something under it, held for as long as it takes to
+   * find out that it was not the first half of a double tap. Every step in goes
+   * through here; the step out clears the timer as it passes, which is what makes
+   * a double tap one gesture rather than a step in followed by a step out of it.
+   */
+  function armEnter(): void {
+    window.clearTimeout(navTimer);
+    navTimer = window.setTimeout(() => {
+      navTimer = 0;
+      display.enter();
+      // The inbox is worth paying for while it is on screen, and stepping into
+      // the letters is exactly that (see ensureVisible).
+      ensureVisible();
+    }, DOUBLE_TAP_MS);
+  }
+
+  /** A tap that has not been taken yet, dropped — because a second one arrived. */
+  function disarmEnter(): void {
+    window.clearTimeout(navTimer);
+    navTimer = 0;
+  }
+
   /**
    * Everything an unfinished sentence is holding, put back. Quiet, because this is
    * also what signing out and shutting down do and neither of those has anybody
@@ -387,6 +422,7 @@ async function main() {
    */
   function discard(): void {
     cancelRecording();
+    disarmEnter();
     // The second tap of a drop arrives while the first one is still waiting to be
     // read as an answer. Clearing the timer here is what makes the drop win.
     window.clearTimeout(tapTimer);
@@ -595,6 +631,9 @@ async function main() {
       const now = Date.now();
       if (now - lastScrollAt < SCROLL_COOLDOWN_MS) return;
       lastScrollAt = now;
+      // A tap still waiting to be read is a reader who has changed their mind:
+      // they are choosing again rather than opening what they were on.
+      disarmEnter();
       // The wheel belongs to whatever has the screen. While a draft is standing
       // there are two answers and no pages, so it chooses between them — either
       // direction, because two things have no order to walk in.
@@ -618,6 +657,9 @@ async function main() {
       // and starting a new sentence over the one still standing would throw away
       // exactly what they were about to be asked about.
       if (draft) return;
+      // And a step in that has not been taken yet is dropped rather than left to
+      // land in the middle of the recording it interrupted.
+      disarmEnter();
       void startRecording();
       return;
     }
@@ -629,28 +671,43 @@ async function main() {
 
     const eventSource = event.sysEvent?.eventSource;
     if (eventType == null && eventSource != null && eventSource !== EventSourceType.TOUCH_EVENT_FORM_DUMMY_NULL) {
-      // The tap answers the composer, and it is the only gesture here that has to
-      // wait to find out what it was: a double tap begins with a press of this
-      // kind, and on this screen the two mean opposite things.
+      // The tap answers the composer, where it is the gesture that saves.
       if (draft) {
         armKeep();
         return;
       }
-      // Everywhere else it is the way out, taken at once. Both the tap and the
-      // double tap that leaves the app end with nothing saved, so the first press
-      // of an exit costing the reader a recording costs them nothing they were
-      // keeping — and a way out that hesitated would be a way out that felt broken.
-      cancel();
+      // With a sentence in the air it is the way out, and it is taken at once:
+      // both the tap and the double tap end with nothing saved, so the first
+      // press of either costs the reader nothing they were keeping — and a way
+      // out that hesitated would be a way out that felt broken.
+      if (recording || transcribing) {
+        cancel();
+        return;
+      }
+      // Otherwise it is the way *in*, and it waits: the double tap that steps
+      // back out begins with a press exactly like this one.
+      armEnter();
       return;
     }
 
     if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-      // While the question is up the double tap belongs to it rather than to the
-      // way out of the app. It arrives on top of the press that opened it, which
-      // is still sitting in the timer waiting to be read as the answer; dropping
+      // While the question is up the double tap belongs to it rather than to
+      // anything else. It arrives on top of the press that opened it, which is
+      // still sitting in the timer waiting to be read as the answer; dropping
       // the draft takes that press with it (see discard).
       if (draft) {
         cancel();
+        return;
+      }
+      // The press that began this double tap is still waiting to be read as a
+      // step in. It is not one: this is the reader coming back out, and taking
+      // the first press would have carried them one level further in first.
+      disarmEnter();
+      // Out of the entry, or out of the list. At the top there is nowhere left
+      // to come back from, and the gesture is what it has always been there —
+      // the standard Even exit.
+      if (display.back()) {
+        ensureVisible();
         return;
       }
       void bridge.shutDownPageContainer(1);

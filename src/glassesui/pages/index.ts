@@ -1,4 +1,4 @@
-// The three pages, and the order they are walked in.
+// The three pages, the order they are walked in, and what is behind them.
 //
 // lo's dashboard is a grid of ten tiles turned with a thumb. There is no grid on
 // a 576×288 heads-up display and nothing to put a thumb on, and a screen that
@@ -17,6 +17,14 @@
 // who had learned where they were, so what a country cannot feed is a line or a
 // group left off a page instead.
 //
+// Two of the three have a list behind them, and the list is where the answer
+// stops being a summary: a tap steps into it, the wheel walks its entries two
+// lines at a time, another tap opens one of them whole, and a double tap comes
+// back out. The pages are still what the app *is* — a reader who never taps is
+// reading the same dashboard as before — and the depth is there for the moment
+// the dashboard has said "posts 4" and the reader wants to know which four (see
+// pages/list.ts, and glasses.ts for the walking of it).
+//
 // lo's mark button is not on this list at all: it is a tile on the phone because
 // a phone has somewhere to put a button, and up here it is a hold on the touchpad
 // — there is no page to draw for it, only something the whole screen can do (see
@@ -27,9 +35,9 @@
 import type { PageContext, PageDefinition } from "./types";
 import { herePage } from "./here";
 import { nearbyPage } from "./nearby";
-import { worldPage } from "./world";
+import { infoPage } from "./info";
 
-export const PAGES: PageDefinition[] = [herePage, nearbyPage, worldPage];
+export const PAGES: PageDefinition[] = [herePage, nearbyPage, infoPage];
 
 /** The pages worth drawing where the reader is standing right now. */
 export function offeredPages(context: PageContext): PageDefinition[] {

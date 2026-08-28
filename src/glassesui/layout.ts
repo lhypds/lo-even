@@ -11,13 +11,21 @@
 // and it can tell a page turn from a clock tick by comparing two of these lists —
 // which is what decides between rebuilding the page and updating a line of it.
 //
-// Seven containers where the firmware allows eight, and the one spare is not an
-// oversight: every page here is the same shape — a frame with the heading written
-// in it, what the page has to say about itself over the end of that line, the
-// unread badge and the hour in the corner beyond it, a footer line with the pager
-// on its end, and a column of labels beside a column of readings — so the reader
-// is never learning a new arrangement, and the painter can write a changed line
-// into a container that is already up rather than building the page again.
+// Five containers of chrome and at most three of body, which is the eight the
+// firmware allows and not one more. The chrome is the same on every screen in
+// the app — a frame with the heading written in it, what the screen has to say
+// about itself over the end of that line, the unread badge and the hour in the
+// corner beyond it, a footer line with where you are standing on it, and the
+// path in the corner beyond that — so the reader is never learning a new
+// arrangement, and the painter can write a changed line into a container that is
+// already up rather than building the page again.
+//
+// What the three body containers are used for is the only thing that changes: a
+// column of labels beside a column of readings, three big entries of a list, or
+// one block of type being read. A screen that wants all five pieces of chrome
+// and three of body is exactly full, which is why the compass is in the heading
+// of the standing page rather than on a line of its own, and why a list names
+// its group in the heading rather than in a margin beside it.
 //
 // The badge and the clock share the corner's one container rather than taking two
 // of them, and that is about spacing rather than about the budget: see theme.ts,
@@ -30,21 +38,25 @@ import {
   BODY_WIDTH,
   CONTAINER,
   FAINT,
-  FOOT_LINE,
-  FOOT_PAGER,
   FRAME,
   HEAD_META,
   HEAD_TIME,
   INK,
+  ITEMS_PER_SCREEN,
   MUTED,
+  PROSE,
   READING_LABELS,
   READING_VALUES,
   cellsIn,
-  frameCells,
+  footLineRect,
+  itemRect,
+  titleCells,
   noteRect,
+  trailRect,
+  trailSlot,
   type Rect,
 } from "./theme";
-import type { Block, PageView } from "./pages/types";
+import type { Block, Item, PageView } from "./pages/types";
 
 /** One text container, ready to be created or updated. */
 export interface Panel {
@@ -58,14 +70,29 @@ export interface Panel {
 }
 
 /**
- * How many screenfuls this page is. Every page is built to come in at or under
- * the seven lines there are, so in practice this is always one — but a page that
- * grew an eighth row would be paginated rather than cut off, because a line
- * dropped without trace is the one failure this display cannot show.
+ * How many steps of the wheel this screen is worth, and what one step means
+ * depends on what is on it.
+ *
+ * A summary page is built to come in at or under the seven lines there are, so
+ * in practice it is one — but a page that grew an eighth row is paginated rather
+ * than cut off, because a line dropped without trace is the one failure this
+ * display cannot show. A list is one step per entry: the wheel moves the reader
+ * from one to the next, and three of them are on screen at a time so the step is
+ * usually the highlight moving rather than the screen changing. A thing being
+ * read is one step per screenful of it, which is how a post longer than the
+ * screen is read to the end rather than cut off at it.
  */
 export function screens(view: PageView): number {
-  if (view.block.kind === "note") return 1;
-  return Math.max(1, Math.ceil(view.block.rows.length / BODY_LINES));
+  switch (view.block.kind) {
+    case "note":
+      return 1;
+    case "items":
+      return Math.max(1, view.block.items.length);
+    case "prose":
+      return Math.max(1, Math.ceil(wrap(view.block.text, cellsIn(BODY_WIDTH)).length / BODY_LINES));
+    default:
+      return Math.max(1, Math.ceil(view.block.rows.length / BODY_LINES));
+  }
 }
 
 /** What the footer and the heading carry, which is the driver's to say rather than a page's. */
@@ -84,11 +111,16 @@ export interface Chrome {
    */
   unread: number;
   /**
-   * Where this screenful stands in the whole sequence, one-based — and left off
-   * altogether by a screen that is not part of one. The composer is the only such
-   * screen there is: it takes the display over rather than joining the line of
-   * pages, and a `1/1` in the corner of it would be an answer to a question the
-   * reader is not being asked (see glasses.ts).
+   * Where in the app this screen is — `lo/`, `lo/nearby`, `lo/nearby/messages`.
+   * Left off by a screen that is nowhere in it, which is the composer: it takes
+   * the display over rather than standing anywhere, and it has its own way out.
+   */
+  path?: string;
+  /**
+   * Where this screenful stands in the level the path names, one-based — and
+   * left off with the path, for the same reason. A `1/1` in the corner of the
+   * composer would be an answer to a question the reader is not being asked
+   * (see glasses.ts).
    */
   index?: number;
   total?: number;
@@ -132,7 +164,13 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
     // The one box on the screen, and the heading is written in it: the frame is a
     // container like any other, and a container with a border and a line of text
     // is a box with a heading in the corner of it.
-    panel(CONTAINER.frame, FRAME, clip(view.title, frameCells()), INK, 0, true),
+    //
+    // Cut to the room before the corner rather than to the width of the frame,
+    // which is the whole screen: the badge and the hour are their own container
+    // laid over the far end of this same line, and a title measured against the
+    // box it is written in is a place name that runs underneath the clock (see
+    // titleCells in theme.ts).
+    panel(CONTAINER.frame, FRAME, clip(view.title, titleCells()), INK, 0, true),
   ];
 
   // The corner, on every page: how much is waiting to be read, then the hour,
@@ -164,16 +202,24 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
   // Whatever is going on takes the footer, and the place has it the rest of the
   // time. One line, because there is one line: a status that appeared *beside*
   // the place would push the place off the screen just when something is
-  // happening to it.
+  // happening to it. What it may not run into is the path in the corner beyond
+  // it, so it is cut to whatever that has left it (see theme.ts).
+  const path = chrome.path ?? "";
+  const footLine = footLineRect(path);
   const foot = chrome.status || view.context || chrome.place;
-  panels.push(panel(CONTAINER.footLine, FOOT_LINE, clip(foot, cellsIn(FOOT_LINE.width)), MUTED, 3));
+  panels.push(panel(CONTAINER.footLine, footLine, clip(foot, cellsIn(footLine.width)), MUTED, 3));
 
-  if (chrome.index != null && chrome.total != null) {
+  // Where the reader is standing in the app, and how far through it. Faint,
+  // because it is the one thing on the screen that is about the app rather than
+  // about the world: a reader who wants it can find it, and a reader reading a
+  // post is not competing with it.
+  if (path) {
+    const counter = chrome.index != null && chrome.total != null ? ` · ${chrome.index}/${chrome.total}` : "";
     panels.push(
       panel(
-        CONTAINER.footPager,
-        FOOT_PAGER,
-        padLeft(`${chrome.index}/${chrome.total}`, FOOT_PAGER.width),
+        CONTAINER.footTrail,
+        trailRect(path),
+        padLeft(`${path}${counter}`, trailSlot(path)),
         FAINT,
         4,
       ),
@@ -220,6 +266,58 @@ function readingPanels(block: Extract<Block, { kind: "readings" }>, screen: numb
 }
 
 /**
+ * Three entries of a list, and which of them the reader is on.
+ *
+ * **A container each, rather than two columns.** Everywhere else on this display
+ * a row is a quiet word beside a bright reading, because one container is one
+ * brightness and that is the only weight there is. Here the unit is the entry
+ * rather than the line, so the entry is the container — which is what buys the
+ * one thing a list actually needs and a table of readings does not: the entry
+ * under the reader is written in ink and the two beside it are muted. No marker,
+ * no cursor, no character spent saying which one is which. It is simply the
+ * bright one, and `●` is left to mean what it means on the row it appears in,
+ * which is that nobody has read this yet.
+ *
+ * **The window.** The reader is kept in the middle where there is a middle to be
+ * in, so there is always the next entry to move onto and the last one to come
+ * back to. At either end of the list the window stops and the highlight walks
+ * the last three on its own — a list that scrolled past its own end to keep a
+ * cursor centred would be two blank rows and a reader wondering what went.
+ */
+function itemPanels(items: Item[], focus: number): Panel[] {
+  const width = cellsIn(itemRect(0).width);
+  const start = Math.max(0, Math.min(focus - 1, items.length - ITEMS_PER_SCREEN));
+  return items.slice(start, start + ITEMS_PER_SCREEN).map((item, slot) =>
+    panel(
+      CONTAINER.items[slot],
+      itemRect(slot),
+      `${clip(item.head, width)}\n${clip(item.line, width)}`,
+      start + slot === focus ? INK : MUTED,
+      5 + slot,
+    ),
+  );
+}
+
+/**
+ * One thing, read. The whole body given over to it, broken to the width of the
+ * line and cut into screenfuls where it runs longer than the screen — which a
+ * post is allowed to, at five hundred characters against this display's three
+ * hundred-odd cells.
+ *
+ * Written in ink and left against the margin. It is not a note and must not read
+ * as one: a note is the screen apologising for having nothing, and this is the
+ * one screen in the app that has exactly what the reader asked for.
+ */
+function prosePanels(block: Extract<Block, { kind: "prose" }>, screen: number): Panel[] {
+  const lines = wrap(block.text, cellsIn(BODY_WIDTH)).slice(
+    screen * BODY_LINES,
+    screen * BODY_LINES + BODY_LINES,
+  );
+  if (lines.length === 0) return [];
+  return [panel(CONTAINER.prose, PROSE, lines.join("\n"), INK, 5)];
+}
+
+/**
  * The sentence a page puts up when it cannot draw at all. Broken to the width of
  * the body first and then hung in the middle of the screen around however many
  * lines that turned out to be (see theme.ts).
@@ -229,11 +327,23 @@ function notePanels(block: Extract<Block, { kind: "note" }>): Panel[] {
   return [panel(CONTAINER.note, noteRect(lines), lines.join("\n"), MUTED, 7)];
 }
 
-/** One screenful: the heading, the body, the footer. */
+/**
+ * One screenful: the heading, the body, the footer. `screen` is where in this
+ * page the reader has got to, and each shape of body reads it as the thing it
+ * counts in — the screenful of a long page, the entry of a list, the screenful
+ * again of something being read (see `screens`).
+ */
 export function layout(view: PageView, screen: number, chrome: Chrome): Panel[] {
   const panels = chromePanels(view, chrome);
+  const { block } = view;
   panels.push(
-    ...(view.block.kind === "note" ? notePanels(view.block) : readingPanels(view.block, screen)),
+    ...(block.kind === "note"
+      ? notePanels(block)
+      : block.kind === "items"
+        ? itemPanels(block.items, screen)
+        : block.kind === "prose"
+          ? prosePanels(block, screen)
+          : readingPanels(block, screen)),
   );
   return panels;
 }

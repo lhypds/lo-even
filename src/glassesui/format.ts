@@ -65,6 +65,32 @@ export function relativeTime(iso: string | null | undefined, locale: string, t: 
   return new Date(time).toLocaleDateString(locale, { month: "short", day: "numeric" });
 }
 
+/**
+ * When a feed item is, which is not always in the past. A news story happened
+ * and reads as "2h"; a listing has not happened yet, and `relativeTime` would
+ * make "just now" of every one of them — a negative age falls under a minute and
+ * comes back as the word for now. So anything still ahead of us is given the day
+ * it falls on instead, which is what a reader wants off a listing anyway.
+ */
+export function feedTime(iso: string | null | undefined, locale: string, t: Translate): string {
+  const time = Date.parse(iso ?? "");
+  if (Number.isNaN(time)) return "";
+  if (time > Date.now() + 60_000) {
+    return new Date(time).toLocaleDateString(locale, { month: "short", day: "numeric" });
+  }
+  return relativeTime(iso, locale, t);
+}
+
+/**
+ * The pieces of one line, dropping whatever is not in, joined lo's own way. The
+ * dot with a space either side of it is what the website puts between the parts
+ * of a reading, and every line on these pages is built with this so that none of
+ * them has to decide again.
+ */
+export function joined(...parts: Array<string | null | undefined | false>): string {
+  return parts.filter((part): part is string => Boolean(part)).join(" · ");
+}
+
 /** The place, written the way lo writes it in the strip above its dashboard. */
 export function formatPlace(place: { name?: string; locality?: string; region?: string } | null): string {
   if (!place) return "";

@@ -98,9 +98,63 @@ export interface ReadingRow {
   value: string;
 }
 
+/**
+ * One entry of a list, which is what a page turns into when the reader steps
+ * into it. A summary line on a page is one row of a `<dl>`; this is one of lo's
+ * cards' rows, and it is bigger because there is now a screen for it to be big
+ * on.
+ *
+ * The four fields are the three screens an entry appears on, in order: `head`
+ * and `line` are the two lines the list gives it, `head` is again the heading of
+ * the screen that reads it, and `body` is what that screen has under the
+ * heading. Nothing is invented at either end — what the list shows cut is what
+ * the reading shows whole.
+ */
+export interface Item {
+  /**
+   * Which of the page's groups this came out of — `posts`, `messages`, `news`.
+   * It names the entry in the heading, and it is the last part of the path in
+   * the corner (`lo/nearby/posts`), so it is the key the words are looked up
+   * under as well: every one of them is `<group>.title` in the dictionary.
+   */
+  group: string;
+  /**
+   * What this entry is, across a refresh. The list is rebuilt on every paint and
+   * a post deleted on somebody's phone shortens it under the reader, so where
+   * they are is kept as this rather than as a position in a list that moved.
+   */
+  key: string;
+  /** Who said it and when — the entry's first line, and the reading's heading. */
+  head: string;
+  /** The right end of that heading while it is being read: usually the hour of it. */
+  meta?: string;
+  /** What it says, in the one line the list has for it. */
+  line: string;
+  /** The whole of what it says, which is what the reader stepped in for. */
+  body: string;
+}
+
+/**
+ * One entry of one page's list, named rather than numbered — which is how the
+ * reader's place survives a list rebuilt under them (see pages/list.ts).
+ */
+export interface ItemRef {
+  group: string;
+  key: string;
+}
+
 export type Block =
   | { kind: "readings"; rows: ReadingRow[] }
-  | { kind: "note"; text: string };
+  | { kind: "note"; text: string }
+  /**
+   * A list of entries, of which three are on screen at a time. Which one the
+   * reader is on is not held here: it is the screen number the layout is asked
+   * for, the same way a page too long for one screenful is asked for its second
+   * — one list is one page with as many screenfuls as it has entries.
+   */
+  | { kind: "items"; items: Item[] }
+  /** One thing, read: broken to the width of the body and paged if it runs over. */
+  | { kind: "prose"; text: string };
 
 /** What one page looks like right now — its heading, and one block under it. */
 export interface PageView {
@@ -130,4 +184,15 @@ export interface PageDefinition {
    */
   offered(context: PageContext): boolean;
   render(context: PageContext): PageView;
+  /**
+   * Everything this page is a summary of, one entry at a time, in the order the
+   * wheel walks them — which is the order the summary lists its groups in, so a
+   * reader who steps into a page finds it laid out the way they just read it.
+   *
+   * A page without this is a page with nothing behind it: the standing page is
+   * five instruments and a count, and there is nothing under any of those to
+   * open. A tap on it does nothing, and that is the honest answer rather than an
+   * empty list.
+   */
+  items?(context: PageContext): Item[];
 }

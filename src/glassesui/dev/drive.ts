@@ -4,6 +4,7 @@
 // glasses.ts, and the rebuild-or-update decision in paint.ts.
 
 import { createGlassesDisplay } from "../glasses";
+import { PAGES } from "../pages/index";
 import { composeView } from "../pages/compose";
 import type { PageContext } from "../pages/types";
 import { translator } from "../strings";
@@ -108,7 +109,7 @@ for (let step = 0; step < 3; step += 1) {
 }
 check(
   "scrolling walks every page in lo's order",
-  visited.join(",") === "here,nearby,world",
+  visited.join(",") === "here,nearby,info",
   visited.join(","),
 );
 check("a lap comes back to where it started", display.current() === "here", String(display.current()));
@@ -186,6 +187,159 @@ check(
   String(display.current()),
 );
 
+// --- stepping in and out ----------------------------------------------------
+// The dashboard is a summary, and under two of its three pages is the list it is
+// a summary of. A tap goes in, the wheel walks the entries, another tap opens
+// one, and a double tap comes back out of each of them in turn.
+//
+// Every group needs something in it for any of that to be worth checking, so
+// this half of the run is driven with a street that has people on it and letters
+// waiting rather than with the sparse one above.
+function busy(over: Partial<PageContext> = {}): PageContext {
+  return context({
+    people: {
+      status: "ready",
+      data: Array.from({ length: 2 }, (_, i) => ({
+        username: `near${i}`,
+        latitude: 35.658 + i / 1000,
+        longitude: 139.7,
+        time: new Date(Date.now() - i * 60_000).toISOString(),
+      })),
+    },
+    events: {
+      status: "ready",
+      data: Array.from({ length: 2 }, (_, i) => ({
+        kind: "event",
+        title: `something on ${i}`,
+        url: `e${i}`,
+        source: "Peatix",
+        time: new Date(Date.now() + (i + 1) * 86_400_000).toISOString(),
+      })),
+    },
+    messages: {
+      status: "ready",
+      data: Array.from({ length: 2 }, (_, i) => ({
+        username: `wrote${i}`,
+        body: `the last thing said ${i}`,
+        time: new Date(Date.now() - i * 3_600_000).toISOString(),
+        mine: false,
+        unread: i,
+      })),
+    },
+    ...over,
+  });
+}
+
+display.render(busy());
+while (display.current() !== "here") {
+  display.scroll(1);
+  await settle();
+}
+display.enter();
+await settle();
+check(
+  "the standing page has nothing under it",
+  display.path() === "lo/" && display.back() === false,
+  display.path(),
+);
+
+display.scroll(1);
+await settle();
+display.enter();
+await settle();
+check("a tap on the second page opens its list", display.path() === "lo/nearby", display.path());
+
+// One entry per person, per post, per listing and per exchange — and a group
+// with nothing in it still keeps one, so the wheel can always walk to it. Asked
+// of the page rather than written down here: the point of the check is that a
+// lap of the list is a lap of the list, whatever is on the street today.
+const nearbyPage = PAGES.find((page) => page.id === "nearby");
+const ENTRIES = nearbyPage?.items?.(busy()).length ?? 0;
+const seen = new Set<string>();
+for (let step = 0; step < ENTRIES; step += 1) {
+  seen.add(display.path());
+  display.scroll(1);
+  await settle();
+}
+check(
+  "the wheel walks the whole list without leaving it",
+  ENTRIES === 2 + 16 + 2 + 2 && seen.size === 1 && seen.has("lo/nearby"),
+  `${ENTRIES} entries, ${[...seen].join(" ")}`,
+);
+
+/** Step in far enough to see which group the reader is standing in, then step back out. */
+async function peek(): Promise<string> {
+  display.enter();
+  await settle();
+  const path = display.path();
+  if (path !== "lo/nearby") {
+    display.back();
+    await settle();
+  }
+  return path;
+}
+
+/** The wheel, that many times. */
+async function roll(times: number): Promise<void> {
+  for (let step = 0; step < times; step += 1) {
+    display.scroll(1);
+    await settle();
+  }
+}
+
+// A lap has brought the reader back to the first entry. The groups are walked in
+// the order the page lists them, which is the order the first page counts them
+// in: who is here, what they left here, what is on here — and then the letters.
+const order = [await peek()];
+await roll(2);
+order.push(await peek());
+await roll(16);
+order.push(await peek());
+await roll(2);
+order.push(await peek());
+check(
+  "the wheel walks the groups in the page's own order",
+  order.join(" ") === "lo/nearby/people lo/nearby/posts lo/nearby/events lo/nearby/messages",
+  order.join(" "),
+);
+
+// Back to the first of the posts, and into it.
+await roll(ENTRIES - 20 + 2);
+display.enter();
+await settle();
+check("a tap on an entry reads it", display.path() === "lo/nearby/posts", display.path());
+
+// The list is rebuilt on every paint, and the reader is held to the entry rather
+// than to its position: four posts deleted from under them is the same group,
+// four rows higher up.
+display.render(busy({ posts: { status: "ready", data: (context().posts.data ?? []).slice(4) } }));
+await settle();
+check(
+  "a list shrinking under you keeps you on what you were reading",
+  display.path() === "lo/nearby/posts",
+  display.path(),
+);
+
+check("a double tap comes back to the list", display.back() && display.path() === "lo/nearby", display.path());
+await settle();
+check("and the next one to the dashboard", display.back() && display.path() === "lo/", display.path());
+await settle();
+check("where it is the way out of the app instead", display.back() === false, display.path());
+check("and the reader is on the page they stepped in from", display.current() === "nearby", String(display.current()));
+
+// A group with nothing in it is one entry saying which kind of nothing, and
+// there is nothing behind that sentence to open.
+display.render(context({ posts: { status: "ready", data: [] } }));
+await settle();
+display.enter();
+await settle();
+check("a page whose groups are all empty still opens", display.path() === "lo/nearby", display.path());
+display.enter();
+await settle();
+check("but a group with nothing in it cannot be", display.path() === "lo/nearby", display.path());
+display.back();
+await settle();
+
 // --- the screen that is not a page ------------------------------------------
 // The composer interrupts the dashboard to ask a dictation what it is, and the
 // whole of what it owes the reader is to put them back afterwards: the anchor is
@@ -208,6 +362,8 @@ calls.length = 0;
 display.scroll(1);
 await settle();
 check("the wheel does not move the pages underneath it", calls.length === 0, calls.join(" ") || "(nothing written)");
+
+check("a takeover has no path, being nowhere in the app", display.path() === "", `"${display.path()}"`);
 
 display.takeover(null);
 await settle();

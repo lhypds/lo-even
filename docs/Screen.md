@@ -186,9 +186,17 @@ From the SDK's own constraints rather than from measurement (see
 and one from the simulator's changelog rather than the SDK: a text container's
 content is capped at **999 bytes**.
 
-Eight text containers is the budget the whole layout is drawn against: four go on
-the chrome and the rest on the body, which is why a page here is a column of
-labels beside a column of readings rather than a grid.
+Eight text containers is the budget the whole layout is drawn against, and it is
+spent to the last one: five go on the chrome — the frame with the heading in it,
+whatever the screen says about itself, the badge and clock in one corner, the
+footer line, and the path in the other corner — and the three left over are the
+body. That is why a summary page is a column of labels beside a column of
+readings rather than a grid, why a list screen shows three entries and not four,
+and why a list names its group in the heading rather than in a margin of its own:
+there was no ninth container to put one in.
+
+A ninth would not be refused, either. The protocol drops it, so it goes missing
+on glass and nowhere else — which is what `npm run glasses:check` counts.
 
 
 ## Simulator versions

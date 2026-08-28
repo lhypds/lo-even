@@ -21,7 +21,14 @@
 // than left blank — a page with five lines on it is a page that knows five
 // things, where a column of empty labels would be five promises it cannot keep.
 
-import { formatAccuracy, formatCoords, formatOffset, localClockTime, relativeTime } from "../format";
+import {
+  formatAccuracy,
+  formatCoords,
+  formatOffset,
+  joined as line,
+  localClockTime,
+  relativeTime,
+} from "../format";
 import { weatherLabelKey } from "../strings";
 import { placeTitle, zoneOf } from "./chrome";
 import type { PageContext, PageDefinition, PageView, ReadingRow } from "./types";
@@ -78,11 +85,6 @@ const WARNINGS = 2;
 
 function round(value: number | null | undefined): number | null {
   return Number.isFinite(value) ? Math.round(value as number) : null;
-}
-
-/** The pieces of one line, dropping whatever is not in, joined lo's own way. */
-function line(...parts: Array<string | null | undefined | false>): string {
-  return parts.filter((part): part is string => Boolean(part)).join(" · ");
 }
 
 /** The day and the daylight — everything about the time but the hour, which is in the heading. */
@@ -254,24 +256,29 @@ function counted(join: string, pairs: Array<[string, number | null]>): string {
  * about the place.
  */
 function tallyRows(context: PageContext): ReadingRow[] {
-  const { posts, people, unread, news, events, trends, components, username, t } = context;
+  const { posts, people, news, events, trends, components, username, t } = context;
   const rows: ReadingRow[] = [];
 
   const join = t("tally.join");
 
+  // In the order the page they count is in, so the line reads as a table of
+  // contents rather than as three figures: who is here, what they left here,
+  // what is on here.
   const others = (people.data ?? []).filter((person) => person.username !== username);
   const nearby = counted(join, [
-    [t("posts.title"), posts.data?.length ?? null],
     [t("people.title"), people.data ? others.length : null],
-    // Only when there is something waiting: a nought here is the one count on
-    // this page that is worth nothing to anybody.
-    [t("messages.title"), unread || null],
+    [t("posts.title"), posts.data?.length ?? null],
+    [t("events.title"), components.includes("events") ? (events.data?.length ?? null) : null],
+    // The letters are not counted here, and they are the one group on that page
+    // that is not: how much is waiting to be read is in the corner of the
+    // heading of every screen in the app, badge and hour together (see
+    // theme.ts), so a fourth count here would be the same figure twice on one
+    // screen — and it is the figure that pushed this line past the end of it.
   ]);
   if (nearby) rows.push({ label: t("nearby.title"), value: nearby });
 
   const wider = counted(join, [
     [t("news.title"), components.includes("nearby") ? (news.data?.length ?? null) : null],
-    [t("events.title"), components.includes("events") ? (events.data?.length ?? null) : null],
     [t("trends.title"), components.includes("trends") ? (trends.data?.length ?? null) : null],
   ]);
   if (wider) rows.push({ label: t("world.title"), value: wider });

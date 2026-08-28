@@ -122,18 +122,27 @@ export const BODY_HEIGHT = FOOT_Y - AIR - BODY_Y;
 export const BODY_LINES = Math.floor(BODY_HEIGHT / LINE_HEIGHT);
 
 // The two corners on the right, and the only two things on the screen that are
-// hung from their right-hand edge rather than their left. A container is cut to
-// the width of what it holds and put where that width ends at the gutter, which
-// is what puts the clock in the corner rather than near it — the spaces a
-// right-aligned string is padded with can only land it within one space of the
-// edge (see padLeft), and a container placed by measurement lands on it.
+// hung from their right-hand edge rather than their left.
 //
 // Sized for the widest they can ever be rather than for what they say now, so
 // that the box never moves: a clock whose container shifted every time a 1 turned
 // into a 2 would be a page rebuilt every other minute for two pixels (see
-// paint.ts). What is left over is padding, which is the one space this can be out
-// by.
-const INNER_RIGHT = SCREEN_WIDTH - EDGE;
+// paint.ts).
+//
+// **They hang from the frame rather than from the gutter, and that is not a
+// mistake.** A left-aligned line puts its first ink on the gutter — a letter's
+// left side bearing is a pixel or so, and that is the whole of the difference. A
+// right-aligned line does nothing of the kind. It is right-aligned by being
+// padded with spaces, and a space is six pixels, so it can only land within one
+// of them; then the last glyph's own right side bearing takes another five to
+// nine. Measured on the simulator, the ink of both of these stopped 12–14 px
+// inside its own box. Hung on the same ten-pixel gutter as the title, that left
+// them twenty-odd pixels off the frame where the title sits nine off it — two
+// margins that do not match, on the one line of the screen that has both.
+//
+// So the gutter they are given is the padding and the bearing they were losing
+// anyway, and the box itself goes right up to the inside of the border.
+const INNER_RIGHT = SCREEN_WIDTH - INSET - FRAME_BORDER_WIDTH;
 const PAGER_SLOT = textWidth("00/00");
 
 /**
@@ -188,14 +197,51 @@ export const HEAD_META: Rect = {
   height: LINE_HEIGHT,
 };
 
-/** The footer: where you are standing, and how far through the sequence you are. */
-export const FOOT_LINE: Rect = { x: EDGE, y: FOOT_Y, width: INNER_WIDTH, height: LINE_HEIGHT };
-export const FOOT_PAGER: Rect = {
-  x: INNER_RIGHT - PAGER_SLOT,
-  y: FOOT_Y,
-  width: PAGER_SLOT,
-  height: LINE_HEIGHT,
-};
+/**
+ * The footer's right-hand end: how deep in the app the reader is standing, and
+ * how far through this level of it — `lo/nearby/messages · 3/9`.
+ *
+ * The path is there because the wheel no longer means one thing. It walked three
+ * pages round a ring and there was nothing to say about where you were that the
+ * counter did not already say; now a tap steps into a list and another one into
+ * what a row of it says, and a reader two steps in has to be able to see that
+ * they are two steps in — and which way is out.
+ *
+ * **One container holding both**, for the reason the top right corner is one
+ * container holding the badge and the hour: everything here hangs from the
+ * right-hand edge, right alignment on this display is spaces, and a space is six
+ * pixels — so two boxes could not have kept the gap between them still.
+ *
+ * Sized for the widest this particular path can ever be rather than for what the
+ * counter says at the moment, so the box does not move as the reader walks a
+ * list. The path is fixed for as long as they are on one level, and `00/00` is
+ * the widest a counter gets.
+ */
+export function trailSlot(path: string): number {
+  return path ? textWidth(`${path} · `) + PAGER_SLOT : 0;
+}
+
+export function trailRect(path: string): Rect {
+  const slot = trailSlot(path);
+  return { x: INNER_RIGHT - slot, y: FOOT_Y, width: slot, height: LINE_HEIGHT };
+}
+
+/**
+ * What is left of the footer for the place you are standing in — the rest of the
+ * line, ending a cell before the trail begins. Cut against the trail rather than
+ * run the whole width underneath it: `lo/nearby/messages · 3/9` is a fifth of
+ * this line, and a place name measured against the full width would be a place
+ * name with a path written over the end of it.
+ */
+export function footLineRect(path: string): Rect {
+  const slot = trailSlot(path);
+  return {
+    x: EDGE,
+    y: FOOT_Y,
+    width: INNER_WIDTH - (slot > 0 ? slot + CHAR_WIDTH : 0),
+    height: LINE_HEIGHT,
+  };
+}
 
 // The body of every page: a word in the margin, and the line that answers it.
 // Ten cells of margin because that is the widest any of those words gets in the
@@ -225,6 +271,43 @@ export const READING_VALUES: Rect = {
 
 /** How wide a line of the body is — what a note is wrapped against. */
 export const BODY_WIDTH = INNER_WIDTH;
+
+// The body of a *list* screen, which is the other shape a body comes in: three
+// big rows instead of seven small ones.
+//
+// A summary page has to get five subjects onto one screen and gives each of them
+// a line. A list has one subject and a reader picking through it, and the same
+// seven lines spent on seven entries makes every entry a clipped half-sentence
+// with nothing to tell it from the one above. So an entry here gets two lines —
+// who said it and when, then what they said — and three of them fill the screen
+// with air between, which is what makes one of them the thing the reader is
+// looking at rather than a row in a table.
+//
+// Every number below is arithmetic off the two above it. Seven lines take three
+// entries of two, and what is left over is 28 pixels — half a line — which goes
+// between them rather than under them: air inside the list is what separates the
+// entries, and air at the bottom would only be a short page.
+export const ITEM_LINES = 2;
+export const ITEMS_PER_SCREEN = Math.floor(BODY_LINES / ITEM_LINES);
+const ITEM_HEIGHT = ITEM_LINES * LINE_HEIGHT;
+const ITEM_GAP = Math.floor((BODY_HEIGHT - ITEMS_PER_SCREEN * ITEM_HEIGHT) / (ITEMS_PER_SCREEN - 1));
+
+/** Where the nth entry on a list screen stands, counting from the top of the body. */
+export function itemRect(slot: number): Rect {
+  return {
+    x: EDGE,
+    y: BODY_Y + slot * (ITEM_HEIGHT + ITEM_GAP),
+    width: INNER_WIDTH,
+    height: ITEM_HEIGHT,
+  };
+}
+
+/**
+ * The whole body, for the screen that is one thing read rather than a list of
+ * them. Left against the margin where the labels start, not centred like a note:
+ * this is the words themselves, and words are read from a left edge.
+ */
+export const PROSE: Rect = { x: EDGE, y: BODY_Y, width: INNER_WIDTH, height: BODY_HEIGHT };
 
 /**
  * A sentence where a page would otherwise be empty, in the middle of the screen.
@@ -271,6 +354,18 @@ export function frameCells(): number {
   return cellsIn(FRAME.width - (FRAME_PADDING + FRAME_BORDER_WIDTH) * 2);
 }
 
+/**
+ * How much of that the *title* may actually have. Rather less, and this is the
+ * number the heading is cut to: the frame runs the whole width of the screen, but
+ * the badge and the clock are a separate container laid over the far end of the
+ * same line, so a title measured against the frame alone is a place name that
+ * runs underneath the hour. A cell of air is kept between the two, which is what
+ * the last term is.
+ */
+export function titleCells(): number {
+  return cellsIn(HEAD_TIME.x - EDGE - CHAR_WIDTH);
+}
+
 // Container identity. The ids are fixed rather than handed out as containers are
 // built, because an update addresses a container by id: a page turn that
 // renumbered them would write the posts into the heading. Reused across pages on
@@ -283,11 +378,23 @@ export const CONTAINER = {
   /** The right-hand corner of the heading: the unread badge and the hour, in one. */
   headTime: 3,
   footLine: 4,
-  footPager: 5,
-  // The body, which is one shape on every page: a column of labels beside a
-  // column of the lines they name — or, where a page cannot draw at all, the one
-  // sentence saying why. Never both, so the ids can neighbour rather than clash.
+  /** The other corner of the footer: the path, and how far through this level. */
+  footTrail: 5,
+  // The body, and there are three ids for it because there are three shapes it
+  // comes in and never two at once: a column of labels beside a column of the
+  // lines they name, three big entries of a list, or the one block of type a
+  // screen showing a single thing is — with the sentence a page puts up when it
+  // cannot draw at all standing in the last of them.
+  //
+  // Sharing the ids is the point rather than an economy: stepping from a list to
+  // the entry it was pointing at is a body of one container where there were
+  // three, and the two that go are two ids the firmware already has (see
+  // paint.ts).
   labels: 6,
   values: 7,
   note: 8,
+  /** The one block of type, where the labels would otherwise start. */
+  prose: 6,
+  /** The three entries of a list, standing where all of those do. */
+  items: [6, 7, 8],
 } as const;

@@ -147,7 +147,7 @@ has just left.
 | The place, its weather, its components, the newswire, what is on, the trends, the posts within reach and who else is about | `POST /api/dashboard?lang=` | Every new fix |
 | Warnings in force | `GET /api/warnings?lat&lon` | Every new fix |
 | Publish our fix, get everyone else's and the unread count | `PUT /api/position` | Every minute |
-| The inbox | `GET /api/messages` | While the second page is up, at most once a minute |
+| The inbox | `GET /api/messages` | While the second page or anything under it is up, at most once a minute |
 | Save a mark | `POST /api/marks?lang=` | On a hold, where the reader answered *mark*, with what was said as its `label` |
 | Leave a post | `POST /api/posts?lang=` | On the same hold, where they answered *post*, with what was said as its `body` |
 
@@ -174,7 +174,12 @@ so they are keyed two decimal places where the dashboard is keyed three. The inb
 has nothing to do with where anybody is standing, so it is asked for only while the
 page that shows it is up, and at most once a minute. Reading `GET /api/messages`
 marks nothing read; only opening one conversation does that, which is why the
-glasses can show who is waiting without answering for the reader.
+glasses can show who is waiting without answering for the reader — and why the
+screen that reads a letter up here shows the last line of it whole rather than the
+exchange it came out of. Opening the conversation is what marks it read, and doing
+that from a screen with no keyboard would answer for the reader twice over: it
+would clear the badge on their phone for a letter they have not replied to and
+cannot. The exchange stays where the reply is.
 
 The cost is one round trip for feeds a given session might never read. The saving
 is a launch that reaches a full first screen after two reads instead of seven, and

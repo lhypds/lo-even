@@ -1,7 +1,7 @@
 lo-even
 =======
 
-`lo` for Even G2. The phone-side WebView signs in to the existing lo account and supplies location; the glasses show lo's dashboard as three pages.
+`lo` for Even G2. The phone-side WebView signs in to the existing lo account and supplies location; the glasses show lo's dashboard as three pages, with the list each page summarises one tap underneath it.
 
 
 On the glasses
@@ -16,7 +16,7 @@ inside one square box drawn round the screen: the heading is its first line, the
 footer its last, and a blank line above and below the body is what tells the three
 apart, because air costs less ink than rules do.
 
-The same corner of every page carries `▤ (2) · 14:32`, whichever page is up: how
+The same corner of every page carries `msg (2) · 14:32`, whichever page is up: how
 much is waiting to be read, and the hour. The count is drawn as a figure and never
 as a blank, so nought reads as nought — the inbox is the one thing on these pages
 that has nothing to do with where you are standing, and a count that appeared only
@@ -29,12 +29,14 @@ is pinned at its right and loose at its left by however far its own characters f
 short, and a clock reading 11:11 is twenty pixels narrower than one reading 00:00.
 Two boxes could not have held a gap still between them.
 
-The mark is a ruled box and not an envelope because the face has no envelope. It
-has no tick either. A character this face does not carry is drawn as nothing at
-all — no box, no blank, just four pixels of air — which is invisible on the screen
-and worse than invisible to the arithmetic that puts a line in a corner. Every
-non-alphabetic character on these pages has been through the probe in
-[docs/Screen.md](docs/Screen.md), and anything new has to be.
+The badge says a word rather than showing an icon because the face has no
+envelope, and no tick either. A character this face does not carry is drawn as
+nothing at all — no box, no blank, just four pixels of air — which is invisible on
+the screen and worse than invisible to the arithmetic that puts a line in a
+corner. The ruled box `▤` that stood there instead does exist in the face, and
+read as a list or a menu rather than as a mailbox. Every non-alphabetic character
+on these pages has been through the probe in [docs/Screen.md](docs/Screen.md), and
+anything new has to be.
 
 **1 · Where you are standing.** The heading is the place and the hour there, with
 the bearing beside it while the compass is on. Under it: the day, the daylight and
@@ -44,12 +46,13 @@ waiting on the other two pages, so a flick is never spent finding out there was
 nothing there.
 
 **2 · Who is here.** The names of everyone else with a tab open nearby, the latest
-posts left on this street, and the last word of each exchange waiting in the
-inbox.
+posts left on this street, what is on within walking distance, and the last word
+of each exchange waiting in the inbox.
 
-**3 · What is being said.** The newswire for this corner of the map, what the
-country is searching for, and what is on — the freshest few of each rather than
-all of one.
+**3 · What is being said.** The newswire for this corner of the map, and what the
+country is searching for — the freshest few of each rather than all of one.
+Listings are on the second page rather than this one, because something on this
+evening a street away is a fact about where you are standing; a newswire is not.
 
 How many lines each group gets is dealt rather than fixed: every group keeps its
 first line whatever happens, and the ones left over go round in the order the page
@@ -58,20 +61,60 @@ posts take it on the afternoon everybody is out. See
 [src/glassesui/](src/glassesui/), where a page says what it has to say and
 [layout.ts](src/glassesui/layout.ts) does all the fitting.
 
-- **Scroll up/down** — the next page, or the previous one.
+
+### Underneath the pages
+
+A dashboard fits by cutting, and what it cuts is the ends of sentences. That is
+the right answer to "what is going on here" and no answer at all to "what did
+they say", so **a tap steps into the page you are on** — the same groups, no
+longer competing for the screen with anything else. Entries get two lines apiece
+and three are on screen at a time, the one you are on written in ink and the two
+beside it muted. Another tap opens it whole, and a long post is read a screenful
+at a time rather than cut off.
+
+The corner of the footer says where you are and how far through it:
+
+```
+lo/ · 1/3            the three pages
+lo/nearby · 7/22     the seventh of the twenty-two things around you
+lo/nearby/messages   one of them, whole
+```
+
+The wheel means the same thing at all three depths — the next thing along,
+rounding at the end rather than stopping — and a double tap comes back out of
+each in turn. Every group keeps its place in the list even when it is empty, with
+one entry saying which kind of empty it is, so the wheel always walks the same
+route; there is simply nothing behind that sentence to open. The standing page is
+instruments rather than a list of anything, and a tap on it does nothing.
+
+What is still not here is anything that writes. lo's own rows open a post *and
+its replies*, and a reply needs a keyboard; the newswire's rows are links out to
+the article. What lo was told is what can be read up here, and the rest is on the
+phone.
+
+- **Scroll up/down** — the next page, entry or screenful, or the previous one.
+- **Single tap** — into the list under this page, or into the entry you are on.
+- **Double tap** — back out. At the top there is nowhere to come back from, and
+  it is the standard Even exit confirmation it has always been.
 - **Press and hold** — record from the glasses microphone. Release to stop, and
   what you said comes back as words on the screen with one question under it:
   **mark** or **post**?
 - **Scroll**, while that question is up — the other answer.
 - **Single tap**, while that question is up — save it as the answer you are on.
 - **Double tap**, while that question is up — throw it away.
-- **Single tap**, otherwise — throw away whatever is in the air: the recording, or
-  the transcript still coming back.
-- **Double tap**, otherwise — the standard Even exit confirmation.
+- **Single tap**, while a recording or a transcript is still in the air — throw it
+  away.
 
 The tap saves and two taps drop only on that one screen, and the swap is the point:
 everywhere else a tap costs nothing, but a sentence you have already said is worth
 something, and throwing it away should take a gesture you had to mean.
+
+A tap waits about half a second before it is taken as a tap, because the host
+reports the first press of a double tap as a press of its own and the two now mean
+opposite things: in, and back out. The one exception is the tap that throws
+something away, which is answered the moment it lands — both gestures end with
+nothing saved there, so there is nothing for the wait to protect, and a way out
+that hesitated would be a way out that felt broken.
 
 A hold is the whole of what the glasses write, and the question is why. There are
 two things a sentence said out here can be, and they are not two ways of filing
@@ -146,11 +189,13 @@ npm run glasses:preview -- en bare   # a country lo can feed none of
 npm run glasses:check            # drive the display against a fake bridge
 ```
 
-`glasses:preview` renders each page to a character grid the shape of the panel, so
-the columns can be read the way the wearer would read them. Pass `ja` or `zh` — a
-column measured in characters rather than cells fits English and clips Japanese,
-and that is only visible side by side. Pass `many` to lengthen the posts and watch
-the lines they are given get dealt out differently.
+`glasses:preview` renders every screen in the app to a character grid the shape of
+the panel — the three pages, then each page's list at every group boundary, then
+the longest entry of each group read whole — so the columns can be read the way
+the wearer would read them. Pass `ja` or `zh` — a column measured in characters
+rather than cells fits English and clips Japanese, and that is only visible side
+by side. Pass `many` to lengthen the posts and watch the lines they are given get
+dealt out differently, or `bare` for a country lo can feed none of.
 
 Every number the layout is built on — the line pitch, what makes a container grow
 a scroll bar, how wide each character actually is — was measured off the simulator
@@ -159,11 +204,14 @@ rather than assumed, and is written down with its method in
 trusting it on glass.
 
 `glasses:check` drives the real display against a bridge that records what it was
-asked to do, and asserts the two things the typechecker cannot see: that scrolling
-walks every page and holds its place when the ground changes underneath it, and
-that a repaint writes as little as it can — one line for a minute of the clock,
-nothing at all when nothing moved, one rebuild rather than four writes when a
-whole page turns.
+asked to do, and asserts the things the typechecker cannot see: that scrolling
+walks every page and holds its place when the ground changes underneath it; that
+a tap steps into the list and a double tap comes back out of each depth in turn,
+leaving the reader on the page they started from; that the wheel walks a page's
+groups in the page's own order and holds onto the entry rather than its position
+when the list shrinks; and that a repaint writes as little as it can — one line
+for a minute of the clock, nothing at all when nothing moved, one rebuild rather
+than four writes when a whole page turns.
 
 
 Release
