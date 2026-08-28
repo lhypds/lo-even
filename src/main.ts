@@ -6,9 +6,14 @@ import {
   type AppLocation,
 } from "@evenrealities/even_hub_sdk";
 import { LoApi } from "./services/api";
+import { Feeds } from "./services/feeds";
 import { conditionPcm, transcribe } from "./utils/audio";
+import { sensorState, startSensors, subscribeSensors } from "./utils/sensors";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glassesui/glasses";
-import type { Coordinates, LocalResult, LoCard, LoUser } from "./types";
+import type { CardContext } from "./glassesui/cards/types";
+import { localeFor } from "./glassesui/format";
+import { translator } from "./glassesui/strings";
+import type { Coordinates, LoUser } from "./types";
 import { createWebUI, type WebUI } from "./webui/webui";
 
 const SAMPLE_RATE = 16_000;
@@ -21,164 +26,26 @@ const SCROLL_COOLDOWN_MS = 380;
 // short enough that a password equivalent is not left sitting in that frame's
 // URL for the rest of the session.
 const LINK_KEY_TTL_MS = 60_000;
-
-interface FeedState {
-  local: LocalResult | null;
-  nearby: Array<Record<string, unknown>>;
-  events: Array<Record<string, unknown>>;
-  trends: Array<Record<string, unknown>>;
-  posts: Array<Record<string, unknown>>;
-  people: Array<Record<string, unknown>>;
-}
-
-const feeds: FeedState = {
-  local: null,
-  nearby: [],
-  events: [],
-  trends: [],
-  posts: [],
-  people: [],
-};
-
-function asText(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function asNumber(value: unknown): number | null {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
-}
-
-function compactLine(item: Record<string, unknown>, primary = "title"): string {
-  const title = asText(item[primary]) || asText(item.body) || asText(item.name) || asText(item.place);
-  const source = asText(item.source) || asText(item.username);
-  return [title, source ? `— ${source}` : ""].filter(Boolean).join(" ");
-}
-
-function weatherName(code: number | null): string {
-  if (code == null) return "Weather unavailable";
-  if (code === 0) return "Clear";
-  if (code <= 3) return "Partly cloudy";
-  if (code <= 48) return "Foggy";
-  if (code <= 57) return "Drizzle";
-  if (code <= 67) return "Rain";
-  if (code <= 77) return "Snow";
-  if (code <= 82) return "Rain showers";
-  if (code <= 86) return "Snow showers";
-  return "Thunderstorms";
-}
-
-function placeName(local: LocalResult | null): string {
-  const place = local?.place;
-  return [place?.locality, place?.name, place?.region].filter(Boolean).filter((value, index, all) => all.indexOf(value) === index).join(" · ") || "Your location";
-}
-
-function listLines(items: Array<Record<string, unknown>>, empty: string, limit = 4): string[] {
-  const lines = items.map((item) => compactLine(item)).filter(Boolean).slice(0, limit);
-  return lines.length ? lines : [empty];
-}
-
-function buildCards(api: LoApi, coords: Coordinates | null): LoCard[] {
-  if (!coords || !feeds.local) return [];
-  const local = feeds.local;
-  const weather = local.weather;
-  const current = weather?.current;
-  const today = weather?.today;
-  const units = weather?.units;
-  const locale = api.language === "zh" ? "zh-CN" : api.language === "ja" ? "ja-JP" : "en-US";
-  const timeZone = weather?.timezone?.id;
-  const now = new Date();
-  const time = new Intl.DateTimeFormat(locale, {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(now);
-  const date = new Intl.DateTimeFormat(locale, {
-    timeZone,
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  }).format(now);
-  const accuracy = coords.accuracy != null ? `phone GPS · ±${Math.round(coords.accuracy)} m` : "phone GPS";
-
-  const cards: LoCard[] = [
-    {
-      id: "now",
-      label: "Now",
-      title: placeName(local),
-      hero: time,
-      lines: [date, `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`],
-      meta: accuracy,
-    },
-    {
-      id: "weather",
-      label: "Weather",
-      title: weatherName(asNumber(current?.weatherCode)),
-      hero: current?.temperature != null ? `${Math.round(current.temperature)}${units?.temperature ?? "°C"}` : "—",
-      lines: [
-        current?.apparent != null ? `Feels like ${Math.round(current.apparent)}${units?.temperature ?? "°C"}` : "",
-        current?.humidity != null ? `Humidity ${Math.round(current.humidity)}%` : "",
-        today?.tempMax != null && today?.tempMin != null
-          ? `Today ${Math.round(today.tempMax)}° / ${Math.round(today.tempMin)}°`
-          : "",
-      ].filter(Boolean),
-      meta: placeName(local),
-    },
-    {
-      id: "people",
-      label: "People",
-      title: `${feeds.people.length} nearby`,
-      lines: listLines(feeds.people, "Nobody nearby has shared a recent position.", 4),
-      meta: "Positions are shared only while lo is open",
-    },
-    {
-      id: "posts",
-      label: "Posts",
-      title: `${feeds.posts.length} around here`,
-      lines: listLines(feeds.posts, "No posts nearby yet. Hold to leave the first one.", 4),
-      meta: "Within 50 km · newest first",
-    },
-  ];
-
-  const available = new Set(local.components ?? []);
-  if (available.has("nearby")) {
-    cards.push({
-      id: "nearby",
-      label: "Nearby",
-      title: "What is happening",
-      lines: listLines(feeds.nearby, "No local stories found.", 4),
-      meta: placeName(local),
-    });
-  }
-  if (available.has("events")) {
-    cards.push({
-      id: "events",
-      label: "Events",
-      title: "What is on",
-      lines: listLines(feeds.events, "No upcoming events found.", 4),
-      meta: placeName(local),
-    });
-  }
-  if (available.has("trends")) {
-    cards.push({
-      id: "trends",
-      label: "Trends",
-      title: "What people are searching",
-      lines: feeds.trends.length
-        ? feeds.trends.slice(0, 5).map((item, index) => `${index + 1}. ${asText(item.name) || compactLine(item)}`)
-        : ["No regional trends available."],
-      meta: local.place?.region || local.place?.country || placeName(local),
-    });
-  }
-  return cards;
-}
+// The beat lo's own dashboard keeps: a fresh fix, published, and everyone else's
+// back in the same answer.
+const PRESENCE_MS = 60_000;
+// A bearing changes continuously and the screen cannot; twice a second is past
+// the point where a reader could tell, and every frame past it is a BLE write
+// bought for nothing.
+const SENSOR_PAINT_MS = 500;
 
 function browserLocation(): Promise<Coordinates | null> {
   if (!navigator.geolocation) return Promise.resolve(null);
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      ({ coords }) => resolve({ latitude: coords.latitude, longitude: coords.longitude, accuracy: coords.accuracy }),
+      ({ coords }) =>
+        resolve({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy,
+          altitude: coords.altitude,
+          speed: coords.speed,
+        }),
       () => resolve(null),
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30_000 },
     );
@@ -188,9 +55,11 @@ function browserLocation(): Promise<Coordinates | null> {
 async function main() {
   const bridge = await waitForEvenAppBridge();
   const api = new LoApi();
+  let t = translator(api.language);
+
   let display: GlassesDisplay;
   try {
-    display = await createGlassesDisplay(bridge);
+    display = await createGlassesDisplay(bridge, t("glasses.connecting"));
   } catch (error) {
     console.info("Even display unavailable; using browser preview", error);
     display = createBrowserDisplay();
@@ -199,12 +68,10 @@ async function main() {
   let ui!: WebUI;
   let user: LoUser | null = null;
   let coords: Coordinates | null = null;
-  let cards: LoCard[] = [];
-  let activeIndex = 0;
-  let status = "connecting";
+  let fixAt: number | null = null;
+  let status = "";
   let statusTimer = 0;
-  let refreshTicket = 0;
-  let lastScrollAt = 0;
+  let locating = false;
 
   let burnTimer = 0;
   let recording = false;
@@ -213,21 +80,54 @@ async function main() {
   let audioChunks: Uint8Array[] = [];
   let audioBytes = 0;
   let pendingTapTimer = 0;
+  let lastScrollAt = 0;
+  let sensorPaintAt = 0;
 
-  function render() {
-    cards = buildCards(api, coords);
-    if (cards.length === 0) activeIndex = 0;
-    else activeIndex = Math.min(activeIndex, cards.length - 1);
-    ui.render(cards, activeIndex, status);
-    display.render(cards, activeIndex, status === "ready" ? "" : status);
+  // Every feed answers back through here, so a card that was waiting redraws the
+  // moment its answer lands rather than on the next beat of anything.
+  const feeds = new Feeds(api, () => render());
+
+  function buildContext(): CardContext {
+    return {
+      now: new Date(),
+      language: api.language,
+      locale: localeFor(api.language),
+      t,
+      coords,
+      fixAt,
+      place: feeds.local.data?.place ?? null,
+      weather: feeds.local.data?.weather ?? null,
+      components: feeds.components,
+      posts: feeds.posts,
+      people: feeds.people,
+      nearby: feeds.nearby,
+      events: feeds.events,
+      trends: feeds.trends,
+      warnings: feeds.warnings,
+      heading: sensorState(),
+      username: user?.username ?? null,
+    };
   }
 
-  function setStatus(next: string, durationMs = 0) {
+  // The card in front of the reader is the one worth paying for. Called after
+  // every paint and every scroll; the feed store decides whether that is
+  // actually a new question (see feeds.ts) and does nothing when it is not.
+  function ensureVisible(): void {
+    const cardId = display.current();
+    if (cardId && coords && api.signedIn) feeds.ensure(cardId, coords, api.language);
+  }
+
+  function render(): void {
+    display.render(buildContext(), status);
+    ensureVisible();
+  }
+
+  function setStatus(next: string, durationMs = 0): void {
     window.clearTimeout(statusTimer);
     status = next;
     render();
     if (durationMs > 0) {
-      statusTimer = window.setTimeout(() => setStatus("ready"), durationMs);
+      statusTimer = window.setTimeout(() => setStatus(""), durationMs);
     }
   }
 
@@ -253,46 +153,42 @@ async function main() {
     return null;
   }
 
-  async function refresh() {
-    if (!user) {
-      setStatus("sign in on phone");
+  /**
+   * A fix, and the three reads that hang off one. Everything else waits until the
+   * reader scrolls to it.
+   */
+  async function refresh(highAccuracy = false): Promise<void> {
+    if (!api.signedIn) {
+      setStatus(t("glasses.signIn"));
       ui.showLogin();
       return;
     }
-    const ticket = ++refreshTicket;
-    setStatus("reading phone location");
-    const nextCoords = await phoneLocation();
-    if (ticket !== refreshTicket) return;
-    if (!nextCoords) {
-      setStatus("location unavailable");
-      return;
-    }
-    coords = nextCoords;
-    setStatus("loading nearby components");
-
-    let dashboard;
+    if (locating) return;
+    locating = true;
+    if (!coords) setStatus(t("glasses.locating"));
     try {
-      dashboard = await api.dashboard(coords);
-    } catch (error) {
-      console.error(error);
-      setStatus("lo.gcc3.com unavailable");
-      return;
+      const next = await phoneLocation(highAccuracy);
+      if (!next) {
+        if (!coords) setStatus(t("glasses.noFix"), 2500);
+        return;
+      }
+      coords = next;
+      fixAt = Date.now();
+      setStatus("");
+      await feeds.here(next, api.language);
+      // A card already in view whose feed is keyed on a fix that has now moved
+      // has to be re-asked; ensureVisible is the same gate the scroll uses.
+      ensureVisible();
+    } finally {
+      locating = false;
     }
-    if (ticket !== refreshTicket) return;
-    feeds.local = dashboard.local;
-    feeds.nearby = dashboard.nearby ?? [];
-    feeds.events = dashboard.events ?? [];
-    feeds.trends = dashboard.trends ?? [];
-    feeds.posts = dashboard.posts ?? [];
-    feeds.people = dashboard.people ?? [];
-    setStatus("ready");
   }
 
   // The key has done its whole job the moment the WebView has traded it for a
   // session, so it is withdrawn rather than left standing. Withdrawing it signs
   // nobody out: the two sessions it opened — the frame's cookie and this frame's
   // bearer token — outlive the key that opened them.
-  async function burnLinkKey() {
+  async function burnLinkKey(): Promise<void> {
     window.clearTimeout(burnTimer);
     burnTimer = 0;
     try {
@@ -305,8 +201,12 @@ async function main() {
     }
   }
 
-  async function login(username: string, password: string) {
+  async function login(username: string, password: string): Promise<void> {
     ui.setLoginBusy(true);
+    // The one press this package has, and iOS will only hand over the compass
+    // from inside one. Not awaited: the sign-in is the thing the reader pressed
+    // for, and a permission sheet is not worth holding it up (see sensors.ts).
+    void startSensors();
     try {
       const session = await api.login(username, password);
       user = session.user;
@@ -321,16 +221,15 @@ async function main() {
       await refresh();
     } catch (error) {
       // The error itself rather than a sentence about it: the screen asking is
-      // lo's own, and it says what the server said in lo's own words — which
-      // takes the code, not just the message (see webui showLogin).
+      // lo's own, and it says what the server said in lo's own words.
       ui.showLogin(error);
-      setStatus("sign in failed");
+      setStatus(t("glasses.signIn"));
     } finally {
       ui.setLoginBusy(false);
     }
   }
 
-  async function logout() {
+  async function logout(): Promise<void> {
     cancelRecording();
     // Before the session goes rather than after: withdrawing the key is spent on
     // the very token /api/logout is about to invalidate. If the minute has
@@ -341,52 +240,43 @@ async function main() {
     ui.setKey("");
     user = null;
     coords = null;
-    feeds.local = null;
-    feeds.nearby = [];
-    feeds.events = [];
-    feeds.trends = [];
-    feeds.posts = [];
-    feeds.people = [];
+    fixAt = null;
+    feeds.clear();
     ui.setUser(null);
-    setStatus("sign in on phone");
+    setStatus(t("glasses.signIn"));
     ui.showLogin();
   }
 
-  function select(index: number) {
-    if (cards.length === 0) return;
-    activeIndex = (index + cards.length) % cards.length;
-    render();
-  }
-
-  async function recordLocation() {
-    if (!user) {
+  async function recordLocation(): Promise<void> {
+    if (!api.signedIn) {
       ui.showLogin();
-      setStatus("sign in on phone");
+      setStatus(t("glasses.signIn"));
       return;
     }
-    setStatus("saving this place");
+    setStatus(t("mark.saving"));
     const fix = await phoneLocation(true);
     if (!fix) {
-      setStatus("location unavailable", 2200);
+      setStatus(t("glasses.noFix"), 2200);
       return;
     }
     coords = fix;
+    fixAt = Date.now();
     try {
       await api.createMark(fix);
-      setStatus("✓ place saved", 2200);
+      setStatus(`✓ ${t("mark.saved")}`, 2200);
     } catch (error) {
       console.error(error);
-      setStatus("could not save place", 2200);
+      setStatus(t("glasses.markFailed"), 2200);
     }
   }
 
-  async function startRecording() {
+  async function startRecording(): Promise<void> {
     window.clearTimeout(pendingTapTimer);
     pendingTapTimer = 0;
-    if (recording || !user) {
-      if (!user) {
+    if (recording || !api.signedIn) {
+      if (!api.signedIn) {
         ui.showLogin();
-        setStatus("sign in on phone");
+        setStatus(t("glasses.signIn"));
       }
       return;
     }
@@ -394,7 +284,7 @@ async function main() {
     recordingStartedAt = Date.now();
     audioChunks = [];
     audioBytes = 0;
-    setStatus("● recording · release to post");
+    setStatus(`● ${t("glasses.recording")}`);
     const opened = await bridge.audioControl(true);
     if (!recording) {
       void bridge.audioControl(false);
@@ -402,13 +292,13 @@ async function main() {
     }
     if (!opened) {
       recording = false;
-      setStatus("microphone unavailable", 2200);
+      setStatus(t("glasses.postFailed"), 2200);
       return;
     }
     recordingTimer = window.setTimeout(() => void finishRecording(), MAX_RECORDING_MS);
   }
 
-  function cancelRecording() {
+  function cancelRecording(): void {
     if (!recording) return;
     recording = false;
     window.clearTimeout(recordingTimer);
@@ -417,7 +307,7 @@ async function main() {
     void bridge.audioControl(false);
   }
 
-  async function finishRecording() {
+  async function finishRecording(): Promise<void> {
     if (!recording) return;
     recording = false;
     window.clearTimeout(recordingTimer);
@@ -432,32 +322,34 @@ async function main() {
     audioChunks = [];
     audioBytes = 0;
     if (elapsed < MIN_RECORDING_MS || raw.byteLength < (SAMPLE_RATE * 2 * MIN_RECORDING_MS) / 1000) {
-      setStatus("ready");
+      setStatus("");
       return;
     }
 
     const fixPromise = phoneLocation(true);
-    setStatus("transcribing");
+    setStatus(t("glasses.transcribing"));
     try {
       const text = await transcribe(conditionPcm(raw), SAMPLE_RATE, api.language);
       if (!text) {
-        setStatus("no speech heard", 2200);
+        setStatus(t("glasses.noSpeech"), 2200);
         return;
       }
-      setStatus("posting your message");
+      setStatus(t("post.posting"));
       const fix = (await fixPromise) ?? coords;
       if (!fix) {
-        setStatus("location unavailable", 2200);
+        setStatus(t("glasses.noFix"), 2200);
         return;
       }
       coords = fix;
+      fixAt = Date.now();
       const result = await api.createPost(fix, text);
-      feeds.posts = [result.post, ...feeds.posts.filter((post) => post.id !== result.post.id)];
-      const preview = text.length > 34 ? `${text.slice(0, 33)}…` : text;
-      setStatus(`✓ posted “${preview}”`, 3000);
+      // Straight onto the list rather than through a refetch: the writer is
+      // looking at the spot they just posted about.
+      feeds.addPost(result.post);
+      setStatus(`✓ ${t("post.posted")}`, 3000);
     } catch (error) {
       console.error(error);
-      setStatus("could not post message", 2500);
+      setStatus(t("glasses.postFailed"), 2500);
     }
   }
 
@@ -465,28 +357,30 @@ async function main() {
     {
       onLogin: login,
       onLogout: logout,
-      onRefresh: () => void refresh(),
-      onSelect: select,
+      onRefresh: () => void refresh(true),
       // A language chosen on the sign-in screen is the language the glasses are
-      // fed in too — the dashboard is asked for it by name, and the clock and the
-      // date are formatted against it. Nothing is loaded yet when this is pressed,
-      // so there is nothing to re-ask for: the first dashboard already goes out in
-      // whichever language was last pressed.
-      onLanguage: (language) => api.setLanguage(language),
+      // fed in too: every feed is keyed on it, so changing it makes every card a
+      // new question and the next paint re-asks whichever one is in view.
+      onLanguage: (language) => {
+        api.setLanguage(language);
+        t = translator(language);
+        feeds.forget();
+        if (coords) void feeds.here(coords, language);
+        render();
+      },
     },
-    // The same language the dashboard is asked for, so the sign-in screen and the
+    // The same language the feeds are asked for, so the sign-in screen and the
     // site behind it are reading from one list.
     api.language,
   );
   ui.setUser(null);
-  render();
 
-  // Every cold start asks for the password, because nothing from the last one
-  // was written down. It has to work this way now that the key is withdrawn a
-  // minute after each sign-in: no endpoint mints a key from a token, so a stored
-  // token could bring the glasses back but never the WebView, and an app that is
-  // half signed in is worse than one that asks.
-  setStatus("sign in on phone");
+  // Every cold start asks for the password, because nothing from the last one was
+  // written down. It has to work this way now that the key is withdrawn a minute
+  // after each sign-in: no endpoint mints a key from a token, so a stored token
+  // could bring the glasses back but never the WebView, and an app that is half
+  // signed in is worse than one that asks.
+  setStatus(t("glasses.signIn"));
   ui.showLogin();
 
   bridge.onEvenHubEvent((event) => {
@@ -496,7 +390,11 @@ async function main() {
       const now = Date.now();
       if (now - lastScrollAt < SCROLL_COOLDOWN_MS) return;
       lastScrollAt = now;
-      select(activeIndex + (eventType === OsEventTypeList.SCROLL_TOP_EVENT ? -1 : 1));
+      // One line of screenfuls, walked a step at a time: a card with more rows
+      // than fit contributes several steps, so scrolling reads down a long list
+      // and then carries on to the next card (see glasses.ts).
+      display.scroll(eventType === OsEventTypeList.SCROLL_TOP_EVENT ? -1 : 1);
+      ensureVisible();
       return;
     }
 
@@ -543,9 +441,35 @@ async function main() {
     }
   });
 
+  // The bearing, and only while it is the thing being looked at. These events
+  // arrive sixty times a second and the compass is one card of ten.
+  subscribeSensors(() => {
+    if (display.current() !== "direction" || recording) return;
+    const now = Date.now();
+    if (now - sensorPaintAt < SENSOR_PAINT_MS) return;
+    sensorPaintAt = now;
+    render();
+  });
+
+  // On the minute, because the clock shows minutes: aligned to the wall clock
+  // rather than to launch, so the face turns over when the minute does.
+  function scheduleMinute(): void {
+    window.setTimeout(
+      () => {
+        if (!recording) render();
+        scheduleMinute();
+      },
+      60_000 - (Date.now() % 60_000) + 50,
+    );
+  }
+  scheduleMinute();
+
+  // lo's own beat: a fresh fix, published, and everyone else's back with it.
   window.setInterval(() => {
-    if (cards.length > 0 && !recording) render();
-  }, 30_000);
+    if (!api.signedIn || recording) return;
+    void refresh();
+    if (coords) void feeds.presence(coords);
+  }, PRESENCE_MS);
 }
 
 main().catch((error) => {

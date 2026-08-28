@@ -1,5 +1,5 @@
 import type { Language } from "../services/api";
-import type { LoCard, LoUser } from "../types";
+import type { LoUser } from "../types";
 import { trackVisualViewport } from "../utils/viewport";
 import { createLogin, type LoginScreen } from "./login";
 import "./styles.css";
@@ -10,7 +10,6 @@ export interface WebUIActions {
   onLogin(username: string, password: string): Promise<void>;
   onLogout(): Promise<void>;
   onRefresh(): void;
-  onSelect(index: number): void;
   onLanguage(language: Language): void;
 }
 
@@ -20,19 +19,19 @@ export interface WebUI {
   showLogin(error?: unknown): void;
   hideLogin(): void;
   setLoginBusy(busy: boolean): void;
-  render(cards: LoCard[], activeIndex: number, status: string): void;
 }
 
-// The phone view is the website itself. Nothing on this side draws lo any more;
-// the outer frame exists only to hold the Even bridge and feed the glasses, so
-// the two WebUI calls that used to paint the phone are now no-ops.
+// The phone view is the website itself. Nothing on this side draws lo any more,
+// and nothing on this side knows what the glasses are showing either: the cards
+// and where the reader has got to among them belong to the display (see
+// glassesui/glasses.ts), which is why this no longer takes a render call.
 //
 // What the outer frame still has to do is get a credential, because a WebView on
 // an Even Hub origin can never be handed lo's cookie. The screen in login.ts asks
 // for the password once and trades it for the account's link key, and that one key
 // then serves both sides: `?k=` carries it into the frame below, where lo signs
 // itself in the way any followed link does, and the same key buys this frame its
-// own bearer token so the dashboard API can go on feeding the glasses.
+// own bearer token so the reads that feed the glasses can be authenticated.
 export function createWebUI(actions: WebUIActions, language: Language = "en"): WebUI {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) throw new Error("#app element not found");
@@ -93,6 +92,5 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
     setLoginBusy(busy) {
       login.setBusy(busy);
     },
-    render() {},
   };
 }

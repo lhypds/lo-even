@@ -1,7 +1,20 @@
+// The shapes lo's server actually answers with. Written out rather than left as
+// `Record<string, unknown>` because the cards read these fields by name, and a
+// column that silently renders `undefined` is worse than one that will not
+// compile — see lo/server/index.js and lo/server/geo.js for the other end of
+// each of them.
+
+/** The language lo is read in. One list, shared by the sign-in screen and the glasses. */
+export type Language = "en" | "ja" | "zh";
+
 export interface Coordinates {
   latitude: number;
   longitude: number;
   accuracy?: number;
+  /** Only a GPS good enough to claim it answers this; most fixes have no altitude. */
+  altitude?: number | null;
+  /** Metres a second over the ground, and null unless the device is actually tracking. */
+  speed?: number | null;
 }
 
 export interface LoUser {
@@ -9,51 +22,128 @@ export interface LoUser {
   username: string;
 }
 
-export interface LoCard {
-  id: string;
-  label: string;
-  title: string;
-  hero?: string;
-  lines: string[];
-  meta?: string;
+/* ------------------------------------------------------------------ place -- */
+
+export interface LoPlace {
+  name?: string;
+  locality?: string;
+  region?: string;
+  country?: string;
+  countryCode?: string;
+  subdivisionCode?: string;
 }
 
-export interface LocalResult {
-  place: {
-    name?: string;
-    locality?: string;
-    region?: string;
-    country?: string;
-    countryCode?: string;
-  } | null;
-  weather: {
-    timezone?: { id?: string; abbreviation?: string };
-    current?: {
-      time?: string;
-      temperature?: number;
-      apparent?: number;
-      humidity?: number;
-      weatherCode?: number;
-      windSpeed?: number;
-      isDay?: boolean;
-    };
-    today?: {
-      date?: string;
-      weatherCode?: number;
-      tempMax?: number;
-      tempMin?: number;
-      sunrise?: string;
-      sunset?: string;
-    };
-    upcoming?: Array<{
-      date?: string;
-      weatherCode?: number;
-      tempMax?: number;
-      tempMin?: number;
-    }>;
-    units?: { temperature?: string; wind?: string };
-  } | null;
+/* ---------------------------------------------------------------- weather -- */
+
+export interface LoWeatherDay {
+  date?: string;
+  weatherCode?: number | null;
+  tempMax?: number | null;
+  tempMin?: number | null;
+  sunrise?: string | null;
+  sunset?: string | null;
+}
+
+export interface LoWeather {
+  timezone?: { id?: string; abbreviation?: string; offsetSeconds?: number };
+  /** The height of the ground the forecast was made for — the compass card's fallback. */
+  elevation?: number | null;
+  current?: {
+    time?: string | null;
+    temperature?: number | null;
+    apparent?: number | null;
+    humidity?: number | null;
+    weatherCode?: number | null;
+    windSpeed?: number | null;
+    isDay?: boolean;
+  };
+  today?: LoWeatherDay | null;
+  upcoming?: LoWeatherDay[];
+  units?: { temperature?: string; wind?: string };
+}
+
+/** What `GET /api/local` answers: where this is, its weather, and what it can feed. */
+export interface LoLocal {
+  place: LoPlace | null;
+  weather: LoWeather | null;
+  /** Which of the regional cards this country has an answer for (see lo/server/countries.js). */
   components: string[];
   failed?: string[];
 }
 
+/* ------------------------------------------------------------------ feeds -- */
+
+export interface LoFeedItem {
+  kind?: string;
+  title: string;
+  url: string;
+  source?: string;
+  time?: string | null;
+  distance?: number | null;
+}
+
+export interface LoFeedResult {
+  place?: { name?: string } | null;
+  items: LoFeedItem[];
+}
+
+export interface LoTrend {
+  name: string;
+  count?: number | null;
+  headline?: string;
+  source?: string;
+  url?: string;
+}
+
+export interface LoTrendsResult {
+  /** The subregion Google answered for, or the country it fell back to. */
+  name?: string;
+  geo?: string;
+  items: LoTrend[];
+}
+
+/* --------------------------------------------------------------- warnings -- */
+
+export interface LoWarningItem {
+  name: string;
+  severity: "emergency" | "urgent" | "warning" | "advisory";
+  areas?: number | null;
+  areaNames?: string[];
+  from?: string | null;
+  to?: string | null;
+}
+
+export interface LoWarningsResult {
+  /** Japan only. Elsewhere the card takes itself off rather than claim an all clear. */
+  covered: boolean;
+  scope?: "municipality" | "region";
+  area?: string;
+  prefecture?: string;
+  issuedAt?: string | null;
+  url?: string;
+  areaCount?: number;
+  items: LoWarningItem[];
+}
+
+/* ----------------------------------------------------------- posts, people -- */
+
+export interface LoPost {
+  id: number;
+  time: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  body: string;
+  image?: string | null;
+  place?: string | null;
+  username: string;
+  comments: number;
+}
+
+export interface LoPerson {
+  username: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  time: string;
+}

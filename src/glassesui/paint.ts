@@ -1,0 +1,183 @@
+// The only thing here that talks to the glasses.
+//
+// Everything above this file deals in panels — rectangles of type — and this
+// turns them into bridge calls. It exists as its own module for one reason: the
+// difference between the two calls it can make is worth a lot, and deciding
+// between them is arithmetic rather than judgement.
+//
+//   • `rebuildPageContainer` throws the page away and builds it again. It is the
+//     SDK's own way of changing a page and is what a card switch needs, because
+//     a different card is a different set of containers in different places.
+//   • `textContainerUpgrade` writes a string into a container that is already
+//     there. It is what a clock tick needs, and a status line, and a list whose
+//     rows came back from a refresh unchanged in shape.
+//
+// So the painter keeps two things: what shape the page is (the signature) and
+// what each container currently says. A different shape has to be rebuilt. The
+// same shape is written into — but only up to a point, because an update is a
+// round trip too, and enough of them cost more than the one rebuild they were
+// avoiding. So the rule is three-way: rebuild a different page, rebuild a page
+// where most of the lines have changed anyway, and write into the rest.
+//
+// A minute of the clock ticking is one short write rather than a page rebuilt.
+// Stepping from the clock to the weather is a rebuild, even though those two
+// cards happen to have the same shape and the signature says so — every line of
+// it is different, and seven updates queued on a BLE link land later than one
+// page does.
+
+import {
+  CreateStartUpPageContainer,
+  RebuildPageContainer,
+  TextContainerProperty,
+  TextContainerUpgrade,
+  type EvenAppBridge,
+} from "@evenrealities/even_hub_sdk";
+import { signature, type Panel } from "./layout";
+import {
+  BAND_BORDER_COLOR,
+  BAND_BORDER_RADIUS,
+  BAND_BORDER_WIDTH,
+  BAND_PADDING,
+  CONTAINER,
+} from "./theme";
+
+export interface Painter {
+  /** Put this on the glasses. Returns at once; the writing is queued. */
+  paint(panels: Panel[]): void;
+  shutdown(): Promise<void>;
+}
+
+// Past this many changed lines, rebuilding the page beats writing them one at a
+// time. An update is a smaller message than a rebuild but it is still a round
+// trip, and on a BLE link the round trips are what cost — one rebuild carrying
+// eight containers lands sooner than seven updates queued behind each other.
+//
+// Three is where the two kinds of change fall either side. A minute turning over
+// is one line; a page turned inside a list is three columns; stepping from the
+// clock to the weather is seven, because those two cards have the same shape and
+// so every line of it is different. That last one is why this exists at all — the
+// signature says the page has not changed, and it is right, but "same page" and
+// "cheaper to update" turn out to be different questions.
+const UPGRADE_LIMIT = 3;
+
+// The name goes out with every call beside the id. Derived rather than stored so
+// that the two can never disagree — the firmware matches on both.
+function nameFor(id: number): string {
+  return `lo${id}`;
+}
+
+function toProperty(panel: Panel): TextContainerProperty {
+  return new TextContainerProperty({
+    xPosition: panel.rect.x,
+    yPosition: panel.rect.y,
+    width: panel.rect.width,
+    height: panel.rect.height,
+    borderWidth: panel.bordered ? BAND_BORDER_WIDTH : 0,
+    borderColor: panel.bordered ? BAND_BORDER_COLOR : 0,
+    borderRadius: panel.bordered ? BAND_BORDER_RADIUS : 0,
+    // Only a band keeps a gutter of its own; a body column is placed where it is
+    // meant to be and padding would shift it off the grid the columns share. It
+    // is charged vertically too, which is why a band is sized around it rather
+    // than given a round number (see BAND_HEIGHT).
+    paddingLength: panel.bordered ? BAND_PADDING : 0,
+    containerID: panel.id,
+    containerName: nameFor(panel.id),
+    content: panel.text,
+    textColor: panel.brightness,
+    // Exactly one container captures, and it is the one that is on every screen.
+    // Two would be two of every event; none risks the page hearing nothing at
+    // all. The events the app actually steers by are system-level anyway (a
+    // scroll, a tap, a hold — see main.ts), so which container holds this makes
+    // no difference beyond there being one.
+    isEventCapture: panel.id === CONTAINER.headBand ? 1 : 0,
+    zOrderIndex: panel.zOrder,
+  });
+}
+
+export async function createPainter(bridge: EvenAppBridge, boot: Panel[]): Promise<Painter> {
+  // The start-up page is not optional — the OS wants it before it will show
+  // anything — and it is the one call worth retrying: on a cold start the
+  // glasses may still be coming up when the WebView is already running.
+  const delays = [0, 200, 500, 1000];
+  let created = 1;
+  for (const delay of delays) {
+    if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+    created = await bridge.createStartUpPageContainer(
+      new CreateStartUpPageContainer({
+        containerTotalNum: boot.length,
+        textObject: boot.map(toProperty),
+      }),
+    );
+    if (created === 0) break;
+  }
+  if (created !== 0) console.warn(`createStartUpPageContainer returned ${created}`);
+
+  let shape = signature(boot);
+  let shown = new Map(boot.map((panel) => [panel.id, panel.text]));
+
+  async function apply(panels: Panel[]): Promise<void> {
+    const next = signature(panels);
+    const changed = next === shape ? panels.filter((panel) => shown.get(panel.id) !== panel.text) : panels;
+
+    if (next !== shape || changed.length > UPGRADE_LIMIT) {
+      await bridge.rebuildPageContainer(
+        new RebuildPageContainer({
+          containerTotalNum: panels.length,
+          textObject: panels.map(toProperty),
+        }),
+      );
+      shape = next;
+      shown = new Map(panels.map((panel) => [panel.id, panel.text]));
+      return;
+    }
+
+    for (const panel of changed) {
+      await bridge.textContainerUpgrade(
+        new TextContainerUpgrade({
+          containerID: panel.id,
+          containerName: nameFor(panel.id),
+          contentOffset: 0,
+          contentLength: panel.text.length,
+          content: panel.text,
+        }),
+      );
+      shown.set(panel.id, panel.text);
+    }
+  }
+
+  // One writer at a time, and only ever the newest frame. A reader spinning the
+  // scroll wheel produces frames faster than the link can carry them, and a
+  // queue of every one of them would keep drawing pages the reader has already
+  // scrolled past; holding just the latest means the display lands on where they
+  // actually stopped.
+  let pending: Panel[] | null = null;
+  let writing = false;
+
+  function paint(panels: Panel[]): void {
+    pending = panels;
+    if (writing) return;
+    writing = true;
+    void (async () => {
+      while (pending) {
+        const next = pending;
+        pending = null;
+        try {
+          await apply(next);
+        } catch (error) {
+          // A dropped frame is not worth stopping the loop for: the next paint
+          // carries the whole page anyway, and a rebuild after a failed upgrade
+          // puts everything back in step.
+          console.error("could not paint the glasses", error);
+        }
+      }
+      writing = false;
+    })();
+  }
+
+  return {
+    paint,
+    async shutdown() {
+      await bridge.shutDownPageContainer(0);
+    },
+  };
+}

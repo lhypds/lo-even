@@ -12,6 +12,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
+    "glasses:check": "TOOL=drive vite build --config vite.tools.config.mjs --logLevel warn && TOOL=drive node src/glassesui/dev/run.mjs",
+    "glasses:preview": "TOOL=preview vite build --config vite.tools.config.mjs --logLevel warn && TOOL=preview node src/glassesui/dev/run.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "even:pack": "bash ./package.sh"
   },

@@ -34,8 +34,8 @@ answers with a `token` and a `key`, and the two are spent on the two frames:
 - the **key** opens the iframe at `https://lo.gcc3.com/?k=<key>`, where the site's
   own `AuthProvider` trades it through `POST /api/link` and strips it back out of
   the address bar;
-- the **token** stays out here, as the `Authorization: Bearer` on
-  `POST /api/dashboard` — the read that feeds the glasses.
+- the **token** stays out here, as the `Authorization: Bearer` on every read that
+  feeds the glasses (see the table at the end).
 
 The iframe cannot hold the session in a cookie. `lo_session` is `SameSite=Lax`,
 and a Lax cookie is neither stored nor sent from a cross-site frame — which the
@@ -81,21 +81,49 @@ and an app half signed in is worse than one that asks.
 
 ## Endpoints used
 
-| Purpose | Endpoint |
-| --- | --- |
-| Sign in | `POST /api/login` |
-| Withdraw the spent link key | `DELETE /api/me/link` |
-| Sign out | `POST /api/logout` |
-| Everything for one location | `POST /api/dashboard?lang=` |
-| Save a mark | `POST /api/marks?lang=` |
-| Publish a post | `POST /api/posts?lang=` |
+| Purpose | Endpoint | When |
+| --- | --- | --- |
+| Sign in | `POST /api/login` | Once, at launch |
+| Withdraw the spent link key | `DELETE /api/me/link` | A minute after sign-in |
+| Sign out | `POST /api/logout` | Once |
+| Place, weather, available components | `GET /api/local?lat&lon&lang` | Every new fix |
+| Posts within reach | `GET /api/posts?lat&lon&lang` | Every new fix |
+| Publish our fix, get everyone else's | `PUT /api/position` | Every minute |
+| The newswire | `GET /api/nearby?lat&lon&lang` | First time that card is looked at |
+| What is on | `GET /api/events?lat&lon&lang` | First time that card is looked at |
+| Search trends | `GET /api/trends?lat&lon&lang` | First time that card is looked at |
+| Warnings in force | `GET /api/warnings?lat&lon` | First time that card is looked at |
+| Save a mark | `POST /api/marks?lang=` | On a tap |
+| Publish a post | `POST /api/posts?lang=` | On a hold |
 
-`POST /api/dashboard` is the one endpoint added for this client. It takes a fix in
-the body and answers with the place, weather, available components, regional
-nearby/events/trends, posts within reach and live people — the seven separate
-reads the website makes as its cards arrive, collapsed into the one round trip
-glasses on a phone tether can afford. It files the fix it is given, the same trade
-`PUT /api/position` makes. The website is free to adopt it.
+Every one of these is an endpoint the website already calls. There is nothing on
+the server that exists only for this package.
+
+That was not true before. This client used to make a single `POST /api/dashboard`
+— a read added for it, which took a fix in the body and answered with the place,
+the weather, the components, the regional feeds, the posts and the live people all
+at once, on the reasoning that glasses on a phone tether cannot afford seven round
+trips. The endpoint is still there and still answers; this package simply no
+longer calls it.
+
+What changed is that the glasses now draw one card at a time rather than a
+dashboard. A dashboard has to have every tile filled before it can be shown, so
+one round trip for all of it was the right trade. A sequence of cards does not:
+the reader is looking at exactly one, and the news, the events and the trends are
+three upstream lookups apiece that most sessions never scroll far enough to
+need. So the reads are split the way the website splits them, the four regional
+ones are made the first time their card comes into view, and each is re-asked only
+when the fix has moved far enough to make it a different question — one decimal
+place for the three city-wide feeds, two for the warnings, which Yahoo answers per
+municipality. Those roundings are the website's own (see `lo/src/components/*Card`).
+
+The cost is one extra round trip the first time a card is looked at. The saving is
+every lookup for every card that never is, and a launch that reaches first paint
+after two reads instead of seven.
+
+`PUT /api/position` is doing double duty here exactly as it does on the website:
+it files where we are and answers with who else is about, so presence costs the
+minute loop nothing beyond what it was already spending.
 
 ## Caveat
 

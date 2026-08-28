@@ -1,8 +1,21 @@
-import type { Coordinates, LocalResult, LoUser } from "../types";
+import type {
+  Coordinates,
+  Language,
+  LoFeedResult,
+  LoLocal,
+  LoPerson,
+  LoPost,
+  LoTrendsResult,
+  LoUser,
+  LoWarningsResult,
+} from "../types";
 
 const API_BASE = "https://lo.gcc3.com";
 
-export type Language = "en" | "ja" | "zh";
+// Re-exported because the sign-in screen and the language switcher in its corner
+// have always imported it from here, and the list itself now lives with the rest
+// of lo's shapes (see types.ts).
+export type { Language } from "../types";
 
 // The key lo keeps its own choice under (see lo/src/i18n/index.js), and the same
 // order of preference behind it: what was chosen last, else the phone's own
@@ -42,12 +55,27 @@ export interface Session {
   user: LoUser;
 }
 
+/**
+ * lo's API, as the glasses use it.
+ *
+ * There is no endpoint here that the website does not also call. `POST
+ * /api/dashboard` — the one read added for this package, which collapsed seven
+ * questions into one round trip — is gone from this side: the glasses now ask
+ * for what the card in front of the reader actually needs, when they need it
+ * (see feeds.ts). The endpoint is still on the server and still answers; nothing
+ * over there had to change.
+ *
+ * What that trade buys is worth stating. The dashboard read fetched the news,
+ * the events and the trends for every launch whether or not anyone scrolled far
+ * enough to see them — three upstream lookups per fix, on a phone tether, for
+ * cards that are four flicks away. Asking per card costs an extra round trip the
+ * first time one is looked at and nothing at all for the ones that never are.
+ */
 export class LoApi {
   private token = "";
   // Which language everything the glasses are fed comes back in, and the one the
   // sign-in screen is read in. Not readonly: the switcher in that screen's corner
-  // is the same control lo has in its own, and a language chosen there is the
-  // language the dashboard should arrive in.
+  // is the same control lo has in its own.
   language: Language;
 
   constructor() {
@@ -69,6 +97,10 @@ export class LoApi {
     this.token = token;
   }
 
+  get signedIn(): boolean {
+    return Boolean(this.token);
+  }
+
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const headers = new Headers(options.headers);
     if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
@@ -87,6 +119,14 @@ export class LoApi {
     return data as T;
   }
 
+  // Every location endpoint answers in the language the glasses are read in, so
+  // the place name in the footer matches the words above it.
+  private geo({ latitude, longitude }: Coordinates): string {
+    return `lat=${latitude}&lon=${longitude}&lang=${this.language}`;
+  }
+
+  /* ------------------------------------------------------------ the session */
+
   async login(username: string, password: string): Promise<Session> {
     const session = await this.request<Session>("/api/login", {
       method: "POST",
@@ -96,9 +136,9 @@ export class LoApi {
     return session;
   }
 
-  // Withdrawing the link key, once the WebView has finished spending it. It
-  // takes the key out of the account altogether; neither session the key opened
-  // is touched, so this signs nobody out of anything.
+  // Withdrawing the link key, once the WebView has finished spending it. It takes
+  // the key out of the account altogether; neither session the key opened is
+  // touched, so this signs nobody out of anything.
   revokeLinkKey() {
     return this.request<void>("/api/me/link", { method: "DELETE" });
   }
@@ -107,19 +147,57 @@ export class LoApi {
     return this.request<void>("/api/logout", { method: "POST" });
   }
 
-  dashboard(coords: Coordinates) {
-    return this.request<{
-      local: LocalResult;
-      nearby?: Array<Record<string, unknown>>;
-      events?: Array<Record<string, unknown>>;
-      trends?: Array<Record<string, unknown>>;
-      posts?: Array<Record<string, unknown>>;
-      people?: Array<Record<string, unknown>>;
-    }>(`/api/dashboard?lang=${this.language}`, {
-      method: "POST",
-      body: JSON.stringify(coords),
+  /* -------------------------------------------------------------- the place */
+
+  /**
+   * Where this is, its weather, and which of the regional cards this country can
+   * feed. One read rather than three, because it is one answer: the components
+   * list is derived from the place, and the clock cannot draw its zone without
+   * the weather. Every card on the opening screens is fed from this.
+   */
+  local(coords: Coordinates) {
+    return this.request<LoLocal>(`/api/local?${this.geo(coords)}`);
+  }
+
+  /* --------------------------------------------------------- the wider place */
+
+  nearby(coords: Coordinates) {
+    return this.request<LoFeedResult>(`/api/nearby?${this.geo(coords)}`);
+  }
+
+  events(coords: Coordinates) {
+    return this.request<LoFeedResult>(`/api/events?${this.geo(coords)}`);
+  }
+
+  trends(coords: Coordinates) {
+    return this.request<LoTrendsResult>(`/api/trends?${this.geo(coords)}`);
+  }
+
+  // The one reading that does not take the interface language: Yahoo answers in
+  // Japanese, and the words the card can translate it translates itself.
+  warnings({ latitude, longitude }: Coordinates) {
+    return this.request<LoWarningsResult>(`/api/warnings?lat=${latitude}&lon=${longitude}`);
+  }
+
+  /* --------------------------------------------------------- people and posts */
+
+  /**
+   * Telling the server where we are and asking who else is out, which is one
+   * question a minute apart rather than two — the same trade the website makes.
+   * The unread figure rides along because the same read already knows it.
+   */
+  publishPosition({ latitude, longitude, accuracy }: Coordinates) {
+    return this.request<{ people: LoPerson[]; unread: number }>("/api/position", {
+      method: "PUT",
+      body: JSON.stringify({ latitude, longitude, accuracy }),
     });
   }
+
+  posts(coords: Coordinates) {
+    return this.request<{ posts: LoPost[] }>(`/api/posts?${this.geo(coords)}`);
+  }
+
+  /* ------------------------------------------------------------ the two verbs */
 
   createMark(coords: Coordinates) {
     return this.request<{ mark: Record<string, unknown> }>(`/api/marks?lang=${this.language}`, {
@@ -129,10 +207,9 @@ export class LoApi {
   }
 
   createPost(coords: Coordinates, body: string) {
-    return this.request<{ post: Record<string, unknown> }>(`/api/posts?lang=${this.language}`, {
+    return this.request<{ post: LoPost }>(`/api/posts?lang=${this.language}`, {
       method: "POST",
       body: JSON.stringify({ ...coords, body, time: new Date().toISOString() }),
     });
   }
-
 }
