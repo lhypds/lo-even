@@ -148,8 +148,11 @@ has just left.
 | Warnings in force | `GET /api/warnings?lat&lon` | Every new fix |
 | Publish our fix, get everyone else's and the unread count | `PUT /api/position` | Every minute |
 | The inbox | `GET /api/messages` | While the second page or anything under it is up, at most once a minute |
+| One exchange, which marks it read | `GET /api/messages/:username` | Three seconds after the reader has opened one letter and stayed on it |
+| Who somebody is: bio, contacts, follow figures, last posts | `GET /api/users/:username` | When the reader opens one of the names on the street |
 | Save a mark | `POST /api/marks?lang=` | On a hold, where the reader answered *mark*, with what was said as its `label` |
 | Leave a post | `POST /api/posts?lang=` | On the same hold, where they answered *post*, with what was said as its `body` |
+| Say something to a person | `POST /api/messages/:username` | On a hold begun while that letter — or that person's page — was open, with what was said as its `body` |
 
 Every one of these is an endpoint the website already calls except two, and both
 of those lo added for a client like this: `POST /api/dashboard`, which is the
@@ -174,33 +177,150 @@ so they are keyed two decimal places where the dashboard is keyed three. The inb
 has nothing to do with where anybody is standing, so it is asked for only while the
 page that shows it is up, and at most once a minute. Reading `GET /api/messages`
 marks nothing read; only opening one conversation does that, which is why the
-glasses can show who is waiting without answering for the reader — and why the
-screen that reads a letter up here shows the last line of it whole rather than the
-exchange it came out of. Opening the conversation is what marks it read, and doing
-that from a screen with no keyboard would answer for the reader twice over: it
-would clear the badge on their phone for a letter they have not replied to and
-cannot. The exchange stays where the reply is.
+glasses can list who is waiting without answering for the reader.
 
 The cost is one round trip for feeds a given session might never read. The saving
 is a launch that reaches a full first screen after two reads instead of seven, and
 a scroll that costs nothing at all.
 
-**The two writes, and why there is a question between them.** The glasses used to
-write only marks: there were two gestures and both were the same verb — a tap
-saved the spot, a hold saved it with what you said about it. That was one thing
-too few. A sentence said out here is a mark when it is a note to yourself and a
-post when it is left for whoever comes past, the difference is the whole of what
-those two endpoints are, and nothing in the words themselves says which. So the
-hold now records and stops there, and the screen asks: the wheel picks between the
-two, a tap sends it, two taps throw it away (see `src/glassesui/pages/compose.ts`).
+**The read that is really a write.** `GET /api/messages/:username` answers with one
+exchange and marks it read on the way past, and there is no endpoint that does only
+the second half. None was added, because lo does not want one: it has never had a
+button for this on its own sheet either — a conversation somebody has been shown is
+one they have seen, and a sheet that made the reader press something afterwards
+would be asking them to file their own post.
 
-Both endpoints take the same shape of body — the fix, the time, and what was said
-— and both look the place up themselves rather than trusting a name from here, so
-what the glasses write is filed exactly as what the website writes is. The
+What decides it up here is three seconds. The glasses ask for the exchange once the
+reader has opened one letter and is still on it, which is the same claim the sheet
+makes by being open, made by the only means a screen with no scrollbar has. Not on
+arrival: the wheel walks a list of letters a flick at a time and the screen changes
+with every flick, so a letter passed through would otherwise be a letter marked
+read. Not from the list either — a reader walking a list of correspondents has
+opened none of them, which is the same rule that keeps a newswire row's story
+unfetched until it is tapped.
+
+This is the piece that had to wait for the reply below. The earlier version of this
+file argued against marking anything read from up here, and the argument was right
+at the time: doing it from a screen that could not answer would clear the badge on
+the phone for a letter the reader had been shown and could do nothing about, and
+they would come home to an inbox that looked dealt with and was not. That objection
+is spent now that the same screen replies.
+
+The answer is also the screen. It carries the whole exchange, and that exchange is
+what the reading screen behind a letter draws — newest line first, which is upside
+down for a correspondence and right for this display: lo's own sheet runs oldest
+first because a sheet can be scrolled to the bottom before the reader sees it, and
+a wheel cannot. It opens on the first screenful and walks forward a flick at a
+time, so the usual order would put the line the reader came for behind every line
+they have already read.
+
+Each line is written as a name, a colon and the sentence, `You:` for the reader's
+own — lo's own `messages.said`, lifted key for key, and a companion for the other
+side that lo has no key for because its row draws the name in a column beside the
+words. `mine` off the wire is the whole of what says which, and a display with one
+column and no bubbles has nowhere but the type to put it. The colon is the ASCII
+one in all three languages where lo sets a full-width `：` in two of them: a
+character this face turns out not to carry draws as four pixels of nothing rather
+than as a box, and U+FF1A has not been through the probe in `docs/Screen.md`.
+
+The three seconds are therefore also three seconds before the exchange appears,
+and nothing on the screen moves when it does. What stands there in the meantime is
+the last thing said — which `GET /api/messages` has already handed over, along
+with which side said it — drawn in exactly the form the exchange will draw it in.
+The rest arrives *underneath* it.
+
+The footer says which of the two states it is in, because the screen itself cannot:
+one line is a short correspondence and a long one still on the wire, and a reader
+with no way to tell them apart takes the first for the second and leaves. A request
+not yet made and a request still out get the same sentence — the care this file
+takes over idle-against-loading elsewhere is about claims, and there is no claim
+here to get wrong. Once the exchange has landed the same line says how to answer
+it, and where nobody could be reached it says that instead of either.
+
+The recounted `unread` comes off the same answer, so the badge in the corner goes
+out in the same breath rather than on the inbox's next beat, and the inbox's own
+key is dropped with it, so the dot beside that correspondent's name goes on the
+next paint rather than at the top of the next minute (see `wrote`, which does the
+same for a post). Exchanges are kept per correspondent and bounded at ten, the way
+stories are: this store grows with what the reader has opened rather than with
+where they are standing.
+
+**Who is about, and how little that is allowed to say.** `PUT /api/position` and the
+dashboard both answer with everyone else's fix, and until recently the screen
+behind a name printed it: a distance, an hour and the coordinates it was taken at,
+to four decimal places. That is eleven metres of where a person actually is, shown
+to anybody within reach with a pair of glasses on, and no screen in lo has ever
+done it — the website draws a dot on a map at a scale nobody reads a doorway off,
+and the number itself is nobody's business. It is off both screens now. What is
+left is the distance and the hour, which says there is somebody here without
+saying which window they are behind. The coordinates still arrive in the answer,
+because the distance is computed from them; nothing draws them.
+
+What is worth reading behind a name is who it belongs to, which is the one question
+a position cannot answer, and lo has had a page for it as long as it has had
+profiles. `GET /api/users/:username` is that page in one read — the bio, the ways
+to reach them off lo, the two follow figures and their most recent posts — and the
+glasses draw all four in the order the website draws them, with five of the posts
+where the website lists twenty. A profile on a phone is scrolled; this one is
+walked a screenful at a time, and the other fifteen would be four flicks of
+somebody else's afternoon between the reader and the end of the screen.
+
+It is asked for when the reader opens one name and not before, which is the same
+rule that keeps a newswire row's story unfetched until it is tapped: a street the
+reader is walking past would otherwise be four profiles a minute nobody asked for.
+Unlike the exchange above it is a read and only a read — lo files nothing when a
+profile is fetched — so no clock stands in front of it, and it is keyed on the name
+and five minutes: a bio changes about never, and what moves underneath is the
+handful of recent posts. Profiles are kept per person and bounded at ten, the way
+exchanges and stories are.
+
+**The three writes, and why there is a question in front of each.** The glasses used
+to write only marks: there were two gestures and both were the same verb — a tap
+saved the spot, a hold saved it with what you said about it. That was one thing too
+few. A sentence said out here is a mark when it is a note to yourself and a post
+when it is left for whoever comes past, the difference is the whole of what those
+two endpoints are, and nothing in the words themselves says which. So the hold
+records and stops there, and the screen asks: the wheel picks between the two, a
+tap sends it, two taps throw it away (see `src/glassesui/pages/compose.ts`).
+
+Those two endpoints take the same shape of body — the fix, the time, and what was
+said — and both look the place up themselves rather than trusting a name from here,
+so what the glasses write is filed exactly as what the website writes is. The
 difference in what they will take is real and is shown to the reader rather than
 applied behind them: 48 characters as a mark's `label` against 500 as a post's
 `body`, so the screen previews the sentence cut the way the answer under the wheel
 would cut it.
+
+**The third is a message**, and it is not on that wheel. `POST /api/messages/:username`
+is reached by holding while one letter is open — where the sentence is being said
+decides what it is, because the address is the one thing the reader has already
+stated by opening that letter and not another. A wheel that could turn a letter
+meant for one person into a line left in the street would put that mistake one
+flick away.
+
+The same hold on one person's page does the same thing, and deliberately: saying
+something to somebody who has not written yet and answering somebody who has are
+one act, one endpoint and one screen, so they are one gesture with one sentence in
+the same corner of the footer saying so. It is also where a conversation most often
+starts on the website — you have just read who somebody is and want to say
+something to them — which is why lo puts the way in on the profile as well as in
+the inbox. Only on the person's own screen, never on the list of names: the list is
+what the wheel walks, and a hold there would be a message addressed to whoever the
+reader had rolled onto.
+
+So the reply gets its own screen with the shorter question on it: the words as they
+were heard, the name of whoever is about to read them, a tap to send and two taps
+to drop. It is confirmed rather than sent on the release because the words are a
+transcriber's and not the reader's, and this is the one write here that lands in
+somebody else's inbox with the reader's name on it. It is also the only write in
+the app with no fix in it — a letter is filed under a person, and where the writer
+was standing when they answered is nobody's business — so a hold begun on a letter
+does not wake the GPS at all, where every other hold ends in a high-accuracy read.
+The `body` is cut to lo's 1000 characters, which a minute of talking does not
+reach. Sending is followed by a re-read of the exchange and a dropped inbox key,
+for the reason a post is followed by a re-read of `GET /api/posts`: the reader is
+put straight back on the screen that lists what they just said, and one that did
+not have it on it would be a screen saying the letter never went.
 
 A post made here is followed by a re-read of `GET /api/posts` rather than left to
 the next minute: the page listing what is on this street is one flick away, and a
@@ -208,7 +328,8 @@ reader who scrolled to it and did not find what they had just said would have
 every reason to think it was never written.
 
 What still belongs on the phone is everything with a keyboard or a camera behind
-it — a post's picture, replies, and editing either kind after the fact.
+it — a post's picture, a reply to a *post* and its thread, and editing any of the
+three after the fact.
 
 `PUT /api/position` is doing double duty here exactly as it does on the website:
 it files where we are and answers with who else is about and how much is waiting to

@@ -4,8 +4,22 @@
 // live in different repositories — but the arithmetic is the website's and any
 // change there belongs here too.
 
-import type { Coordinates } from "../types";
+import type { Coordinates, LoPost } from "../types";
 import type { Translate } from "./strings";
+
+/**
+ * What a post says, which is its words — or, for a photo with no words, where it
+ * was taken, and the coordinates for that.
+ *
+ * Here rather than on either page that draws a list of posts, because both of
+ * them do: the ground under the reader on one screen and one person's own last
+ * few on another, and a post that read differently on the two would be the same
+ * post twice. It is lo's own expression, written the same way in both of the
+ * places lo lists posts.
+ */
+export function postSays({ body, place, latitude, longitude }: LoPost): string {
+  return body || place || formatCoords(latitude, longitude);
+}
 
 /** Coordinates the way a map reads them: north/south first. */
 export function formatCoords(latitude: number, longitude: number): string {

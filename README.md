@@ -38,6 +38,14 @@ read as a list or a menu rather than as a mailbox. Every non-alphabetic characte
 on these pages has been through the probe in [docs/Screen.md](docs/Screen.md), and
 anything new has to be.
 
+A word is also a thing that can be translated, which a picture is not: the badge
+reads `msg (2)` in English and `未読 (2)` or `未读 (2)` in the other two — three
+narrow Latin letters against two full-width characters, thirty-seven pixels
+against forty. The corner is measured against whichever is widest and every
+language gets that same box, because everything on that line is placed from this
+edge: a corner that resized with the dictionary would make the heading a different
+width in Japanese than in English.
+
 **1 · Where you are standing.** The heading is the place and the hour there, with
 the bearing beside it while the compass is on. Under it: the day, the daylight and
 the zone; the fix, how sure it is and how high; what it is like out and what the
@@ -50,6 +58,12 @@ latest posts left on this street, what is on within walking distance, and the
 names of everyone else with a tab open nearby. The letters come first because
 they are the one thing on the page addressed to the reader by name — the posts
 are everybody's and the names are whoever happens to be about.
+
+A name says how far away and how long ago, and never where. Somebody's fix
+written out to four decimal places is eleven metres of where they actually are,
+printed for anybody within reach who has a pair of glasses on; no screen in lo
+has ever shown it and neither does this one. What is on the screen says there is
+somebody here without saying which window they are behind.
 
 **3 · What is being said.** The newswire for this corner of the map, and what the
 country is searching for — the freshest few of each rather than all of one.
@@ -85,6 +99,35 @@ that opened *a* list would have to guess which, and the wheel would then have to
 carry you across group boundaries to correct the guess — so the choice is made
 where all four are already in front of you.
 
+One entry reads as a list rather than as a thing, and that is the letters: the
+third tap opens the whole exchange with that person, not the one line the inbox
+had. **Newest at the top**, which is upside down for a correspondence and the
+right way up for a wheel. lo's own sheet runs oldest first and opens itself
+scrolled to the bottom — a sheet can be scrolled before you see it, and this
+cannot. Here you land on the first screenful and go forward a flick at a time, so
+the usual order would put the line you came for behind everything you had already
+read. The hour is on the heading rather than repeated down the margin.
+
+Every message the app draws — down that exchange, under a name in the list, and on
+the summary a page up — is written the same way: **a name, a colon, and the
+sentence**, `You:` for your own. Nothing in the words themselves says which
+direction a line went, and there is no left and right up here to say it with; lo's
+own sheet has bubbles and this has one column, so the attribution has to be in the
+type. The summary is the one row that names two people, because it is the only
+place that says who a letter is with as well as who spoke: `@mari: on my way` when
+it is theirs, `@mari · You: on my way` when it is yours. The second shape never
+wears the unread disc — a thread you spoke in last is a thread with nothing waiting
+in it.
+
+The third tap on a name opens the other page lo has always had on the phone: who
+that person is. How far off and how recently, then how many read them and how many
+they read, the line they wrote about themselves, the ways to reach them off lo, and
+the last five things they have left on the ground. It is fetched when you open that
+one name and not while you are walking past a list of them. Five posts where the
+website lists twenty, because this page is walked a screenful at a time rather than
+scrolled: the other fifteen would be four flicks of somebody else's afternoon
+between you and the end of the screen.
+
 The corner of the footer says where you are and how far through it:
 
 ```
@@ -119,10 +162,14 @@ gesture and a pointer that changed shape half way through would be two things to
 learn. On a list you get both: the box, and the entry written in ink with the two
 beside it muted.
 
-What is still not here is anything that writes. lo's own rows open a post *and
-its replies*, and a reply needs a keyboard; the newswire's rows are links out to
-the article. What lo was told is what can be read up here, and the rest is on the
-phone.
+The things behind these pages that answer back are the two addressed to somebody:
+a letter, and a person. lo's own rows open a post *and its replies*, and a reply
+to a post needs a keyboard; the newswire's rows are links out to the article.
+These two are the exception because a message is one sentence said to one person,
+which is the whole of what a hold on the temple already records — so a hold on a
+letter answers it and a hold on somebody's page says the first thing to them, the
+same gesture into the same inbox, and everything else lo was told is read here and
+answered on the phone.
 
 - **Scroll up/down** — the next page, group, entry or screenful, or the previous
   one.
@@ -131,10 +178,11 @@ phone.
 - **Double tap** — one step back out. At the top there is nowhere to come back
   from, and it is the standard Even exit confirmation it has always been.
 - **Press and hold** — record from the glasses microphone. Release to stop, and
-  what you said comes back as words on the screen with one question under it:
-  **mark** or **post**?
-- **Scroll**, while that question is up — the other answer.
-- **Single tap**, while that question is up — save it as the answer you are on.
+  what you said comes back as words on the screen with a question under it:
+  **mark** or **post**? — or, where you had a letter or one person's page open
+  when you started talking, whether that goes to them.
+- **Scroll**, while that question is up — the other answer, where there are two.
+- **Single tap**, while that question is up — send it as the answer you are on.
 - **Double tap**, while that question is up — throw it away.
 - **Single tap**, while a recording or a transcript is still in the air — throw it
   away.
@@ -158,11 +206,58 @@ which, and there is no unsaying something to a street — so the glasses ask, an
 the wheel opens on the mark, which is the answer that can still be taken back by
 nobody having seen it.
 
-The words on that screen are the words the answer you are on would actually save:
-lo takes 48 characters as the name of a mark and 500 as the words of a post, so a
-long sentence visibly loses its tail on the mark line and keeps it on the post
-line. Replies, photos and everything else with a keyboard behind it stay on the
-phone.
+The third is a **reply**, and it is not on that wheel. What decides it is where
+you were standing when you started talking rather than anything in the words: hold
+while a letter is open and the sentence is an answer to that letter, hold anywhere
+else and it is about the ground under you. A wheel that could turn a letter meant
+for one person into a line left in the street would be one flick away from a
+mistake nobody should be able to make by rolling a thumb, and the address is the
+one thing here the reader has already stated — by opening that letter and not
+another.
+
+So the reply screen asks the shorter question. There is nothing to choose, only
+whether it goes: the words as they were heard, the name of whoever is about to
+read them, a tap to send and two taps to drop it. It is asked at all because the
+words are a transcriber's rather than yours, and this is the one thing the glasses
+write that lands in somebody else's inbox with your name on it.
+
+The words on those screens are the words the answer you are on would actually
+send: lo takes 48 characters as the name of a mark, 500 as the words of a post and
+1000 as the words of a letter, so a long sentence visibly loses its tail on the
+mark line and keeps it on the other two. Photos, replies to a *post*, and
+everything else with a keyboard or a camera behind it stay on the phone.
+
+The footer of that screen is the letter's own, where every other screen in the app
+has the place you are standing in there — a letter is not about a place. It says
+two things, in this order. While the rest of the exchange is on its way it says so:
+one line on a screen is a short correspondence and a long one that has not arrived
+yet, and without a word about it you would take the one line for the whole of it
+and leave. Once it is all there it says **hold to reply**, which is the verb this
+screen has and no other screen in the app does, and so the one verb nobody can be
+expected to find on their own. Where lo could not be reached it says that instead
+of either.
+
+**A letter you stopped on has been read.** Three seconds on the screen that reads
+one and lo is told so — the dot goes out beside that name, here and on the phone,
+and whoever wrote it can see it arrived. There is no gesture for this and lo has
+never had one: a letter somebody has been shown is a letter they have seen, and a
+screen that asked you to confirm it afterwards would be asking you to file your own
+post. Three seconds rather than none because the wheel walks the letters a flick at
+a time and the screen changes with every flick — arriving on a letter is not
+reading one. It is only the screen that reads a letter whole, never the list: on a
+list you have chosen nothing yet.
+
+Those same three seconds are what fetch the exchange, because saying a letter has
+been read and asking for it are one request in lo and there is no wanting them
+apart. They are invisible all the same: what is on the screen until they are up is
+the last thing said, drawn exactly as the exchange will draw it, and the rest of
+the correspondence arrives *underneath* it. Nothing you are reading moves.
+
+This is the piece that had to wait for the reply. Marking a letter read from a
+screen that could not answer it would have cleared the badge on the phone for a
+letter you had been shown and could do nothing about — the reader would have gone
+home to an inbox that looked dealt with and was not. Now the same screen that says
+you read it is the screen you answer from, and the two halves are one gesture apart.
 
 What a country cannot feed is a line or a group left off a page rather than a page
 left out: with three of them, a page that took itself off would move the other two

@@ -30,7 +30,9 @@ import type {
   Language,
   LoArticle,
   LoFeedItem,
+  LoMessage,
   LoPerson,
+  LoPersonPage,
   LoPlace,
   LoPost,
   LoThread,
@@ -92,6 +94,32 @@ export interface PageContext {
    * starts the fetch is the reader arriving on the reading screen (see main.ts).
    */
   article(link: string): Feed<LoArticle>;
+  /**
+   * One whole exchange, for a correspondent whose letter has been opened. A read
+   * and never a request, exactly as `article` is and for the same reason — and
+   * more sharply here, because the request behind it is the one that tells lo the
+   * letter has been read. A page that could start it by drawing a row would be
+   * marking every correspondent read on the way past (see main.ts).
+   *
+   * Idle until the reader has stopped on one letter for three seconds. What the
+   * screen draws in the meantime is the one line the inbox already handed over,
+   * written exactly as the exchange will write it, so the rest arriving adds lines
+   * underneath rather than moving the one being read.
+   */
+  thread(username: string): Feed<LoMessage[]>;
+  /**
+   * Who one of the names on the street is, for a person whose entry has been
+   * opened: the line they wrote about themselves, how to reach them off lo, the
+   * two follow figures and their last few posts. A read and never a request, for
+   * the reason both of the above are — the page builds an entry for everybody
+   * about on every paint, and a call that fetched would be lo asked about a whole
+   * street on the strength of the reader walking down it.
+   *
+   * Idle until the reader has opened one of them, and no clock on it: a profile
+   * is a read that files nothing, so unlike the letter above there is nothing to
+   * be careful of in asking (see main.ts).
+   */
+  profile(username: string): Feed<LoPersonPage>;
 }
 
 /**
@@ -148,6 +176,14 @@ export interface Item {
   line: string;
   /** The whole of what it says, which is what the reader stepped in for. */
   body: string;
+  /**
+   * What the footer says while this entry is being read whole, in place of the
+   * place the reader is standing in. Set by the one kind of entry that can be
+   * answered from up here — a letter, which says so — because the gesture that
+   * answers it is a gesture no other screen in the app has, and a screen with a
+   * verb nobody could guess at owes the reader the sentence (see pages/nearby.ts).
+   */
+  context?: string;
   /**
    * Where the rest of this entry lives, for the one kind that does not carry its
    * own words: a newswire row is a headline and a link, and the story behind it

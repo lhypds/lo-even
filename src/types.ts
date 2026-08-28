@@ -173,6 +173,70 @@ export interface LoPerson {
   time: string;
 }
 
+/* --------------------------------------------------------------- profiles -- */
+
+/**
+ * One more way of reaching somebody, past the five lo asks everybody for: the
+ * platform it is on and the handle they keep there. lo stores these as a
+ * document rather than as a table — written whole, read whole, in the order
+ * their owner put them in — so this is read defensively at both ends (see the
+ * `links` column in lo/server/db.js).
+ */
+export interface LoProfileLink {
+  kind: string;
+  value: string;
+}
+
+/**
+ * Who somebody is, which is the one question a position cannot answer. A post
+ * says where somebody was standing and a fix says they are still out there;
+ * neither of them says who they are, and this is what does (see
+ * lo/src/components/UserProfile).
+ *
+ * Every field but the name is optional and most profiles have most of them
+ * empty, which is why nothing here is stood in for: a bio nobody wrote is a line
+ * the screen leaves out rather than one it fills in on their behalf.
+ */
+export interface LoProfile {
+  username: string;
+  /** When the account was opened. lo has stopped drawing it; it answers with it all the same. */
+  createdAt?: string | null;
+  /** The address of the picture, not the name it is filed under. Nothing draws it up here. */
+  avatar?: string | null;
+  bio?: string | null;
+  email?: string | null;
+  website?: string | null;
+  /** The LINE ID, which lo's column calls `line_id` and its answer calls this. */
+  line?: string | null;
+  whatsapp?: string | null;
+  wechat?: string | null;
+  links?: LoProfileLink[];
+}
+
+/**
+ * How many read this account, how many it reads, and whether the reader asking
+ * is one of the first. One answer rather than three, because they change
+ * together and a page that fetched them apart could draw two of them disagreeing.
+ */
+export interface LoFollows {
+  followers: number;
+  following: number;
+  isFollowing: boolean;
+}
+
+/**
+ * What `GET /api/users/:username` answers, which is lo's whole profile page in
+ * one read: who they are, the two figures, and the last of what they have left
+ * on the ground. The glasses want it in one round trip for the same reason they
+ * want the dashboard in one.
+ */
+export interface LoPersonPage {
+  user: LoProfile;
+  /** Null where lo could not work them out, which the screen reads as a row to leave off. */
+  follows: LoFollows | null;
+  posts: LoPost[];
+}
+
 /* --------------------------------------------------------------- messages -- */
 
 /**
@@ -187,6 +251,26 @@ export interface LoThread {
   time: string;
   mine: boolean;
   unread: number;
+}
+
+/**
+ * One line of one exchange, as `GET /api/messages/:username` answers it — which
+ * is the request that also marks the exchange read (see lo/server/index.js).
+ *
+ * The glasses ask for it to say they have read it and take the fresh count off
+ * the answer; the lines themselves are the phone's to draw, and the screen up
+ * here still shows the last of them rather than the correspondence. The shape is
+ * written out all the same, because a return type that named only the field this
+ * client happens to use would be a lie about what lo said.
+ */
+export interface LoMessage {
+  id: number;
+  body: string;
+  time: string;
+  /** Which side of the exchange said it. */
+  mine: boolean;
+  /** Whether the far side has had it in front of them. */
+  read: boolean;
 }
 
 /* -------------------------------------------------------------- dashboard -- */

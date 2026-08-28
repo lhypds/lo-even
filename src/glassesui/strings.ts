@@ -26,7 +26,61 @@ const en: Dict = {
   "posts.title": "Posts",
   "people.title": "People",
   "messages.title": "Messages",
+  // The badge in the top right corner, which every screen wears. It is the one
+  // word in the app measured before it is chosen: the corner is sized for the
+  // widest any language makes it (see theme.ts), so a long one costs the place
+  // name on the same line the room it needs. `msg` is what English can say in
+  // three narrow letters; the two below say `unread`, which is what the count
+  // actually is, in two characters that come to the same width.
+  "mail.badge": "msg",
   "messages.empty": "Nothing waiting to be read.",
+  // Whoever said it, in front of what they said. Nothing about a line of an
+  // exchange says which way it went, and a screen with no bubbles and no left and
+  // right has nowhere to put that but in the words — so every message drawn
+  // anywhere in this app is a name, a colon and the sentence.
+  //
+  // The reader's own side is lifted key for key out of lo, which already draws
+  // this row in its inbox and calls it `messages.said`; the other side is the
+  // glasses' own, because lo's row has a column for the name beside the words and
+  // one line is all there is up here.
+  //
+  // The colon is the ASCII one in all three languages, where lo sets a full-width
+  // `：` in the two that would take one. That is not a translation being ignored:
+  // a character this face turns out not to carry draws as four pixels of nothing
+  // rather than as a box (see metrics.ts), U+FF1A has not been through the probe
+  // in docs/Screen.md, and an invisible colon is worse than a narrow one. The
+  // clock already writes `14:32` in every language for the same reason. One
+  // screenshot would settle it.
+  "messages.said": "You: {{body}}",
+  "messages.from": "{{name}}: {{body}}",
+  // The two things the footer of an open letter says, in the order it says them:
+  // that the rest of the exchange is on its way, and then — once it is all there —
+  // the verb this screen has that no other screen in the app does (see
+  // `letterFoot` in pages/nearby.ts).
+  "messages.reading": "Reading the exchange.",
+  "messages.reply": "Hold to reply.",
+  // What the footer says while one person is open — the same sentence as the
+  // letter's above, because it is the same gesture, the same composer and the same
+  // endpoint (see pages/person.ts).
+  "people.message": "Hold to send a message.",
+  // The two follow figures, and lo's own words for them. English is the only one
+  // of these three languages with an opinion about a single follower, which is
+  // why the singular is a key of its own and the other two dictionaries answer
+  // both keys with the one word they have.
+  "user.followers": "{{n}} followers",
+  "user.follower": "{{n}} follower",
+  "user.following": "{{n}} following",
+  // The one heading on a profile. The contacts under it need none — a line
+  // reading `Email mari@example.com` says which section it is in by saying it —
+  // where a post is a sentence with an hour in front of it and nothing about the
+  // sentence says it is a post rather than a contact.
+  "user.posts": "Recent posts",
+  // The ways off lo, named as lo's own profile form names them.
+  "profile.email": "Email",
+  "profile.website": "Website",
+  "profile.line": "LINE",
+  "profile.whatsapp": "WhatsApp",
+  "profile.wechat": "WeChat",
   "nearby.title": "Nearby",
   "world.title": "Info",
   // What goes between the counts on the two table-of-contents lines. A word of
@@ -71,6 +125,16 @@ const en: Dict = {
   "compose.postWho": "everyone here",
   "compose.hint": "Roll to choose · tap to keep · twice to drop.",
   "compose.dropped": "Dropped.",
+  // The other composer: a dictation said while one letter was open, which is an
+  // answer to it rather than anything about the ground. The heading is the whole
+  // question, because showing the words back before they go to a named person is
+  // the whole of what that screen is for.
+  "compose.replyTitle": "send this reply?",
+  "compose.sendTo": "Send to",
+  "compose.replyHint": "Tap to send · twice to drop.",
+  "reply.sending": "Sending.",
+  "reply.sent": "Replied.",
+  "reply.failed": "Could not send this.",
   "warnings.kind.rain": "Heavy rain",
   "warnings.kind.flood": "Flood",
   "warnings.kind.storm": "Storm",
@@ -146,6 +210,13 @@ const en: Dict = {
   "glasses.recording": "Recording — release to stop.",
   "glasses.transcribing": "Transcribing.",
   "glasses.noSpeech": "Nothing heard.",
+  // The two ways a dictation can fail before anybody knows what it was going to
+  // be. Both used to say the line below, which named a verb the reader had not
+  // chosen yet — and which became plainly wrong once a hold on a letter meant
+  // "reply". A failure says which step failed; the line below is kept for the one
+  // place it is true, which is a mark that would not save (see main.ts).
+  "glasses.noMic": "The microphone did not open.",
+  "glasses.transcribeFailed": "Speech service unreachable.",
   "glasses.markFailed": "Could not mark this spot.",
   "glasses.empty": "Nothing to show yet.",
 };
@@ -161,7 +232,22 @@ const ja: Dict = {
   "posts.title": "posts",
   "people.title": "近くの人",
   "messages.title": "メッセージ",
+  "mail.badge": "未読",
   "messages.empty": "未読のメッセージはありません。",
+  "messages.said": "自分: {{body}}",
+  "messages.from": "{{name}}: {{body}}",
+  "messages.reading": "やり取りを読み込み中。",
+  "messages.reply": "長押しで返信。",
+  "people.message": "長押しでメッセージ。",
+  "user.followers": "フォロワー {{n}}",
+  "user.follower": "フォロワー {{n}}",
+  "user.following": "フォロー中 {{n}}",
+  "user.posts": "最近の posts",
+  "profile.email": "メール",
+  "profile.website": "ウェブサイト",
+  "profile.line": "LINE",
+  "profile.whatsapp": "WhatsApp",
+  "profile.wechat": "WeChat",
   "nearby.title": "周辺",
   "world.title": "情報",
   "tally.join": "・",
@@ -201,6 +287,12 @@ const ja: Dict = {
   "compose.postWho": "ここにいる人",
   "compose.hint": "回して選択 · タップで保存 · 2回で破棄。",
   "compose.dropped": "破棄しました。",
+  "compose.replyTitle": "この返信を送る？",
+  "compose.sendTo": "宛先",
+  "compose.replyHint": "タップで送信 · 2回で破棄。",
+  "reply.sending": "送信中。",
+  "reply.sent": "返信しました。",
+  "reply.failed": "送信できません。",
   "warnings.kind.rain": "大雨",
   "warnings.kind.flood": "洪水",
   "warnings.kind.storm": "暴風",
@@ -273,6 +365,8 @@ const ja: Dict = {
   "glasses.recording": "録音中 — 離すと終了。",
   "glasses.transcribing": "文字起こし中。",
   "glasses.noSpeech": "音声を認識できません。",
+  "glasses.noMic": "マイクを開けませんでした。",
+  "glasses.transcribeFailed": "音声認識に接続できません。",
   "glasses.markFailed": "この場所を記録できません。",
   "glasses.empty": "表示できるものがありません。",
 };
@@ -288,7 +382,22 @@ const zh: Dict = {
   "posts.title": "posts",
   "people.title": "附近的人",
   "messages.title": "消息",
+  "mail.badge": "未读",
   "messages.empty": "没有未读消息。",
+  "messages.said": "我: {{body}}",
+  "messages.from": "{{name}}: {{body}}",
+  "messages.reading": "正在读取对话。",
+  "messages.reply": "长按回信。",
+  "people.message": "长按发消息。",
+  "user.followers": "关注者 {{n}}",
+  "user.follower": "关注者 {{n}}",
+  "user.following": "关注中 {{n}}",
+  "user.posts": "最近的 posts",
+  "profile.email": "邮箱",
+  "profile.website": "主页",
+  "profile.line": "LINE",
+  "profile.whatsapp": "WhatsApp",
+  "profile.wechat": "微信",
   "nearby.title": "附近",
   "world.title": "信息",
   "tally.join": " · ",
@@ -328,6 +437,12 @@ const zh: Dict = {
   "compose.postWho": "这里的所有人",
   "compose.hint": "滚动选择 · 轻触保存 · 连按两次丢弃。",
   "compose.dropped": "已丢弃。",
+  "compose.replyTitle": "发送这条回复？",
+  "compose.sendTo": "发送给",
+  "compose.replyHint": "轻触发送 · 连按两次丢弃。",
+  "reply.sending": "发送中。",
+  "reply.sent": "已回复。",
+  "reply.failed": "无法发送。",
   "warnings.kind.rain": "暴雨",
   "warnings.kind.flood": "洪水",
   "warnings.kind.storm": "暴风",
@@ -400,6 +515,8 @@ const zh: Dict = {
   "glasses.recording": "录音中 — 松开结束。",
   "glasses.transcribing": "正在转写。",
   "glasses.noSpeech": "没有听到内容。",
+  "glasses.noMic": "麦克风未能打开。",
+  "glasses.transcribeFailed": "无法连接语音服务。",
   "glasses.markFailed": "无法记录此处。",
   "glasses.empty": "暂无内容。",
 };

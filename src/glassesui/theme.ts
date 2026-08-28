@@ -176,8 +176,22 @@ const PAGER_SLOT = textWidth("00/00");
  * rather than three digits, because a badge is a glance rather than a figure and
  * the point past which the exact number stops mattering is well short of a
  * hundred (see MAIL_MAX in layout.ts).
+ *
+ * **Widest across the languages, too.** The badge is a word and lo is read in
+ * three (`mail.badge` in strings.ts), so the corner is measured against whichever
+ * of them takes the most room and every language gets that box. The alternative
+ * — a corner that resized with the dictionary — would make the heading a
+ * different width in Japanese from in English, and everything on that line is
+ * measured from this edge: the title is cut against it, and so is the bearing
+ * laid over the middle of it. One width is one layout to reason about.
+ *
+ * They come out within three pixels of each other in any case. `msg` is three of
+ * the narrower Latin letters at 37, and 未読 and 未读 are two full-width
+ * characters at 40 — the same badge, in the language that has a two-character way
+ * of saying it.
  */
-const CORNER_SLOT = textWidth("msg (99+) · 00:00");
+const MAIL_SLOT = Math.max(textWidth("msg"), textWidth("未読"), textWidth("未读"));
+const CORNER_SLOT = MAIL_SLOT + textWidth(" (99+) · 00:00");
 
 export const HEAD_TIME: Rect = {
   x: INNER_RIGHT - CORNER_SLOT,
@@ -229,7 +243,7 @@ export function trailSlot(path: string): number {
 // and the two numbers below are what pull it off it.
 //
 // Everything else in a corner has room to spare. The hour is right-aligned inside
-// a slot measured off `msg (99+) · 00:00`, which is wider than any hour it
+// a slot measured off the widest badge and `(99+) · 00:00`, which is wider than any hour it
 // actually says, so it floats several pixels clear. The pager does not: its slot
 // is `${path} · ` plus the width of `00/00`, and a counter of narrower digits
 // falls short of that by very nearly a whole number of spaces — `lo/ · 3/3` is

@@ -40,6 +40,27 @@ const DOUBLE_TAP_MS = 650;
 // What the composer is called where the display has to name what is in front of
 // the reader. It is not a page and it is not in the sequence (see glasses.ts).
 const COMPOSE = "compose";
+// What the letters are called where a group has to be named by it. Every entry
+// nearby.ts builds out of the inbox is stamped with this (see pages/nearby.ts).
+const LETTERS = "messages";
+// And what the names on the street are called, which is the other group down
+// here whose entries are addressed to a person rather than to a place: opening
+// one is what fetches their profile, and a hold on one is a message to them.
+const PEOPLE = "people";
+// How long one letter has to stay in front of the reader before lo is told they
+// have read it.
+//
+// It is a clock rather than a gesture, and that is the point. lo has never had a
+// button for this on its own sheet — a conversation somebody has been shown is one
+// they have seen, and a screen that asked them to press something afterwards would
+// be asking them to file their own post — and a screen with three gestures on it
+// could not have spared one for filing anyway.
+//
+// Three seconds because the wheel walks the letters a flick at a time, and the
+// screen changes under it on every flick: arriving on a letter is not reading one.
+// Long enough to be past everybody who was passing through, short enough to have
+// happened well before a reader who stopped is done with it.
+const READ_DWELL_MS = 3000;
 // How long the link key is left standing after a sign-in. Long enough for the
 // WebView to have traded it for a session of its own on a slow phone tether,
 // short enough that a password equivalent is not left sitting in that frame's
@@ -102,6 +123,16 @@ async function main() {
   let navTimer = 0;
   let lastScrollAt = 0;
   let sensorPaintAt = 0;
+  // The three seconds that mark a letter read, and which letter they are being
+  // counted on. The second of these is what keeps a repaint — the clock turning
+  // over, a feed landing, the compass moving — from starting the count again on a
+  // letter that has been on screen for two and a half seconds already.
+  let dwellTimer = 0;
+  let dwellOn = "";
+  // Who the sentence now being recorded is an answer to, taken when the hold
+  // began. Empty for a hold that was not begun on a letter, which is every hold
+  // anywhere else in the app.
+  let replyTo = "";
 
   // What a sentence goes through between being said and being saved: heard, then
   // waited on while it is turned into words, then standing as a draft until the
@@ -141,11 +172,13 @@ async function main() {
       heading: sensorState(),
       username: user?.username ?? null,
       article: (link) => feeds.article(link),
+      thread: (username) => feeds.thread(username),
+      profile: (username) => feeds.profile(username),
     };
   }
 
   // What is in front of the reader is what is worth paying for. Two reads work
-  // that way, and neither has anything to do with where anybody is standing:
+  // that way, and none of them has anything to do with where anybody is standing:
   //
   //   • the inbox, which is not worth asking for until the page that shows it is
   //     up. `current` answers with the page rather than the path, which is what
@@ -156,11 +189,20 @@ async function main() {
   //     (see lo/server/articles.js), so this is the request that decides — and
   //     it is deliberately hung off `reading`, which is null at both the depths
   //     where the reader is still choosing.
+  //   • who one of the names on the street is, which is worth asking for at
+  //     exactly the same moment and for the same reason. It hangs off `opened`
+  //     rather than `reading` because a person carries no link — there is nothing
+  //     to fetch a profile *by* except the name — and `opened` is null at those
+  //     same two depths, so a wheel walking a list of names asks lo about none of
+  //     them.
   //
   // Called after every paint, every scroll and every step in or out; the feed
-  // store decides whether either is actually a new question (see feeds.ts) and
-  // does nothing when it is not.
+  // store decides whether any of them is actually a new question (see feeds.ts)
+  // and does nothing when it is not.
   function ensureVisible(): void {
+    // First, because this one is about a screen going away as much as about one
+    // arriving, and a signed-out app has a clock to stop rather than nothing to do.
+    watchLetter();
     if (!api.signedIn) return;
     if (display.current() === "nearby") feeds.inbox();
     const open = display.reading();
@@ -170,6 +212,39 @@ async function main() {
         kind: open.group === "events" ? "event" : "news",
       });
     }
+    // And the profile behind an open name. No clock in front of it, where the
+    // letter three lines up has three seconds: asking for an exchange is what
+    // tells lo it has been read, and asking for a profile tells lo nothing.
+    const person = display.opened();
+    if (person?.group === PEOPLE) feeds.meet(person.key);
+  }
+
+  /**
+   * The clock that marks a letter read, started when one is opened and stopped
+   * when the reader moves off it. It is the only thing in this app that writes
+   * without being asked to, and the whole of what keeps that honest is the
+   * comparison below: the count belongs to a letter by name, so it survives every
+   * repaint of the screen it is on and does not survive a flick to the next one.
+   *
+   * What counts as being on a letter is the reading screen and nothing above it.
+   * A list of correspondents is a list the wheel walks; opening one is the reader
+   * saying which, exactly as it is for a story (see feeds.read). And a composer
+   * standing in front of the screen answers `null` here, so a reader dictating a
+   * reply is not also being timed — the letter is behind the question they are
+   * looking at.
+   */
+  function watchLetter(): void {
+    const open = api.signedIn ? display.opened() : null;
+    const letter = open?.group === LETTERS ? open.key : "";
+    if (letter === dwellOn) return;
+    window.clearTimeout(dwellTimer);
+    dwellOn = letter;
+    dwellTimer = letter
+      ? window.setTimeout(() => {
+          dwellTimer = 0;
+          feeds.seen(letter);
+        }, READ_DWELL_MS)
+      : 0;
   }
 
   function render(): void {
@@ -379,9 +454,17 @@ async function main() {
     setStatus("");
   }
 
-  /** The wheel, while the composer has it: the other of the two answers. */
+  /**
+   * The wheel, while the composer has it: the other of the two answers.
+   *
+   * A reply has no other answer. The sentence was said into one letter and there
+   * is nothing on that screen to choose between, so the wheel does nothing rather
+   * than being given something to do — the alternative would be offering to turn a
+   * letter meant for one person into a line left in the street, which is not a
+   * mistake a flick of the wheel should be able to make.
+   */
   function chooseOther(): void {
-    if (!draft) return;
+    if (!draft || draft.kind === "reply") return;
     draft = { ...draft, kind: draft.kind === "mark" ? "post" : "mark" };
     showDraft();
   }
@@ -446,6 +529,11 @@ async function main() {
     // asking. Bumping the ticket is what tells it so.
     dictation += 1;
     transcribing = false;
+    // And whoever the sentence was going to. `finishRecording` takes its own copy
+    // before it awaits anything, so clearing this cannot redirect a reply already
+    // on its way to the screen — it is what stops the *next* hold inheriting the
+    // last one's correspondent.
+    replyTo = "";
     if (draft) {
       draft = null;
       display.takeover(null);
@@ -473,10 +561,35 @@ async function main() {
   /** The answer, and the one round trip it turns into. */
   async function keep(): Promise<void> {
     if (!draft) return;
-    const { text, coords: spot, kind } = draft;
-    const shared = kind === "post";
+    const current = draft;
     draft = null;
     display.takeover(null);
+
+    // A letter, which is the one thing this app writes that is addressed to
+    // somebody rather than left at a place. It carries no fix — where the reader
+    // was standing when they answered is nobody's business — so there is nothing
+    // here about the ground and nothing on any page here to put right afterwards
+    // except the inbox's own idea of who spoke last.
+    if (current.kind === "reply") {
+      setStatus(t("reply.sending"));
+      try {
+        await api.reply(current.to, current.text);
+        setStatus(t("reply.sent"), 2500);
+        // The exchange the reader is about to be put back on now ends with what
+        // they just said, and the inbox's row for it does too. Both are re-asked
+        // rather than left to the next beat: a reader who answered a letter and
+        // did not find the answer in it would have every reason to think it never
+        // went (see feeds.ts, which does the same for a post).
+        feeds.replied(current.to);
+      } catch (error) {
+        console.error(error);
+        setStatus(t("reply.failed"), 2500);
+      }
+      return;
+    }
+
+    const { text, coords: spot, kind } = current;
+    const shared = kind === "post";
     setStatus(t(shared ? "post.saving" : "mark.saving"));
     try {
       if (shared) await api.createPost(spot, text);
@@ -497,7 +610,18 @@ async function main() {
     }
   }
 
-  async function startRecording(): Promise<void> {
+  /**
+   * The microphone, opened. `answering` is the correspondent this sentence is a
+   * reply to, where the hold began on one letter read whole, and empty everywhere
+   * else — which is what decides, an entire dictation later, which of the two
+   * questions the reader is asked (see finishRecording).
+   *
+   * It is settled here rather than when the recording ends because the wheel still
+   * works while the microphone is open: a reader who says something into a letter
+   * and then rolls on to the next one meant the first, and asking again at the far
+   * end would send it to whoever they had drifted onto.
+   */
+  async function startRecording(answering = ""): Promise<void> {
     if (recording || !api.signedIn) {
       if (!api.signedIn) {
         ui.showLogin();
@@ -509,8 +633,10 @@ async function main() {
     // than racing it. Bumping the ticket is what tells the transcript still on its
     // way that nobody is waiting for it — without this, it would land on top of
     // the recording that has already started and put up a question about the
-    // wrong words.
+    // wrong words. It also clears the last hold's correspondent, which is why the
+    // new one is written down after it rather than before.
     if (transcribing) discard();
+    replyTo = answering;
     recording = true;
     recordingStartedAt = Date.now();
     audioChunks = [];
@@ -523,7 +649,12 @@ async function main() {
     }
     if (!opened) {
       recording = false;
-      setStatus(t("glasses.markFailed"), 2200);
+      // The microphone, and not anything the sentence was going to be. This used
+      // to say "could not mark this spot", which was already answering for a
+      // reader who had not been asked yet and became plainly wrong once a hold on
+      // a letter started meaning "reply": nothing has been marked, posted or sent
+      // here, because nothing has been said. A failure names the step that failed.
+      setStatus(t("glasses.noMic"), 2200);
       return;
     }
     recordingTimer = window.setTimeout(() => void finishRecording(), MAX_RECORDING_MS);
@@ -557,10 +688,17 @@ async function main() {
       return;
     }
 
+    // Who this is an answer to, if it is one. Read now, before anything is
+    // awaited, for the same reason the ticket below exists: a second hold can
+    // arrive while this transcript is still coming back, and it writes its own
+    // correspondent over this one.
+    const answering = replyTo;
     // Taken now rather than when the reader answers: the fix belongs to the spot
     // they were standing on when they said it, not to wherever they had drifted to
-    // while deciding what it was.
-    const fixPromise = phoneLocation(true);
+    // while deciding what it was. A reply is filed under a person and carries no
+    // fix at all, so the GPS is not woken for one — the high-accuracy read is the
+    // most expensive thing a hold does and a letter has no use for the answer.
+    const fixPromise = answering ? null : phoneLocation(true);
     const ticket = ++dictation;
     transcribing = true;
     setStatus(t("glasses.transcribing"));
@@ -571,6 +709,17 @@ async function main() {
       if (ticket !== dictation) return;
       if (!text) {
         setStatus(t("glasses.noSpeech"), 2200);
+        return;
+      }
+      // An answer to the letter that was open when the hold began. Shown back
+      // before it goes rather than sent on the release: these are words a
+      // transcriber heard rather than words the reader typed, and they are about
+      // to arrive in somebody else's inbox with the reader's name on them. Every
+      // other write up here is a note about a place; this is the one that is a
+      // letter to a person, and there is no unsending one.
+      if (answering) {
+        draft = { kind: "reply", text, to: answering };
+        showDraft();
         return;
       }
       const fix = (await fixPromise) ?? coords;
@@ -594,7 +743,13 @@ async function main() {
       showDraft();
     } catch (error) {
       console.error(error);
-      if (ticket === dictation) setStatus(t("glasses.markFailed"), 2500);
+      // The transcriber, and again not the verb. What threw is the one step every
+      // dictation goes through before anybody knows what it is going to be — a
+      // speech service that could not be reached, or would not answer — so the
+      // reader is told that rather than told a mark failed. It is the same
+      // sentence whichever of the three a hold was going to turn into, because at
+      // this point it had not turned into any of them (see `glasses.noMic`).
+      if (ticket === dictation) setStatus(t("glasses.transcribeFailed"), 2500);
     } finally {
       if (ticket === dictation) transcribing = false;
     }
@@ -684,7 +839,21 @@ async function main() {
       // And a step in that has not been taken yet is dropped rather than left to
       // land in the middle of the recording it interrupted.
       disarmEnter();
-      void startRecording();
+      // What the sentence is going to be is settled here, by where the reader was
+      // standing when they started talking rather than by anything in the words.
+      // On one letter read whole it is an answer to that letter, and on one person
+      // read whole it is a message to them — the same gesture, the same composer
+      // and the same endpoint, because saying something to somebody who has not
+      // written yet is not a different act from answering somebody who has.
+      // Anywhere else in the app it is about the ground under them and the composer
+      // asks which of the two things it is (see pages/compose.ts).
+      //
+      // Only on the letter or the person itself, and not on the list of either:
+      // the list is what the wheel walks, and a hold there would be a message
+      // addressed to whoever the reader happened to have rolled onto.
+      const open = display.opened();
+      const addressed = open?.group === LETTERS || open?.group === PEOPLE;
+      void startRecording(addressed ? open.key : "");
       return;
     }
 
@@ -740,6 +909,10 @@ async function main() {
 
     if (eventType === OsEventTypeList.SYSTEM_EXIT_EVENT || eventType === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
       discard();
+      // A letter half read when the app was closed is a letter half read. The
+      // clock is stopped rather than left to say otherwise on the way out.
+      window.clearTimeout(dwellTimer);
+      dwellOn = "";
       void display.shutdown();
       return;
     }

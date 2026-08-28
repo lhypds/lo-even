@@ -14,7 +14,7 @@
 // gets there second loses its tail to the first. A clock reading `14:3`, or a
 // deep path missing from the footer entirely because the place name reached its
 // column first, is this file being coarse rather than the layout being wrong: on
-// the glasses the heading's corner is 158 pixels sized off the widest it can ever
+// the glasses the heading's corner is 161 pixels sized off the widest it can ever
 // be, and the footer's is cut against the path beside it (see theme.ts).
 //
 // The body is past what it can show for the same reason, and this is new: the
@@ -33,7 +33,7 @@
 // blank row for the second. On the glasses the two gaps are the same.
 
 import { PAGES } from "../pages/index";
-import { composeView, type DraftKind } from "../pages/compose";
+import { composeView, type Draft } from "../pages/compose";
 import { listView, readView } from "../pages/list";
 import { spans } from "../pages/stack";
 import type { PageContext } from "../pages/types";
@@ -153,9 +153,64 @@ const ctx: PageContext = {
     status: "ready",
     data: [
       { username: "mari", body: "明日どこで待ち合わせにする？", time: new Date(Date.now() - 12 * 60_000).toISOString(), mine: false, unread: 2 },
-      { username: "tom", body: "Thanks for the bookshop tip — went yesterday", time: new Date(Date.now() - 5 * 3600_000).toISOString(), mine: false, unread: 0 },
+      // The reader spoke last in this one, which is the other of the two shapes a
+      // row of the inbox takes: the summary has to name the correspondent as well
+      // as the speaker when they are not the same person, and a thread nobody is
+      // waiting on never wears the disc (see pages/nearby.ts).
+      { username: "tom", body: "Any time — the cat is the real draw", time: new Date(Date.now() - 5 * 3600_000).toISOString(), mine: true, unread: 0 },
     ],
   },
+  // One of the two exchanges has been opened and the other has not, which is the
+  // pair of states the screen behind a letter is actually met in: the whole
+  // correspondence where the three seconds have elapsed, and the last line of it
+  // standing in until they have (see pages/nearby.ts). Oldest first, which is how
+  // lo answers; the page turns it round.
+  thread: (username: string) =>
+    username === "mari"
+      ? {
+          status: "ready" as const,
+          data: [
+            { id: 1, body: "今週末って空いてる？", time: new Date(Date.now() - 3 * 3600_000).toISOString(), mine: false, read: true },
+            { id: 2, body: "土曜なら空いてる。日曜は仕事", time: new Date(Date.now() - 2.5 * 3600_000).toISOString(), mine: true, read: true },
+            { id: 3, body: "じゃあ土曜で。前に話してた古本屋、まだ行ってないよね？あの猫がいるところ", time: new Date(Date.now() - 40 * 60_000).toISOString(), mine: false, read: true },
+            { id: 4, body: "行ってない。九時まで開いてるらしいから夕方でも大丈夫", time: new Date(Date.now() - 20 * 60_000).toISOString(), mine: true, read: true },
+            { id: 5, body: "明日どこで待ち合わせにする？", time: new Date(Date.now() - 12 * 60_000).toISOString(), mine: false, read: false },
+          ],
+        }
+      : { status: "idle" as const, data: null },
+  // The same pair for the other group that is about a person: one name opened and
+  // one not. The filled one carries everything a profile can carry — the two
+  // figures, a bio, contacts of both kinds and more posts than the screen draws —
+  // because this sheet exists to show what the fullest screen looks like, and a
+  // profile is the longest thing on the nearby page now that a post is not.
+  profile: (username: string) =>
+    username === "mari"
+      ? {
+          status: "ready" as const,
+          data: {
+            user: {
+              username: "mari",
+              bio: "古本屋めぐりと、だれも見ていない路地の写真。だいたい渋谷か下北のあたりにいます。",
+              email: "mari@example.com",
+              website: "https://example.com/mari",
+              line: "mari-line",
+              links: [
+                { kind: "instagram", value: "mari.walks" },
+                { kind: "xiaohongshu", value: "mari_tokyo" },
+              ],
+            },
+            follows: { followers: 1, following: 42, isFollowing: true },
+            posts: [
+              { id: 8, time: new Date(Date.now() - 42 * 60_000).toISOString(), latitude: 35.6601, longitude: 139.6990, body: "Great little second-hand bookshop tucked behind the station", username: "mari", comments: 0 },
+              { id: 5, time: new Date(Date.now() - 20 * 3600_000).toISOString(), latitude: 35.6612, longitude: 139.7005, body: "", place: "Miyashita Park", username: "mari", comments: 3 },
+              { id: 4, time: new Date(Date.now() - 3 * 86400_000).toISOString(), latitude: 35.6633, longitude: 139.6981, body: "雨上がりの路地がいちばんきれい", username: "mari", comments: 1 },
+              { id: 3, time: new Date(Date.now() - 5 * 86400_000).toISOString(), latitude: 35.6644, longitude: 139.6972, body: "coffee at the counter, nine seats, no music", username: "mari", comments: 0 },
+              { id: 2, time: new Date(Date.now() - 9 * 86400_000).toISOString(), latitude: 35.6655, longitude: 139.6963, body: "古本市、今日まで", username: "mari", comments: 2 },
+              { id: 1, time: new Date(Date.now() - 14 * 86400_000).toISOString(), latitude: 35.6666, longitude: 139.6954, body: "the sixth post, which this screen never draws", username: "mari", comments: 0 },
+            ],
+          },
+        }
+      : { status: "idle" as const, data: null },
   unread: 2,
   heading: { status: "on", heading: 127.4, headingAccuracy: 8, turnRate: 14.2 },
   username: "heyang",
@@ -199,7 +254,7 @@ function raster(panels: ReturnType<typeof layout>): string {
       // Hung from the container's right edge, and allowed to start left of the
       // container's own left edge to get there. That is not the display being
       // described wrongly, it is this grid being too coarse to describe it: the
-      // corner is fifteen characters of narrow type inside 158 pixels, which is
+      // corner is fifteen characters of narrow type inside 161 pixels, which is
       // thirteen cells, because a cell is the widest glyph there is and a `1` is
       // seven pixels. Clamped to the box it would lose its last characters off the
       // right of the screen instead, and a proof that drops what it cannot fit is
@@ -302,6 +357,7 @@ for (const page of PAGES) {
       time: clockFace(ctx),
       status: "",
       unread: ctx.unread,
+      mail: t("mail.badge"),
       path: pathOf(page),
       index,
       total: steps.length,
@@ -329,6 +385,7 @@ for (const page of PAGES) {
       time: clockFace(ctx),
       status: "",
       unread: ctx.unread,
+      mail: t("mail.badge"),
     };
 
     // The page itself with a box round this group, which is what the first tap
@@ -365,22 +422,33 @@ for (const page of PAGES) {
 }
 
 // The composer, which is not one of the pages and is not in the count above: it
-// takes the display over while a dictation is waiting to be told what it is. Both
-// answers are drawn, because the two are not the same screenful — the sentence is
-// shown as the answer under the wheel would save it, so the mark's 48 characters
-// are visibly fewer words than the post's (see pages/compose.ts).
+// takes the display over while a dictation is waiting to be sent somewhere. All
+// three answers are drawn, because none of them is the same screenful — the
+// sentence is shown as the answer would save it, so the mark's 48 characters are
+// visibly fewer words than the post's, and the reply has a line more of them
+// again because it has one answer where the others have two (see
+// pages/compose.ts).
 const SPOKEN =
   language === "en"
     ? "second-hand bookshop behind the station, open until nine, the one with the cat"
     : "駅の裏の古本屋、九時まで開いてる、猫がいる方の店。コーヒーも出してくれるらしいから、今度ゆっくり行ってみたい";
-for (const kind of ["mark", "post"] as DraftKind[]) {
-  const panels = layout(composeView({ text: SPOKEN, coords: ctx.coords!, kind }, t), 0, {
+const DRAFTS: Draft[] = [
+  { kind: "mark", text: SPOKEN, coords: ctx.coords! },
+  { kind: "post", text: SPOKEN, coords: ctx.coords! },
+  // Said into one open letter rather than at the street, which is the same screen
+  // asked the shorter question: not which of two things this is, only whether it
+  // goes. `mari` is the correspondent the inbox above is holding a letter from.
+  { kind: "reply", text: SPOKEN, to: "mari" },
+];
+for (const draft of DRAFTS) {
+  const panels = layout(composeView(draft, t), 0, {
     place: formatPlace(ctx.place),
     time: clockFace(ctx),
     status: "",
     unread: ctx.unread,
+    mail: t("mail.badge"),
   });
-  console.log(`\n╔══ compose (${kind}) ${"═".repeat(30 - kind.length)}`);
+  console.log(`\n╔══ compose (${draft.kind}) ${"═".repeat(30 - draft.kind.length)}`);
   console.log(raster(panels));
 }
 

@@ -46,12 +46,18 @@ export function listView(items: Item[], focus: number, t: Translate): PageView {
  * One entry, whole. Its first line becomes the heading — the same words in the
  * same place, so the step in reads as the entry growing rather than as a screen
  * arriving — and everything it has to say goes under it.
+ *
+ * The footer is the entry's own where it has something to say there, and the
+ * place the reader is standing in where it has not. One kind has: a letter can be
+ * answered from this screen and from nowhere else in the app, and a gesture that
+ * exists on one screen is a gesture that has to be written on it.
  */
 export function readView(item: Item): PageView {
   return {
     title: item.head,
     meta: item.meta,
     block: { kind: "prose", text: item.body },
+    context: item.context,
   };
 }
 

@@ -118,6 +118,19 @@ export interface GlassesDisplay {
    * already carries what it says. What acts on it is main.ts, after every paint.
    */
   reading(): ReadRef | null;
+  /**
+   * The entry being read whole, whatever kind it is — the one above without the
+   * condition that its words live elsewhere. Null on the dashboard, null while a
+   * group is only picked out, and null in a list: a reader walking a list of
+   * letters has opened none of them.
+   *
+   * It is what tells the app which letter is in front of the reader, which two
+   * things now hang off: the three seconds that mark it read, and the hold that
+   * answers it (see main.ts). Neither can use `reading` — a letter carries its own
+   * words and so has no link — and neither wants the reader's position in a list,
+   * which is where `enter` has not been pressed yet.
+   */
+  opened(): ItemRef | null;
   /** Where in the app they are, as the corner of the footer says it: `lo/nearby`. */
   path(): string;
   shutdown(): Promise<void>;
@@ -190,6 +203,12 @@ interface Inside {
    * looking at a list of twenty headlines has chosen none of them.
    */
   read?: ReadRef;
+  /**
+   * Which entry that screen is reading, whatever kind it is — set at the same one
+   * depth as `read` and for the same reason, but without the condition that made
+   * `read` about newswire rows alone.
+   */
+  open?: ItemRef;
 }
 
 /**
@@ -276,6 +295,11 @@ export async function createGlassesDisplay(
   // of the app has worked out ought to be. Null at every other depth, and on
   // every entry that already carries what it says (see main.ts).
   let shownRead: ReadRef | null = null;
+  // And which entry that screen is reading, whichever kind it turned out to be —
+  // kept off the same paint, for the same reason: what is in front of the reader
+  // is what the glass says is, not what some other part of the app has worked out
+  // ought to be by now.
+  let shownOpen: ItemRef | null = null;
 
   /** The place, the hour, the badge and whatever is being said — the same on every screen. */
   function surround(context: PageContext): Chrome {
@@ -284,6 +308,7 @@ export async function createGlassesDisplay(
       time: clockFace(context),
       status: latestStatus,
       unread: context.unread,
+      mail: context.t("mail.badge"),
     };
   }
 
@@ -392,6 +417,11 @@ export async function createGlassesDisplay(
       // story worth a request. An entry that carries its own words — a post, a
       // letter — has no link and so asks for nothing.
       read: item.link ? { link: item.link, group: item.group, title: item.line } : undefined,
+      // And the entry itself, on the same one screen, whether or not it has a
+      // story behind it. A letter is the case that made this necessary: it
+      // carries its own words, so it never sets `read`, and it is nevertheless
+      // the thing two errands out here need to be able to name.
+      open: { group: item.group, key: item.key },
     };
   }
 
@@ -404,6 +434,7 @@ export async function createGlassesDisplay(
     // reader should not have to work out that it is. No path and no counter: it
     // is not anywhere in the app, and it has its own way out (see compose.ts).
     shownRead = null;
+    shownOpen = null;
     if (taken) {
       painter.paint(layout(taken.view, 0, surround(latest)));
       return;
@@ -414,6 +445,7 @@ export async function createGlassesDisplay(
       if (step) {
         shownPath = step.chrome.path ?? ROOT;
         shownRead = step.read ?? null;
+        shownOpen = step.open ?? null;
         painter.paint(layout(step.view, step.screen, step.chrome, step.select));
         return;
       }
@@ -550,6 +582,10 @@ export async function createGlassesDisplay(
       return taken ? null : shownRead;
     },
 
+    opened() {
+      return taken ? null : shownOpen;
+    },
+
     shutdown() {
       return painter.shutdown();
     },
@@ -581,8 +617,10 @@ export function createBrowserDisplay(): GlassesDisplay {
     },
     current: () => taken ?? pageId,
     // Nothing is ever read whole in a browser: the phone view is lo's own site
-    // in a frame and does its own reading (see webui.ts).
+    // in a frame and does its own reading, its own marking read and its own
+    // replying (see webui.ts).
     reading: () => null,
+    opened: () => null,
     path: () => ROOT,
     async shutdown() {},
   };

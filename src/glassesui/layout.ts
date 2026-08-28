@@ -148,6 +148,13 @@ export interface Chrome {
    */
   unread: number;
   /**
+   * The word in front of that count, in the reader's own language. It comes in
+   * from the driver rather than being written down here, because this file has
+   * no dictionary and the corner is the one place in the app where the word and
+   * the space it is allowed are decided apart from each other (see theme.ts).
+   */
+  mail: string;
+  /**
    * Where in the app this screen is — `lo/`, `lo/nearby`, `lo/nearby/msg`.
    * Left off by a screen that is nowhere in it, which is the composer: it takes
    * the display over rather than standing anywhere, and it has its own way out.
@@ -163,16 +170,16 @@ export interface Chrome {
   total?: number;
 }
 
-// The mark in the unread badge, which is a word rather than a picture. There are
-// no images on this display and no way to load one, so an icon here can only be a
-// character the face actually has — and the shapes that survive are the wrong
-// ones. ✉ draws as nothing at all (see the note under the table in metrics.ts),
-// and ▤, which stood here in its place, is a ruled box that reads as a list or a
-// menu rather than as a mailbox. Three lowercase letters say it outright and cost
-// seventeen pixels more than the box did, which the corner has to spare.
-const MAIL = "msg";
-
-// Past this, the exact figure has stopped being worth the pixels: a reader with a
+// The mark in the unread badge is a word rather than a picture, and it is one of
+// the reader's own. There are no images on this display and no way to load one,
+// so an icon here could only be a character the face actually has — and the
+// shapes that survive are the wrong ones: ✉ draws as nothing at all (see the note
+// under the table in metrics.ts), and ▤, which stood here in its place, is a
+// ruled box that reads as a list or a menu rather than as a mailbox. A word says
+// it outright, and a word can be translated where a picture would have had to
+// mean the same thing to everybody (see `mail.badge` in strings.ts).
+//
+// Past MAIL_MAX the exact figure has stopped being worth the pixels: a reader with a
 // hundred unread messages is being told to open their phone, not being told a
 // number. It is also what fixes the width of the badge's slot, so the box never
 // moves (see HEAD_MAIL in theme.ts).
@@ -224,7 +231,7 @@ function chromePanels(view: PageView, chrome: Chrome): Panel[] {
     panel(
       CONTAINER.headTime,
       HEAD_TIME,
-      padLeft(`${MAIL} (${mailCount(chrome.unread)}) · ${chrome.time}`, HEAD_TIME.width),
+      padLeft(`${chrome.mail} (${mailCount(chrome.unread)}) · ${chrome.time}`, HEAD_TIME.width),
       MUTED,
       1,
     ),

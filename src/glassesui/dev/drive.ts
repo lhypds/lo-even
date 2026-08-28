@@ -70,8 +70,14 @@ function context(over: Partial<PageContext> = {}): PageContext {
       })),
     },
     people: { status: "ready", data: [] },
-    // Nothing is ever opened in here, so no story is ever asked for.
+    // Nothing is ever opened in here, so no story is ever asked for — and no
+    // exchange either, which is the state a letter's screen is met in for the
+    // three seconds before the request that fetches it has been made, nor any
+    // profile, which is the state a person's screen is met in for the moment
+    // before the same paint's request comes back.
     article: () => ({ status: "idle", data: null }),
+    thread: () => ({ status: "idle", data: null }),
+    profile: () => ({ status: "idle", data: null }),
     news: { status: "idle", data: null },
     events: { status: "idle", data: null },
     trends: { status: "idle", data: null },
@@ -228,6 +234,54 @@ function busy(over: Partial<PageContext> = {}): PageContext {
         unread: i,
       })),
     },
+    // One exchange fetched and one not, which is the pair of states the screen
+    // behind a letter is met in — the whole correspondence once the three seconds
+    // have marked it read, and the inbox's own last line standing in until they
+    // have. The long one is what makes that screen more than one screenful, so the
+    // wheel walking it below has something to walk.
+    thread: (username: string) =>
+      username === "wrote0"
+        ? {
+            status: "ready" as const,
+            data: Array.from({ length: 12 }, (_, i) => ({
+              id: i,
+              body: `line ${i} of the exchange, long enough to want a row of its own`,
+              time: new Date(Date.now() - (12 - i) * 60_000).toISOString(),
+              mine: i % 2 === 1,
+              read: true,
+            })),
+          }
+        : { status: "idle" as const, data: null },
+    // And one profile fetched and one not, which is the same pair of states for
+    // the other group down here that is about a person. The filled one is what
+    // makes that screen more than one screenful, and it answers with eight posts
+    // where the screen carries five — the trim is the page's, so it has to be
+    // given something to trim.
+    profile: (username: string) =>
+      username === "near0"
+        ? {
+            status: "ready" as const,
+            data: {
+              user: {
+                username: "near0",
+                bio: "walks a lot, reads on trains, mostly on the west side of the city",
+                email: "near0@example.com",
+                website: "https://example.com/near0",
+                links: [{ kind: "github", value: "near0" }],
+              },
+              follows: { followers: 12, following: 30, isFollowing: false },
+              posts: Array.from({ length: 8 }, (_, i) => ({
+                id: 100 + i,
+                time: new Date(Date.now() - i * 3_600_000).toISOString(),
+                latitude: 35.658,
+                longitude: 139.7,
+                body: `something left on the ground ${i}`,
+                username: "near0",
+                comments: 0,
+              })),
+            },
+          }
+        : { status: "idle" as const, data: null },
     ...over,
   });
 }
@@ -463,6 +517,134 @@ check(
   "and the next story is asked for when that one is opened",
   display.reading()?.link === "https://news.google.com/rss/articles/BBB",
   String(display.reading()?.link ?? "null"),
+);
+
+// --- the letter in front of the reader --------------------------------------
+// Two errands now hang off knowing which letter is open: the three seconds that
+// mark it read, and the hold that answers it (see main.ts). Both ask the display
+// the same question, and the whole of what makes either safe is where it answers
+// with nothing — a wheel walking a list of correspondents must not be marking
+// each of them read on its way past, and a hold on that list must not be a reply
+// addressed to whoever it had rolled onto.
+while (display.back()) await settle();
+display.render(busy());
+await settle();
+while (display.current() !== "nearby") {
+  display.scroll(1);
+  await settle();
+}
+check("no letter is open from the page", display.opened() === null, String(display.opened()));
+
+display.enter();
+await settle();
+while ((await opens()) !== "lo/nearby/msg") await roll(1);
+check("nor while the group is only picked out", display.opened() === null, String(display.opened()));
+
+display.enter();
+await settle();
+check("nor from the list of them", display.opened() === null, `${display.path()} → ${display.opened()}`);
+
+display.enter();
+await settle();
+check(
+  "the letter is named once it is open",
+  display.opened()?.group === "messages" && display.opened()?.key === "wrote0",
+  `${display.path()} → ${display.opened()?.key ?? "null"}`,
+);
+
+// The wheel down here walks the screenfuls of one exchange rather than the
+// letters, so reading a long correspondence to its end is not a dozen letters
+// being marked read on the way past.
+await roll(4);
+check("the wheel inside a letter stays on it", display.opened()?.key === "wrote0", String(display.opened()?.key));
+
+// A composer standing in front of the screen answers nothing, which is what stops
+// a reader dictating a reply from also being timed as reading the letter behind
+// the question they are looking at.
+const answer = { kind: "reply", text: "on my way", to: "wrote0" } as const;
+display.takeover({ id: "compose", view: composeView(answer, t) });
+await settle();
+check("a composer in front of it hides the letter", display.opened() === null, String(display.opened()));
+
+display.takeover(null);
+await settle();
+check("and putting it away brings the letter back", display.opened()?.key === "wrote0", String(display.opened()?.key));
+
+display.back();
+await settle();
+check("stepping back out leaves no letter open", display.opened() === null, `${display.path()} → ${display.opened()}`);
+
+// And the next one along is a different letter, which is what stops one clock and
+// starts another rather than letting the first one mark the second read.
+display.scroll(1);
+await settle();
+display.enter();
+await settle();
+check(
+  "the next letter is named when that one is opened",
+  display.opened()?.key === "wrote1",
+  String(display.opened()?.key),
+);
+while (display.back()) await settle();
+
+// --- and the person in front of the reader ----------------------------------
+// The same question again, for the other group down here whose entries are
+// addressed to somebody rather than to a place. Two errands hang off knowing
+// which name is open: the read that says who they are, and the hold that sends
+// them a message — and both are safe in the same place the letters are, which is
+// where this answers with nothing. A wheel walking a list of names must not be
+// asking lo who each of them is on the way past.
+while (display.back()) await settle();
+display.render(busy());
+await settle();
+while (display.current() !== "nearby") {
+  display.scroll(1);
+  await settle();
+}
+display.enter();
+await settle();
+while ((await opens()) !== "lo/nearby/people") await roll(1);
+check("no name is open while the group is only picked out", display.opened() === null, String(display.opened()));
+
+display.enter();
+await settle();
+check("nor from the list of names", display.opened() === null, `${display.path()} → ${display.opened()}`);
+
+display.enter();
+await settle();
+check(
+  "the person is named once their page is open",
+  display.opened()?.group === "people" && display.opened()?.key === "near0",
+  `${display.path()} → ${display.opened()?.key ?? "null"}`,
+);
+
+// A profile runs to more than one screenful on an account with anything filled
+// in, and the wheel down here walks those rather than the street: a reader
+// reading to the end of one person is not four other people asked about.
+await roll(3);
+check("the wheel inside a profile stays on it", display.opened()?.key === "near0", String(display.opened()?.key));
+while (display.back()) await settle();
+
+// Five of somebody's posts and no more, whatever lo answers with. A profile on
+// the phone is scrolled and draws twenty; this one is walked a screenful at a
+// time, and the other fifteen would be four flicks of somebody else's afternoon
+// between the reader and the end of the screen.
+const nearest = nearbyPage?.items?.(busy()).find((item) => item.group === "people" && item.key === "near0");
+const drawn = (nearest?.body.match(/something left on the ground/g) ?? []).length;
+check("a profile carries five of their posts at most", drawn === 5, `${drawn} of 8 drawn`);
+
+// And the one check in this file about what must *not* be on a screen. A
+// person's fix to four decimal places is eleven metres of where somebody
+// actually is, and it stood on both of these screens until it was taken off:
+// what is left says there is somebody here without saying which window they are
+// behind (see pages/person.ts).
+const COORDS = /\d+\.\d+°[NSEW]/;
+const names = nearbyPage?.items?.(busy()).filter((item) => item.group === "people") ?? [];
+check(
+  "nobody's own position is written out on any of their screens",
+  names.length > 0 &&
+    names.every((item) => !COORDS.test(`${item.head} ${item.line} ${item.body.split("\n")[0]}`)),
+  names.map((item) => item.line).join(" | ") || "(nobody about)",
 );
 
 // --- what the protocol will carry -------------------------------------------

@@ -20,6 +20,17 @@
 //     enough to see is a warning that was not issued.
 //   • `GET /api/messages` while the reader is actually on the page that shows
 //     them, and at most once a minute — see the key below.
+//   • `GET /api/messages/:username` once the reader has been sitting on one
+//     letter for three seconds, because asking for an exchange is what marks it
+//     read and there is no other way to say so (see `seen`). It is the one read
+//     here that is really a write, and the only one a clock starts.
+//   • `GET /api/users/:username` once the reader has opened one of the names on
+//     the street: who they are, the two follow figures and the last of what they
+//     have left on the ground, which is lo's whole profile page in one answer.
+//     Made on the way in rather than on a clock, because unlike the letter above
+//     it files nothing — and made for that one name rather than for everybody
+//     about, because a street the reader is walking past is four profiles a
+//     minute nobody asked for.
 //
 // And two on the minute beat, neither of which asks lo to look anything up
 // elsewhere: `PUT /api/position`, which files where we are and takes back
@@ -40,7 +51,9 @@ import type {
   LoArticle,
   LoDashboard,
   LoFeedItem,
+  LoMessage,
   LoPerson,
+  LoPersonPage,
   LoPost,
   LoThread,
   LoTrend,
@@ -99,9 +112,48 @@ const DASHBOARD_MS = 10 * 60_000;
 // lo's own newswire — a whole page's worth read end to end, which nobody does.
 const ARTICLES_KEPT = 20;
 
+// And how many exchanges. Fewer, because there are fewer to have: lo draws at
+// most fifty correspondents in an inbox and an afternoon on the glasses opens a
+// handful of them. Same bound for the same reason as the stories — this store
+// grows with what the reader has done rather than with where they are standing.
+const THREADS_KEPT = 10;
+
+// And how many profiles. The same bound as the exchanges and for the same
+// reason: this store grows with which of the names on the street the reader has
+// stopped on, and a street rarely has ten.
+const PROFILES_KEPT = 10;
+
+// How long one of them stands before it is worth asking again. Longer than
+// anything about the ground: a bio changes about never and the two figures about
+// as often, and what does move underneath is the handful of recent posts. Five
+// minutes in front of one profile is a long way past what this screen is for.
+const PROFILE_MS = 5 * 60_000;
+
 /** The stretch of time an answer belongs to, which is the rest of every key. */
 function within(every: number): string {
   return String(Math.floor(Date.now() / every));
+}
+
+/**
+ * The slot for one thing the reader has opened, made where this is the first
+ * time they have opened it.
+ *
+ * There are three of these stores now — the stories, the exchanges and the
+ * profiles — and all three are bounded for the same reason: they grow with what
+ * the reader has done rather than with where they are standing, so an afternoon
+ * spent walking and reading would otherwise keep the whole afternoon alive. The
+ * oldest goes, which on a Map is its first key.
+ */
+function keyed<T>(store: Map<string, Slot<T>>, key: string, kept: number): Slot<T> {
+  const found = store.get(key);
+  if (found) return found;
+  if (store.size >= kept) {
+    const oldest = store.keys().next();
+    if (!oldest.done) store.delete(oldest.value);
+  }
+  const made = slot<T>();
+  store.set(key, made);
+  return made;
 }
 
 export class Feeds {
@@ -113,6 +165,17 @@ export class Feeds {
   private warningsSlot = slot<LoWarningsResult>();
   private inboxSlot = slot<LoThread[]>();
   private peopleSlot = slot<LoPerson[]>();
+  // One per exchange the reader has opened, keyed by the correspondent — the same
+  // shape as the stories above and for the same reason: there is no telling in
+  // advance which of a list they will open, and each of them is worth keeping once
+  // it has been paid for. The one round trip behind these is also what tells lo
+  // the letter has been read (see `seen`).
+  private threadSlots = new Map<string, Slot<LoMessage[]>>();
+  // One per person the reader has stopped on, keyed by their name. The same
+  // shape again, and the same reason a third time: there is no telling in advance
+  // which of the names on a street they will open, and lo must not be asked about
+  // the ones they do not.
+  private profileSlots = new Map<string, Slot<LoPersonPage>>();
   // One per story the reader has opened, keyed by the link that opened it.
   // A Map rather than a field because there is no telling in advance which of a
   // list they will read, and insertion order is what makes the cap above a
@@ -196,19 +259,10 @@ export class Feeds {
    * (see lo/server/articles.js) — so this is the request that decides.
    */
   read(link: string, hints: { title?: string; source?: string; kind?: string }): void {
-    let target = this.articleSlots.get(link);
-    if (!target) {
-      // Bounded, because this is the one store that grows with what the reader
-      // has done rather than with where they are standing: an afternoon spent
-      // walking and reading the wire would otherwise keep every story of the day
-      // alive. The oldest goes, which on a Map is its first key.
-      if (this.articleSlots.size >= ARTICLES_KEPT) {
-        const oldest = this.articleSlots.keys().next();
-        if (!oldest.done) this.articleSlots.delete(oldest.value);
-      }
-      target = slot<LoArticle>();
-      this.articleSlots.set(link, target);
-    }
+    // Bounded, because this store grows with what the reader has done rather than
+    // with where they are standing: an afternoon spent walking and reading the
+    // wire would otherwise keep every story of the day alive (see `keyed`).
+    const target = keyed(this.articleSlots, link, ARTICLES_KEPT);
     void this.fill(target, link, () => this.api.article(link, hints));
   }
   /** How much is waiting to be read, which rides in on the presence trade. */
@@ -341,6 +395,105 @@ export class Feeds {
     );
   }
 
+  /**
+   * One whole exchange, if it has been asked for. A pure read, like `article`
+   * above: the page behind a letter calls it while drawing and must not be able to
+   * start anything by doing so — more sharply here than there, because the request
+   * that would start is the one that tells lo the letter has been read.
+   */
+  thread(username: string): Feed<LoMessage[]> {
+    const found = this.threadSlots.get(username);
+    return found ? view(found) : { status: "idle", data: null };
+  }
+
+  /**
+   * This letter has been in front of the reader long enough to count as read, and
+   * lo is told so. The request that tells it is the one that fetches the exchange
+   * — lo has no other and wants none, because a conversation somebody has been
+   * shown is one they have seen (see api.ts) — so one round trip both says the
+   * letter was read and brings back what the screen behind it draws.
+   *
+   * Keyed on the minute as well as the name, so a letter left open across one is
+   * asked again and picks up whatever arrived in it. Everything commoner than that
+   * — every repaint of the clock, every feed landing underneath — finds the key
+   * unchanged and costs nothing.
+   */
+  seen(username: string): void {
+    // Bounded, like the stories, and for the same reason: this store grows with
+    // what the reader has opened rather than with where they are standing, and an
+    // exchange is two hundred lines at its longest (see `keyed`).
+    const target = keyed(this.threadSlots, username, THREADS_KEPT);
+    void this.fill(
+      target,
+      `${username}:${within(INBOX_MS)}`,
+      async () => {
+        const answer = await this.api.conversation(username);
+        this.unreadCount = answer.unread ?? this.unreadCount;
+        // The inbox is now wrong by one dot — it was read before this letter was,
+        // and it is what draws the disc beside this correspondent's name on both
+        // screens that list them. Dropped rather than patched, so the next paint
+        // asks lo instead of this client deciding what lo would have said. It is
+        // the same move `wrote` makes for a post, for the same reason.
+        this.inboxSlot.key = "";
+        return answer.messages;
+      },
+      // Quietly: the screen already has the last line of this exchange on it and
+      // is showing it, so a slot flipping to "loading" would be this errand
+      // replacing something readable with a word about itself.
+      true,
+    );
+  }
+
+  /**
+   * The reader has just answered one. Two things are now a version behind: the
+   * inbox, whose last line for that correspondent is the reader's own now, and the
+   * exchange itself, which is the screen they are looking at. Both keys go, so the
+   * next paint asks again — exactly as the posts are re-asked after one is left on
+   * the ground, and for the same reason. A reader who said something into a letter
+   * and did not then see it in the letter would have every reason to think it was
+   * never sent.
+   */
+  replied(username: string): void {
+    this.inboxSlot.key = "";
+    const thread = this.threadSlots.get(username);
+    if (thread) thread.key = "";
+    // And asked again now rather than left to the three seconds the reader would
+    // have to sit through on the way back to the letter. It marks the exchange
+    // read a second time on the way past, which it already was — a reader who
+    // answered a letter has plainly read it.
+    this.seen(username);
+  }
+
+  /**
+   * Who one of the names on the street is, if it has been asked for. A pure read,
+   * like `article` and `thread` above and for the first of their two reasons: the
+   * page behind a name is rebuilt on every paint, and it must be able to ask this
+   * of whoever the reader has open without the drawing itself being the request.
+   */
+  profile(username: string): Feed<LoPersonPage> {
+    const found = this.profileSlots.get(username);
+    return found ? view(found) : { status: "idle", data: null };
+  }
+
+  /**
+   * The reader has stopped on one of the dots. A name off the presence trade is
+   * an hour and a distance and nothing else; this is the read that says who it
+   * belongs to, and it is made only once they have opened that one name — a page
+   * that asked for everybody about would be lo answering four profiles a minute
+   * for a street the reader is walking past.
+   *
+   * Unlike the exchange above, it is a read and only a read: lo files nothing
+   * when a profile is fetched, so there is no clock in front of this one. The
+   * request goes the moment the screen is open.
+   */
+  meet(username: string): void {
+    void this.fill(
+      keyed(this.profileSlots, username, PROFILES_KEPT),
+      `${username}:${within(PROFILE_MS)}`,
+      () => this.api.profile(username),
+    );
+  }
+
   /** Signed out: nothing here belongs to whoever signs in next. */
   clear(): void {
     this.dashSlot = slot();
@@ -348,6 +501,8 @@ export class Feeds {
     this.warningsSlot = slot();
     this.inboxSlot = slot();
     this.peopleSlot = slot();
+    this.threadSlots.clear();
+    this.profileSlots.clear();
     this.articleSlots.clear();
     this.unreadCount = 0;
     this.changed();

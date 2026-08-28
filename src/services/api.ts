@@ -3,7 +3,9 @@ import type {
   Language,
   LoArticle,
   LoDashboard,
+  LoMessage,
   LoPerson,
+  LoPersonPage,
   LoPost,
   LoThread,
   LoUser,
@@ -12,10 +14,12 @@ import type {
 
 const API_BASE = "https://lo.gcc3.com";
 
-// What lo will take as the name of a mark and as the words of a post, character
-// for character (see lo/server/index.js: `POST /api/marks`, `POST /api/posts`).
+// What lo will take as the name of a mark, as the words of a post and as the
+// words of a letter, character for character (see lo/server/index.js:
+// `POST /api/marks`, `POST /api/posts`, `POST /api/messages/:username`).
 const MARK_LABEL_MAX = 48;
 const POST_BODY_MAX = 500;
+const MESSAGE_BODY_MAX = 1000;
 
 /**
  * A spoken sentence cut to what lo will take as the name of a spot. Exported
@@ -34,6 +38,17 @@ export function markLabel(text: string): string {
 /** The same, for the words of a post — where lo's own limit is ten times as long. */
 export function postBody(text: string): string {
   return Array.from(text.trim()).slice(0, POST_BODY_MAX).join("").trim();
+}
+
+/**
+ * And for a reply, which lo gives twice as much room again: a message is a letter
+ * rather than a remark. A spoken one has to run for well over a minute to reach
+ * it, which is longer than the microphone stays open — so the screen that shows a
+ * reply before it goes is showing the whole of it, where the mark line is often
+ * showing a sentence with its tail cut off (see pages/compose.ts).
+ */
+export function messageBody(text: string): string {
+  return Array.from(text.trim()).slice(0, MESSAGE_BODY_MAX).join("").trim();
 }
 
 // Re-exported because the sign-in screen and the language switcher in its corner
@@ -296,13 +311,80 @@ export class LoApi {
   }
 
   /**
+   * Who somebody is: the line they wrote about themselves, the ways to reach them
+   * off lo, how many read them and how many they read, and the last of what they
+   * have left on the ground — lo's whole profile page in one answer, which is the
+   * shape the glasses want for the same reason the dashboard is one read.
+   *
+   * The one question in this file about a person rather than about a place. A
+   * name that comes back off the presence trade is a dot and an hour and nothing
+   * else, and a reader who has stopped on one of those dots is asking who that
+   * is; this is the read that answers, and it is made only once they have opened
+   * one of them (see feeds.ts).
+   *
+   * It marks nothing and files nothing — unlike the exchange above, which is a
+   * read that is really a write — so nothing has to wait on a clock before asking.
+   */
+  profile(username: string) {
+    return this.request<LoPersonPage>(`/api/users/${encodeURIComponent(username)}`);
+  }
+
+  /**
    * The inbox: who has written, and the last line of each exchange. Reading this
-   * marks nothing read — only opening one conversation does that (see
-   * lo/server/index.js) — so the glasses can show who is waiting without
+   * marks nothing read — only opening one conversation does that, which is the
+   * request below — so the page that lists who is waiting can be drawn without
    * answering for the reader.
    */
   messages() {
     return this.request<{ conversations: LoThread[]; unread: number }>("/api/messages");
+  }
+
+  /**
+   * One exchange, both directions — and, which is what the glasses ask for it,
+   * the fact that asking is what marks it read. There is no endpoint that does
+   * only the marking and none is wanted: lo has never had a button for this,
+   * because a conversation somebody has been shown is one they have seen, and a
+   * screen that made them press something afterwards would be asking them to file
+   * their own post (see lo/server/index.js).
+   *
+   * So the glasses say the same thing the sheet on the phone says, in the same
+   * words: this letter has been in front of somebody. What decides that up here
+   * is three seconds of not moving on (see main.ts) — the wheel walks a list of
+   * letters a flick at a time, and a letter the reader passed through is not one
+   * they read.
+   *
+   * The lines come back with it and the glasses use none of them. The screen that
+   * reads a letter up here shows the last thing said rather than the exchange it
+   * came out of, which is what the inbox already handed over; what is taken off
+   * this answer is the count, already counted down by the reading, so the badge in
+   * the corner goes out in the same breath.
+   */
+  conversation(username: string) {
+    // The correspondent comes back as a name and a picture rather than as an
+    // account — lo answers `{ username, avatar }` here, and there is no id in it.
+    // Written out as what it is rather than borrowed from `LoUser`, which has an
+    // id and no picture and is a different answer to a different question.
+    return this.request<{
+      user: { username: string; avatar?: string | null };
+      messages: LoMessage[];
+      unread: number;
+    }>(`/api/messages/${encodeURIComponent(username)}`);
+  }
+
+  /**
+   * The answer, said rather than typed. lo's own reply is a line in a sheet with a
+   * keyboard under it; this is the same endpoint reached from a screen that has
+   * neither, so the words are a dictation and the sending is a tap.
+   *
+   * It is the one write in this file addressed to a person rather than to a place,
+   * and the only one with no fix in it: a letter is filed under whoever it is to,
+   * and where the writer was standing when they said it is nobody's business.
+   */
+  reply(username: string, body: string) {
+    return this.request<{ message: LoMessage }>(`/api/messages/${encodeURIComponent(username)}`, {
+      method: "POST",
+      body: JSON.stringify({ body: messageBody(body) }),
+    });
   }
 
   /**
