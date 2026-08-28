@@ -5,94 +5,78 @@
 // everything lo does with weight and scale on a phone has to be said here with
 // position and brightness instead. The three that carry it:
 //
-//   • Columns. A list row is not one string with spaces in it but three
-//     containers side by side, which is what lets the middle one be bright while
-//     the two either side stay quiet. Rows line up because each column is one
+//   • Columns. A row is not one string with spaces in it but two containers side
+//     by side, which is what lets the word in the margin stay quiet while the
+//     reading beside it is bright. Rows line up because each column is one
 //     container holding one line per row.
 //   • Brightness. 0–4, and lo's own two inks map straight onto it: --ink is
 //     INK, --muted is MUTED. A label is never the same weight as its value.
-//   • Bands. The heading and the footer are boxes with a border; the body floats
-//     between them. That border is the rule under lo's card headings, drawn the
-//     only way a display with no line-drawing can draw one.
+//   • Air. One box around the whole screen and nothing drawn inside it, so the
+//     heading and the footer are told apart from the body by the blank line above
+//     and below it rather than by rules of their own. Two boxes stacked with the
+//     body between them spent three lines of ink saying what half a line of air
+//     says as well.
 //
 // Everything below is measured in whole lines and whole cells, because a layout
 // that lands half a line short reads as a bug rather than as air.
+
+import { CHAR_WIDTH, textWidth } from "./metrics";
 
 /** The G2 canvas. Nothing may be positioned outside it. */
 export const SCREEN_WIDTH = 576;
 export const SCREEN_HEIGHT = 288;
 
-// One character cell. The display sets its text in a fixed-width face, so a
-// column count is a pixel count divided by this — which is what makes the
-// right-aligned halves of the heading and the footer land where they are meant
-// to. If a firmware ever changes the face, this is the one number to change.
-export const CHAR_WIDTH = 12;
+// The character cell every column here is measured in. It belongs to the type
+// rather than to the layout, so it is defined with the rest of the face's
+// measurements and passed through from here (see metrics.ts).
+export { CHAR_WIDTH };
 
 // The line, measured rather than assumed. A text container lays its lines out at
 // the font's own pitch and shows a scroll bar the moment they do not fit, so a
 // box that is a pixel short of one line is a box with a bar down its right-hand
-// edge and a clipped line inside it — which is exactly what the bands were (see
-// BAND_HEIGHT). 27 is what the Even Hub simulator draws, for Latin and for CJK
-// alike: two lines in a plain container land 27 apart, and a container whose
-// content box is 27 holds one line with no bar where 26 does not. Re-measure it
-// against a pair of glasses before trusting it on glass — everything vertical on
-// this screen is derived from it, so a firmware that sets its type differently is
-// this one number.
+// edge and a clipped line inside it. 27 is what the Even Hub simulator draws, for
+// Latin and for CJK alike: two lines in a plain container land 27 apart, and a
+// container whose content box is 27 holds one line with no bar where 26 does not.
+// Re-measure it against a pair of glasses before trusting it on glass —
+// everything vertical on this screen is derived from it, so a firmware that sets
+// its type differently is this one number.
 export const LINE_HEIGHT = 27;
 
-/** The gutter every band and column keeps from the edge of the screen. */
+/** The gutter every line keeps from the edge of the screen. */
 export const EDGE = 10;
 
 // Brightness, which is the only weight this display has. The names are lo's own
-// so that a card written against the website reads the same here: what is --ink
+// so that a page written against the website reads the same here: what is --ink
 // there is INK here, and what is --muted there is MUTED.
 export const INK = 4;
 export const MUTED = 2;
 export const FAINT = 1;
 
-// What a band is drawn with. Kept together and named, because whether the
-// heading wears a box at all is the one judgement in this file that is taste
-// rather than arithmetic — a see-through display charges for every lit pixel,
-// and if the boxes turn out to be too much ink on real glass, this is the line
-// to change rather than the layout.
-export const BAND_BORDER_WIDTH = 1;
-export const BAND_BORDER_COLOR = 5;
-export const BAND_BORDER_RADIUS = 9;
+// The one box on the screen, drawn around the whole of it. Kept together and
+// named, because whether the screen wears a box at all is the one judgement in
+// this file that is taste rather than arithmetic — a see-through display charges
+// for every lit pixel, and if the frame turns out to be too much ink on real
+// glass, this is the line to change rather than the layout.
+//
+// Square corners: a rounded box reads as a card sitting on a background, and
+// there is no background here — only whatever the glass is pointed at. The frame
+// is the edge of the writing, and an edge is straight.
+export const FRAME_BORDER_WIDTH = 1;
+export const FRAME_BORDER_COLOR = 5;
+export const FRAME_BORDER_RADIUS = 0;
 
-// The three bands, inset by a pixel so a border is never clipped by the edge of
-// the panel.
+// Inset by a pixel so the border is never clipped by the edge of the panel.
 const INSET = 1;
 
-// The gutter a band keeps inside its own border. Derived rather than chosen, so
-// that a band's first character lands on EDGE — the same column the body's
-// left-hand list starts in. A heading that began a pixel or two off the list
-// under it would read as two layouts sharing a screen.
-export const BAND_PADDING = EDGE - INSET - BAND_BORDER_WIDTH;
-
-// A band is one line of type and the box it sits in, and nothing else decides
-// its height: the padding is charged on the top and the bottom as well as the
-// sides, so a band that looks tall enough for its line can still be several
-// pixels short of one inside its own border — and a text container that is short
-// of its content does not simply crop, it grows a scroll bar. That is what the
-// heading and the footer were: 34 pixels with 22 of them spent on the border and
-// the gutter, leaving 12 for a 27-pixel line.
-export const BAND_HEIGHT = LINE_HEIGHT + (BAND_PADDING + BAND_BORDER_WIDTH) * 2;
-
-// Air between a band and the body, so the two rules are not read as the edges of
-// the list rather than as the edges of the screen.
-const BODY_GAP = 2;
-
-// What is left over is the body, and how many lines that is worth is arithmetic
-// rather than a decision: 288 is 1 + 45 + 2 + 192 + 2 + 45 + 1 and the middle of
-// that is seven lines with three pixels to spare. Widen the bands and the body
-// loses a line here rather than silently losing it on the glasses.
-export const BODY_Y = INSET + BAND_HEIGHT + BODY_GAP;
-export const BODY_HEIGHT = SCREEN_HEIGHT - (BODY_Y + BODY_GAP + BAND_HEIGHT + INSET);
-export const BODY_LINES = Math.floor(BODY_HEIGHT / LINE_HEIGHT);
+// The gutter the frame keeps inside its own border. Derived rather than chosen,
+// so that the first character of every line lands on EDGE — the heading, the
+// margin and the footer all in one column. A heading that began a pixel or two
+// off the list under it would read as two layouts sharing a screen.
+export const FRAME_PADDING = EDGE - INSET - FRAME_BORDER_WIDTH;
 
 /**
  * A rectangle on the screen, in pixels. Written out rather than computed at the
- * call site so that every band and column in the app can be read off one page.
+ * call site so that every line and column in the app can be read off one page.
  */
 export interface Rect {
   x: number;
@@ -101,89 +85,176 @@ export interface Rect {
   height: number;
 }
 
-const BAND_WIDTH = SCREEN_WIDTH - INSET * 2;
+/**
+ * The frame, which is also the container the heading is written in. One box
+ * rather than two settles what an empty bordered container would do — this one is
+ * never empty — and buys back the container the second box was spending.
+ */
+export const FRAME: Rect = {
+  x: INSET,
+  y: INSET,
+  width: SCREEN_WIDTH - INSET * 2,
+  height: SCREEN_HEIGHT - INSET * 2,
+};
 
-/** The heading band: a bordered box across the top, holding the card's name. */
-export const HEAD_BAND: Rect = { x: INSET, y: INSET, width: BAND_WIDTH, height: BAND_HEIGHT };
+// Inside the border and the gutter: where the first line starts, where the last
+// one has to end, and how much of the width is left for either.
+const INNER_TOP = INSET + FRAME_BORDER_WIDTH + FRAME_PADDING;
+const INNER_BOTTOM = SCREEN_HEIGHT - INSET - FRAME_BORDER_WIDTH - FRAME_PADDING;
+const INNER_WIDTH = SCREEN_WIDTH - EDGE * 2;
 
-// The heading's right end, laid over the band rather than beside it. Two
-// bordered boxes side by side would draw a rule down the middle of the heading;
-// one box with a borderless container on top of it draws the band once and lets
-// the meta be quieter than the title. That is what zOrderIndex is for.
+/** The heading's line, which the frame itself carries, and the footer's. */
+const HEAD_Y = INNER_TOP;
+const FOOT_Y = INNER_BOTTOM - LINE_HEIGHT;
+
+// The blank line the heading and the footer are told apart by, now that neither
+// has a rule under it. Half a line rather than a whole one: a whole one would
+// cost the body a row, and half is already more air than a hairline of ink was.
+const AIR = 12;
+
+// What is left over is the body, and how many lines that is worth is arithmetic
+// rather than a decision: 288 is 1 + 1 + 8 + 27 + 12 + 190 + 12 + 27 + 8 + 1 + 1,
+// and the middle of that is seven lines with a pixel to spare. Give the frame a
+// wider gutter and the body loses a line here rather than silently losing it on
+// the glasses.
+export const BODY_Y = HEAD_Y + LINE_HEIGHT + AIR;
+export const BODY_HEIGHT = FOOT_Y - AIR - BODY_Y;
+export const BODY_LINES = Math.floor(BODY_HEIGHT / LINE_HEIGHT);
+
+// The two corners on the right, and the only two things on the screen that are
+// hung from their right-hand edge rather than their left. A container is cut to
+// the width of what it holds and put where that width ends at the gutter, which
+// is what puts the clock in the corner rather than near it — the spaces a
+// right-aligned string is padded with can only land it within one space of the
+// edge (see padLeft), and a container placed by measurement lands on it.
 //
-// Set on the band's own line rather than centred in the band, because the
-// display sets text from the top of a container down: the band starts its line
-// under its border and its padding, and an overlay that started at the top of
-// the box would sit that much higher than the title it is meant to be level
-// with. One line tall for the same reason — the room below it is the band's, not
-// this container's.
-const bandLine = (band: Rect): number => band.y + BAND_BORDER_WIDTH + BAND_PADDING;
+// Sized for the widest they can ever be rather than for what they say now, so
+// that the box never moves: a clock whose container shifted every time a 1 turned
+// into a 2 would be a page rebuilt every other minute for two pixels (see
+// paint.ts). What is left over is padding, which is the one space this can be out
+// by.
+const INNER_RIGHT = SCREEN_WIDTH - EDGE;
+const PAGER_SLOT = textWidth("00/00");
 
+/**
+ * The top right corner: how much is waiting to be read, then the hour, with a
+ * dot between them. **One container holding all three**, and that is the whole
+ * design of it rather than an economy.
+ *
+ * The badge earns this corner because the inbox is the one thing on these pages
+ * with nothing to do with where the reader is standing: a count that appeared
+ * only on the page listing it would be a count nobody saw until they had already
+ * gone looking. It is drawn as a figure and never as a blank, so nought reads as
+ * nought.
+ *
+ * **Why one box and not two.** Everything in this corner is hung from its
+ * right-hand edge, and a right-aligned string is right-aligned by being padded
+ * with spaces — so each box is pinned at its right edge and floats at its left by
+ * however far its own characters happen to fall short. A clock reading 11:11 is
+ * twenty pixels narrower than one reading 00:00. Two boxes therefore cannot hold
+ * a fixed gap between them: whichever of the pair the dot went in, the space on
+ * its other side breathed with the hour. In one box the dot has a space either
+ * side of it, exactly and always, and what floats instead is the left-hand end of
+ * the whole group — against the empty middle of the heading, where there is
+ * nothing for it to breathe against.
+ *
+ * The price is that the badge cannot be a different weight from the clock: one
+ * container is one brightness. The count says what it has to say.
+ *
+ * Sized for the widest it can ever be rather than for what it says now, so the
+ * box never moves: a corner whose container shifted every time a 1 turned into a
+ * 2 would be a page rebuilt every minute for two pixels (see paint.ts). `99+`
+ * rather than three digits, because a badge is a glance rather than a figure and
+ * the point past which the exact number stops mattering is well short of a
+ * hundred (see MAIL_MAX in layout.ts).
+ */
+const CORNER_SLOT = textWidth("msg (99+) · 00:00");
+
+export const HEAD_TIME: Rect = {
+  x: INNER_RIGHT - CORNER_SLOT,
+  y: HEAD_Y,
+  width: CORNER_SLOT,
+  height: LINE_HEIGHT,
+};
+
+// Whatever else the page has to say about itself, ending a cell before that
+// corner. Laid over the frame rather than beside it: one line of type with a
+// quieter one over the end of it needs no agreement about where the middle is,
+// and it lets the meta be quieter than the title, which one container cannot do.
 export const HEAD_META: Rect = {
   x: SCREEN_WIDTH / 2,
-  y: bandLine(HEAD_BAND),
-  width: SCREEN_WIDTH / 2 - EDGE,
+  y: HEAD_Y,
+  width: HEAD_TIME.x - CHAR_WIDTH - SCREEN_WIDTH / 2,
   height: LINE_HEIGHT,
 };
 
-/** The footer band, built the same way as the heading and for the same reasons. */
-export const FOOT_BAND: Rect = {
-  x: INSET,
-  y: BODY_Y + BODY_HEIGHT + BODY_GAP,
-  width: BAND_WIDTH,
-  height: BAND_HEIGHT,
-};
+/** The footer: where you are standing, and how far through the sequence you are. */
+export const FOOT_LINE: Rect = { x: EDGE, y: FOOT_Y, width: INNER_WIDTH, height: LINE_HEIGHT };
 export const FOOT_PAGER: Rect = {
-  x: SCREEN_WIDTH - EDGE - 160,
-  y: bandLine(FOOT_BAND),
-  width: 160,
+  x: INNER_RIGHT - PAGER_SLOT,
+  y: FOOT_Y,
+  width: PAGER_SLOT,
   height: LINE_HEIGHT,
 };
 
-// A face — the clock, the weather, the compass. One reading across the top and
-// the smaller figures under it, which is lo's own arrangement of those three
-// tiles: a big number, a line naming what it is, and the readings along the
-// bottom. The gap between them is a whole blank line, because on a screen with
-// one type size air is the only way left to group anything.
-export const FACE_HERO: Rect = { x: EDGE, y: BODY_Y, width: 280, height: LINE_HEIGHT };
-export const FACE_CAPTION: Rect = {
-  x: EDGE + 290,
-  y: BODY_Y,
-  width: SCREEN_WIDTH - EDGE - (EDGE + 290),
-  height: LINE_HEIGHT,
-};
-export const FACE_LABELS: Rect = {
+// The body of every page: a word in the margin, and the line that answers it.
+// Ten cells of margin because that is the widest any of those words gets in the
+// language that needs the most room — メッセージ is five characters and ten cells
+// — and every cell left over goes to the line, which is where the readings are.
+//
+// Left-aligned, both of them, and that is not a small decision: a column pushed
+// to the right end with spaces only lands there if a space is exactly as wide as
+// this file thinks it is, and it is not (see CHAR_WIDTH). A column that starts
+// where its container starts lands where it is meant to whatever face the
+// firmware is setting.
+const LABEL_CELLS = 10;
+const READING_GAP = EDGE + LABEL_CELLS * CHAR_WIDTH + CHAR_WIDTH;
+
+export const READING_LABELS: Rect = {
   x: EDGE,
-  y: BODY_Y + LINE_HEIGHT * 2,
-  width: 260,
-  height: LINE_HEIGHT * 5,
-};
-export const FACE_VALUES: Rect = {
-  x: EDGE + 270,
-  y: BODY_Y + LINE_HEIGHT * 2,
-  width: SCREEN_WIDTH - EDGE - (EDGE + 270),
-  height: LINE_HEIGHT * 5,
-};
-
-// The same pair of columns with no reading over them, for a card that is all
-// readings — the place you are standing in, which has no one figure to lead with.
-export const ROWS_LABELS: Rect = { x: EDGE, y: BODY_Y, width: 260, height: BODY_HEIGHT };
-export const ROWS_VALUES: Rect = {
-  x: EDGE + 270,
   y: BODY_Y,
-  width: SCREEN_WIDTH - EDGE - (EDGE + 270),
+  width: LABEL_CELLS * CHAR_WIDTH,
+  height: BODY_HEIGHT,
+};
+export const READING_VALUES: Rect = {
+  x: READING_GAP,
+  y: BODY_Y,
+  width: SCREEN_WIDTH - EDGE - READING_GAP,
   height: BODY_HEIGHT,
 };
 
-// A sentence where a card would otherwise be empty. Set in from the top rather
-// than at it: a lone line of type hard against the heading reads as a row that
-// failed to draw the rest of its list.
-export const NOTE: Rect = {
-  x: EDGE,
-  y: BODY_Y + LINE_HEIGHT,
-  width: SCREEN_WIDTH - EDGE * 2,
-  height: LINE_HEIGHT * 5,
-};
+/** How wide a line of the body is — what a note is wrapped against. */
+export const BODY_WIDTH = INNER_WIDTH;
+
+/**
+ * A sentence where a page would otherwise be empty, in the middle of the screen.
+ * A page with one line on it has no columns to line that line up with, and left
+ * against the margin where the readings usually start it reads as the first row
+ * of a list that failed to draw the rest of itself. In the middle it reads as
+ * what it is: the whole of what this screen has to say.
+ *
+ * Centred by measuring, because the display has no alignment to set — the box is
+ * cut to the width of the widest line it holds and put half of what is left over
+ * from either edge. The measure over-estimates every character it has not been
+ * given a width for, so the box is never too narrow for its text; it is only ever
+ * a few pixels wider, and the sentence sits that much left of true centre (see
+ * metrics.ts).
+ */
+export function noteRect(lines: string[]): Rect {
+  const text = Math.max(1, ...lines.map(textWidth));
+  const height = Math.max(1, lines.length) * LINE_HEIGHT;
+  // The box gets a cell of slack and the text does not: a box cut to exactly the
+  // width of what it holds wraps the moment either is a pixel out, and a wrapped
+  // line in a box one line tall is a scroll bar. Hung from the left edge the text
+  // would sit at, so the slack goes on the right where nothing is looking rather
+  // than half a cell into the centring.
+  return {
+    x: Math.round((SCREEN_WIDTH - text) / 2),
+    y: Math.round(BODY_Y + (BODY_HEIGHT - height) / 2),
+    width: Math.min(BODY_WIDTH, text + CHAR_WIDTH),
+    height,
+  };
+}
 
 /** How wide a plain container is, in character cells. */
 export function cellsIn(width: number): number {
@@ -191,28 +262,32 @@ export function cellsIn(width: number): number {
 }
 
 /**
- * How wide a *band* is inside its own border and padding. A band is the one kind
- * of container that keeps a gutter of its own, so it holds fewer cells than its
+ * How wide the *frame* is inside its own border and padding. It is the one
+ * container that keeps a gutter of its own, so it holds fewer cells than its
  * width alone suggests — and a heading measured against the wrong number is a
- * heading whose right-aligned half hangs off the edge.
+ * heading that runs into the edge of the box it is written in.
  */
-export function bandCells(rect: Rect): number {
-  return cellsIn(rect.width - (BAND_PADDING + BAND_BORDER_WIDTH) * 2);
+export function frameCells(): number {
+  return cellsIn(FRAME.width - (FRAME_PADDING + FRAME_BORDER_WIDTH) * 2);
 }
 
 // Container identity. The ids are fixed rather than handed out as containers are
-// built, because an update addresses a container by id: a card switch that
-// renumbered them would write the posts list into the heading. Reused across
-// layouts on purpose — only one is ever on screen, and crossing between two is a
-// rebuild rather than an update (see paint.ts).
+// built, because an update addresses a container by id: a page turn that
+// renumbered them would write the posts into the heading. Reused across pages on
+// purpose — every page is the same shape, so a turn is text written into the
+// containers already up rather than a page built again (see paint.ts).
 export const CONTAINER = {
-  headBand: 1,
+  /** The box round the screen, which is also where the heading is written. */
+  frame: 1,
   headMeta: 2,
-  footBand: 3,
-  footPager: 4,
-  // The body slots. Which of them exist depends on what the card came back with.
-  bodyA: 5,
-  bodyB: 6,
-  bodyC: 7,
-  bodyD: 8,
+  /** The right-hand corner of the heading: the unread badge and the hour, in one. */
+  headTime: 3,
+  footLine: 4,
+  footPager: 5,
+  // The body, which is one shape on every page: a column of labels beside a
+  // column of the lines they name — or, where a page cannot draw at all, the one
+  // sentence saying why. Never both, so the ids can neighbour rather than clash.
+  labels: 6,
+  values: 7,
+  note: 8,
 } as const;

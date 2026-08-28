@@ -1,38 +1,51 @@
-// What has been asked for, what came back, and what is not worth asking yet.
+// What has been asked for, what came back, and what is not worth asking twice.
 //
-// The website has one of these per card: each of lo's regional cards holds its
-// own result, its own error and its own "still loading", and re-asks when the
-// fix has moved far enough to be a different question. This is that, gathered
-// into one object because up here the cards are pure functions and cannot hold
-// anything themselves.
+// The website has one of these per card: each of lo's cards holds its own result,
+// its own error and its own "still loading", and re-asks when the fix has moved
+// far enough to be a different question. This is that, gathered into one object
+// because up here the pages are pure functions and cannot hold anything
+// themselves.
 //
-// **Eager and lazy.** Three reads go out the moment there is a fix, because the
-// first screens cannot draw without them: the place and its weather (which also
-// says which cards this country can feed), the posts around here, and our own
-// position — which is traded for everyone else's, so presence costs nothing
-// extra. Everything else is fetched the first time the reader actually scrolls
-// to it. The news, the events and the trends are three upstream lookups apiece
-// on a phone tether, and a reader who never turns past the weather should not be
-// paying for them.
+// **Three reads, and what decides each of them.**
+//
+//   • `POST /api/dashboard` on every new fix — the place, its weather, which
+//     regional feeds the country has, those feeds, the posts within reach and who
+//     else is about, in one round trip. lo added that read for a client that
+//     cannot afford seven, and the glasses are that client: the first page is a
+//     summary of all of it, so there is no such thing here as a feed nobody has
+//     scrolled to yet. It files our fix on the way past, the way the position
+//     trade does.
+//   • `GET /api/warnings` on every new fix as well, because it is not in that
+//     answer and it is a line of the opening page. A warning nobody scrolled far
+//     enough to see is a warning that was not issued.
+//   • `GET /api/messages` while the reader is actually on the page that shows
+//     them, and at most once a minute — see the key below.
+//
+// And two on the minute beat, neither of which asks lo to look anything up
+// elsewhere: `PUT /api/position`, which files where we are and takes back
+// everyone else's and the unread count, and `GET /api/posts`, because what is
+// written on the ground here is the one thing on these pages that changes while
+// the reader stands still.
 //
 // **How coarse a question is.** A fix jitters by metres while a hand is still,
-// and re-asking on every jitter would be the same question over and over. Each
-// feed is keyed as coarsely as its answer actually is, and the roundings are
-// lo's own: one decimal (~11 km) for the three that are city-wide questions, two
-// (~1.1 km) for the warnings, which Yahoo answers per municipality, three
-// (~110 m) for the place and the posts, which are about the street.
+// and re-asking on every jitter would be the same question over and over — so
+// each feed is keyed as coarsely as its answer actually is, in place *and* in
+// time. The roundings are lo's own: three decimals (~110 m) for the dashboard and
+// the posts, which are about the street, and two (~1.1 km) for the warnings,
+// which Yahoo answers per municipality. The stretches of time are below.
 
 import type {
   Coordinates,
   Language,
-  LoFeedResult,
-  LoLocal,
+  LoDashboard,
+  LoFeedItem,
   LoPerson,
   LoPost,
-  LoTrendsResult,
+  LoThread,
+  LoTrend,
   LoWarningsResult,
 } from "../types";
-import type { Feed } from "../glassesui/cards/types";
+import type { Feed } from "../glassesui/pages/types";
 import type { LoApi } from "./api";
 
 type Status = Feed<unknown>["status"];
@@ -54,78 +67,110 @@ function view<T>(from: Slot<T>): Feed<T> {
   return { status: from.status, data: from.data };
 }
 
+/** One part of the dashboard's answer, wearing the whole answer's status. */
+function part<K extends keyof LoDashboard>(from: Slot<LoDashboard>, key: K): Feed<LoDashboard[K]> {
+  return { status: from.status, data: from.data ? from.data[key] : null };
+}
+
 function round(coords: Coordinates, places: number): string {
   return `${coords.latitude.toFixed(places)},${coords.longitude.toFixed(places)}`;
 }
 
-/** Which feed each card is waiting on. Cards not named here need no read of their own. */
-const LAZY: Record<string, "nearby" | "events" | "trends" | "warnings"> = {
-  nearby: "nearby",
-  events: "events",
-  trends: "trends",
-  warnings: "warnings",
-};
+// How long an answer stands before the same question is worth asking again.
+//
+// A key that is only a place is a question that is never asked twice while the
+// reader stands still, which is right for a fix that jitters by metres and wrong
+// for everything else: a post deleted on the phone, a warning lifted, a
+// temperature that has moved on. So every key carries the stretch of time it
+// belongs to as well, and each is as long as its answer actually keeps.
+//
+// The posts are the shortest because they are the only thing here a person
+// changes by hand, and the cheapest — one database read, where the dashboard is
+// four upstream lookups behind it.
+const POSTS_MS = 60_000;
+const INBOX_MS = 60_000;
+const WARNINGS_MS = 5 * 60_000;
+const DASHBOARD_MS = 10 * 60_000;
+
+/** The stretch of time an answer belongs to, which is the rest of every key. */
+function within(every: number): string {
+  return String(Math.floor(Date.now() / every));
+}
 
 export class Feeds {
   private readonly api: LoApi;
   private readonly changed: () => void;
 
-  private localSlot = slot<LoLocal>();
+  private dashSlot = slot<LoDashboard>();
   private postsSlot = slot<LoPost[]>();
-  private peopleSlot = slot<LoPerson[]>();
-  private nearbySlot = slot<LoFeedResult>();
-  private eventsSlot = slot<LoFeedResult>();
-  private trendsSlot = slot<LoTrendsResult>();
   private warningsSlot = slot<LoWarningsResult>();
+  private inboxSlot = slot<LoThread[]>();
+  private peopleSlot = slot<LoPerson[]>();
+  private unreadCount = 0;
 
   constructor(api: LoApi, changed: () => void) {
     this.api = api;
     this.changed = changed;
   }
 
-  get local(): Feed<LoLocal> {
-    return view(this.localSlot);
+  get place() {
+    return this.dashSlot.data?.local?.place ?? null;
   }
+  get weather() {
+    return this.dashSlot.data?.local?.weather ?? null;
+  }
+  /** Which regional feeds the country the reader is standing in has. */
+  get components(): string[] {
+    return this.dashSlot.data?.local?.components ?? [];
+  }
+
+  /**
+   * What is on the ground here. The dashboard answers this too, but the minute
+   * beat keeps a fresher list than the fix does — so the beat's wins wherever it
+   * has landed, and the dashboard's stands in until it has.
+   */
   get posts(): Feed<LoPost[]> {
-    return view(this.postsSlot);
+    return this.postsSlot.status === "idle" ? part(this.dashSlot, "posts") : view(this.postsSlot);
   }
+  get news(): Feed<LoFeedItem[]> {
+    return part(this.dashSlot, "nearby");
+  }
+  get events(): Feed<LoFeedItem[]> {
+    return part(this.dashSlot, "events");
+  }
+  get trends(): Feed<LoTrend[]> {
+    return part(this.dashSlot, "trends");
+  }
+
+  /**
+   * Who else is out. The dashboard answers this too, but the minute beat keeps a
+   * fresher list than the fix does — so the traded one wins wherever it has
+   * landed, and the dashboard's stands in until it has.
+   */
   get people(): Feed<LoPerson[]> {
-    return view(this.peopleSlot);
+    return this.peopleSlot.status === "idle" ? part(this.dashSlot, "people") : view(this.peopleSlot);
   }
-  get nearby(): Feed<LoFeedResult> {
-    return view(this.nearbySlot);
-  }
-  get events(): Feed<LoFeedResult> {
-    return view(this.eventsSlot);
-  }
-  get trends(): Feed<LoTrendsResult> {
-    return view(this.trendsSlot);
-  }
+
   get warnings(): Feed<LoWarningsResult> {
     return view(this.warningsSlot);
   }
-
-  /** Which regional cards the country the reader is standing in can feed. */
-  get components(): string[] {
-    return this.localSlot.data?.components ?? [];
+  get messages(): Feed<LoThread[]> {
+    return view(this.inboxSlot);
+  }
+  /** How much is waiting to be read, which rides in on the presence trade. */
+  get unread(): number {
+    return this.unreadCount;
   }
 
   /**
    * Everything is a stale answer to a question about somewhere else now. Not
    * cleared, though — the old reading stays on screen until the new one lands,
-   * because a card that empties itself on every step of a walk is a card nobody
+   * because a page that empties itself on every step of a walk is a page nobody
    * can read while walking. The keys are what actually change, and they are what
-   * makes the next `ensure` re-ask.
+   * makes the next read re-ask.
    */
   forget(): void {
-    for (const each of [
-      this.localSlot,
-      this.postsSlot,
-      this.nearbySlot,
-      this.eventsSlot,
-      this.trendsSlot,
-      this.warningsSlot,
-    ]) {
+    for (const each of [this.dashSlot, this.postsSlot, this.warningsSlot, this.inboxSlot]) {
       each.key = "";
     }
   }
@@ -158,70 +203,98 @@ export class Feeds {
   }
 
   /**
-   * The three reads the opening screens cannot draw without. Called on every new
-   * fix; the keys below decide whether any of them is actually a new question.
+   * The two reads a new fix is worth. Called on every one; the keys decide
+   * whether either of them is actually a new question.
    */
   async here(coords: Coordinates, language: Language): Promise<void> {
-    const street = `${round(coords, 3)}:${language}`;
     await Promise.all([
-      this.fill(this.localSlot, street, () => this.api.local(coords)),
-      this.fill(this.postsSlot, street, () => this.api.posts(coords).then((answer) => answer.posts)),
-      // Not keyed on where we are: publishing a fix is worth doing wherever it
-      // was taken, and the answer — who else is out — is about the last minute
-      // rather than about the metre. Keyed on nothing, so only the timer
-      // re-asks it.
-      this.fill(this.peopleSlot, "live", () => this.api.publishPosition(coords).then((a) => a.people), true),
+      this.fill(
+        this.dashSlot,
+        `${round(coords, 3)}:${language}:${within(DASHBOARD_MS)}`,
+        () => this.api.dashboard(coords),
+      ),
+      // Not asked for outside Japan, where Yahoo has nothing to say and the
+      // answer would be an all clear nobody checked.
+      this.fill(
+        this.warningsSlot,
+        `${round(coords, 2)}:${within(WARNINGS_MS)}`,
+        () => this.api.warnings(coords),
+      ),
     ]);
   }
 
-  /** Just the presence trade, which the minute loop makes on its own. */
-  async presence(coords: Coordinates): Promise<void> {
-    this.peopleSlot.key = "";
-    await this.fill(this.peopleSlot, "live", () => this.api.publishPosition(coords).then((a) => a.people), true);
+  /**
+   * The minute beat: file where we are, take back everyone else's position and
+   * the unread count, and re-read what is on the ground. Two reads, neither of
+   * which touches anything upstream of lo.
+   */
+  async beat(coords: Coordinates, language: Language): Promise<void> {
+    await Promise.all([
+      this.fill(
+        this.peopleSlot,
+        within(POSTS_MS),
+        async () => {
+          const answer = await this.api.publishPosition(coords);
+          this.unreadCount = answer.unread ?? 0;
+          return answer.people;
+        },
+        true,
+      ),
+      this.readPosts(coords, language),
+    ]);
   }
 
   /**
-   * The reader has scrolled to this card. If it is one of the four that pay for
-   * themselves, this is where that gets paid — once, and not again until the fix
-   * has moved far enough to make it a different question.
+   * The reader has just left a post on the ground here. The minute this happened
+   * in has an answer already and that answer is now wrong by exactly one post —
+   * the reader's own — so the key is dropped and the read made again rather than
+   * left to come right on the next beat. It is the one moment these pages know
+   * they are stale without being told by a clock.
+   *
+   * Only the posts: nothing else on any page changed, and re-asking the dashboard
+   * would spend four upstream lookups on a fact this client already has.
    */
-  ensure(cardId: string, coords: Coordinates, language: Language): void {
-    const feed = LAZY[cardId];
-    if (!feed) return;
-    switch (feed) {
-      case "nearby":
-        void this.fill(this.nearbySlot, `${round(coords, 1)}:${language}`, () => this.api.nearby(coords));
-        return;
-      case "events":
-        void this.fill(this.eventsSlot, `${round(coords, 1)}:${language}`, () => this.api.events(coords));
-        return;
-      case "trends":
-        void this.fill(this.trendsSlot, `${round(coords, 1)}:${language}`, () => this.api.trends(coords));
-        return;
-      case "warnings":
-        // Alone among these it does not take the language: Yahoo answers in
-        // Japanese either way, and the card puts the reader's words back on.
-        void this.fill(this.warningsSlot, round(coords, 2), () => this.api.warnings(coords));
-    }
+  wrote(coords: Coordinates, language: Language): Promise<void> {
+    this.postsSlot.key = "";
+    return this.readPosts(coords, language);
   }
 
-  /** A post just written, straight onto the list rather than through a refetch. */
-  addPost(post: LoPost): void {
-    const posts = this.postsSlot.data ?? [];
-    this.postsSlot.data = [post, ...posts.filter((each) => each.id !== post.id)];
-    this.postsSlot.status = "ready";
-    this.changed();
+  /** What is on the ground here, asked for as coarsely as the answer keeps. */
+  private readPosts(coords: Coordinates, language: Language): Promise<void> {
+    return this.fill(
+      this.postsSlot,
+      `${round(coords, 3)}:${language}:${within(POSTS_MS)}`,
+      () => this.api.posts(coords).then((answer) => answer.posts),
+      true,
+    );
+  }
+
+  /**
+   * The reader is looking at the page that shows the inbox. Keyed on the minute
+   * rather than on where we are standing, because who has written has nothing to
+   * do with the street — and because this is called on every paint of that page.
+   */
+  inbox(): void {
+    void this.fill(
+      this.inboxSlot,
+      String(Math.floor(Date.now() / INBOX_MS)),
+      async () => {
+        const answer = await this.api.messages();
+        this.unreadCount = answer.unread ?? this.unreadCount;
+        return answer.conversations;
+      },
+      true,
+    );
   }
 
   /** Signed out: nothing here belongs to whoever signs in next. */
   clear(): void {
-    this.localSlot = slot();
+    this.dashSlot = slot();
     this.postsSlot = slot();
-    this.peopleSlot = slot();
-    this.nearbySlot = slot();
-    this.eventsSlot = slot();
-    this.trendsSlot = slot();
     this.warningsSlot = slot();
+    this.inboxSlot = slot();
+    this.peopleSlot = slot();
+    this.unreadCount = 0;
     this.changed();
   }
 }

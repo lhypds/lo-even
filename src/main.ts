@@ -5,12 +5,13 @@ import {
   waitForEvenAppBridge,
   type AppLocation,
 } from "@evenrealities/even_hub_sdk";
-import { LoApi } from "./services/api";
+import { ApiError, LoApi } from "./services/api";
 import { Feeds } from "./services/feeds";
 import { conditionPcm, transcribe } from "./utils/audio";
 import { sensorState, startSensors, subscribeSensors } from "./utils/sensors";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glassesui/glasses";
-import type { CardContext } from "./glassesui/cards/types";
+import { composeView, type Draft } from "./glassesui/pages/compose";
+import type { PageContext } from "./glassesui/pages/types";
 import { localeFor } from "./glassesui/format";
 import { translator } from "./glassesui/strings";
 import type { Coordinates, LoUser } from "./types";
@@ -19,8 +20,21 @@ import { createWebUI, type WebUI } from "./webui/webui";
 const SAMPLE_RATE = 16_000;
 const MIN_RECORDING_MS = 250;
 const MAX_RECORDING_MS = 60_000;
-const SINGLE_TAP_DELAY_MS = 650;
 const SCROLL_COOLDOWN_MS = 380;
+// How long the composer sits on a tap before taking it as the answer. The host
+// reports the first press of a double tap as a press of its own, so on the one
+// screen where a tap saves and two taps throw away, the two gestures begin
+// identically and the first of them cannot be acted on yet. Everywhere else a
+// tap is answered the moment it lands: nothing else here is undone by waiting.
+//
+// The number is the one this app already learned, back when a tap wrote a mark
+// and had to be told apart from the double tap that leaves — long enough for the
+// second press to have come over BLE, and it is spent on the one screen where a
+// reader is deciding anyway.
+const DOUBLE_TAP_MS = 650;
+// What the composer is called where the display has to name what is in front of
+// the reader. It is not a page and it is not in the sequence (see glasses.ts).
+const COMPOSE = "compose";
 // How long the link key is left standing after a sign-in. Long enough for the
 // WebView to have traded it for a session of its own on a slow phone tether,
 // short enough that a password equivalent is not left sitting in that frame's
@@ -79,15 +93,27 @@ async function main() {
   let recordingTimer = 0;
   let audioChunks: Uint8Array[] = [];
   let audioBytes = 0;
-  let pendingTapTimer = 0;
+  let tapTimer = 0;
   let lastScrollAt = 0;
   let sensorPaintAt = 0;
+
+  // What a sentence goes through between being said and being saved: heard, then
+  // waited on while it is turned into words, then standing as a draft until the
+  // reader says which of the two things it is.
+  //
+  // `dictation` is which one of those is the live one. A tap can throw a sentence
+  // away while the transcript is still coming back, and a transcript that landed
+  // after that has to know it is answering a question nobody is asking any more —
+  // the same ticket the feed store keeps, for the same reason (see feeds.ts).
+  let dictation = 0;
+  let transcribing = false;
+  let draft: Draft | null = null;
 
   // Every feed answers back through here, so a card that was waiting redraws the
   // moment its answer lands rather than on the next beat of anything.
   const feeds = new Feeds(api, () => render());
 
-  function buildContext(): CardContext {
+  function buildContext(): PageContext {
     return {
       now: new Date(),
       language: api.language,
@@ -95,26 +121,30 @@ async function main() {
       t,
       coords,
       fixAt,
-      place: feeds.local.data?.place ?? null,
-      weather: feeds.local.data?.weather ?? null,
+      place: feeds.place,
+      weather: feeds.weather,
       components: feeds.components,
       posts: feeds.posts,
       people: feeds.people,
-      nearby: feeds.nearby,
+      news: feeds.news,
       events: feeds.events,
       trends: feeds.trends,
       warnings: feeds.warnings,
+      messages: feeds.messages,
+      unread: feeds.unread,
       heading: sensorState(),
       username: user?.username ?? null,
     };
   }
 
-  // The card in front of the reader is the one worth paying for. Called after
-  // every paint and every scroll; the feed store decides whether that is
-  // actually a new question (see feeds.ts) and does nothing when it is not.
+  // The page in front of the reader is the one worth paying for, and there is
+  // exactly one read that works that way now: the inbox, which has nothing to do
+  // with where anybody is standing and so is not worth asking for until the page
+  // that shows it is up. Called after every paint and every scroll; the feed
+  // store decides whether that is actually a new question (see feeds.ts) and does
+  // nothing when it is not.
   function ensureVisible(): void {
-    const cardId = display.current();
-    if (cardId && coords && api.signedIn) feeds.ensure(cardId, coords, api.language);
+    if (display.current() === "nearby" && api.signedIn) feeds.inbox();
   }
 
   function render(): void {
@@ -154,8 +184,8 @@ async function main() {
   }
 
   /**
-   * A fix, and the three reads that hang off one. Everything else waits until the
-   * reader scrolls to it.
+   * A fix, and the two reads that hang off one — which between them fill all three
+   * pages, because the first of them is a count of the other two (see feeds.ts).
    */
   async function refresh(highAccuracy = false): Promise<void> {
     if (!api.signedIn) {
@@ -176,7 +206,7 @@ async function main() {
       fixAt = Date.now();
       setStatus("");
       await feeds.here(next, api.language);
-      // A card already in view whose feed is keyed on a fix that has now moved
+      // A page already in view whose feed is keyed on a fix that has now moved
       // has to be re-asked; ensureVisible is the same gate the scroll uses.
       ensureVisible();
     } finally {
@@ -201,6 +231,50 @@ async function main() {
     }
   }
 
+  // What a key is spent on, from either of the two ways of coming by one — the
+  // password, or the token the last launch left behind. The frame is entered on
+  // it, the screen in front of the frame comes down, and the key's withdrawal
+  // goes on the clock.
+  function spendLinkKey(key: string): void {
+    ui.setKey(key);
+    ui.hideLogin();
+    window.clearTimeout(burnTimer);
+    burnTimer = window.setTimeout(() => void burnLinkKey(), LINK_KEY_TTL_MS);
+  }
+
+  /**
+   * Coming back without being asked anything. The token is written down and the
+   * key is not, so a launch that finds one asks lo a single question — whose
+   * session is this, and a fresh key for the frame — and both sides come up
+   * signed in on the answer (see api.ts).
+   *
+   * Every way this can fail ends in the password being asked for, because there
+   * is no half of this worth keeping: a token that cannot buy a key would leave
+   * the glasses reading a feed the phone view could not show.
+   */
+  async function resume(): Promise<boolean> {
+    if (!api.signedIn) return false;
+    setStatus(t("glasses.resuming"));
+    // The one request, and nothing else, decides whether the password screen goes
+    // up: everything after it is this launch getting on with itself, and a fix or
+    // a feed that fails is not a session that failed.
+    const session = await api.resume().catch((error: unknown) => {
+      // Forgotten only where lo actually answered — a token it no longer knows,
+      // or an account that has none of this. A launch that could not reach lo at
+      // all has learned nothing about the session and keeps it written down for
+      // the next one; this launch asks for the password either way, and a
+      // sign-in overwrites whatever was being kept.
+      api.setToken("", error instanceof ApiError);
+      return null;
+    });
+    if (!session) return false;
+    user = session.user;
+    ui.setUser(user);
+    spendLinkKey(session.key);
+    await refresh();
+    return true;
+  }
+
   async function login(username: string, password: string): Promise<void> {
     ui.setLoginBusy(true);
     // The one press this package has, and iOS will only hand over the compass
@@ -211,13 +285,12 @@ async function main() {
       const session = await api.login(username, password);
       user = session.user;
       // The password is spent here and goes no further, and neither does the key
-      // it bought: nothing from this sign-in is written down. The key opens the
-      // WebView, the token feeds the glasses, and both die with this launch.
+      // it bought: the key opens the WebView and is withdrawn a minute later, so
+      // there is nothing of it left to keep. The token is the one thing written
+      // down, and it is written down so that this is the last time this reader is
+      // asked (see api.ts).
       ui.setUser(user);
-      ui.setKey(session.key);
-      ui.hideLogin();
-      window.clearTimeout(burnTimer);
-      burnTimer = window.setTimeout(() => void burnLinkKey(), LINK_KEY_TTL_MS);
+      spendLinkKey(session.key);
       await refresh();
     } catch (error) {
       // The error itself rather than a sentence about it: the screen asking is
@@ -229,50 +302,151 @@ async function main() {
     }
   }
 
+  /**
+   * Signing out, which is news from the frame rather than anything pressed out
+   * here: the sign-out button belongs to lo's own account sheet, and what reaches
+   * this side is the line lo posts on its way out (see webui.ts).
+   *
+   * The screen goes first and the errands after. By the time this runs the site
+   * has already signed itself out and is drawing its own sign-in screen, and
+   * every moment spent on a round trip before the frame is taken down is a moment
+   * of that screen showing through — the one thing the reader is not meant to
+   * see, there being no second screen as far as they know.
+   */
   async function logout(): Promise<void> {
-    cancelRecording();
-    // Before the session goes rather than after: withdrawing the key is spent on
-    // the very token /api/logout is about to invalidate. If the minute has
-    // already elapsed there is nothing left to withdraw.
-    if (burnTimer) await burnLinkKey();
-    await api.logout().catch(() => {});
-    api.setToken("");
-    ui.setKey("");
+    discard();
     user = null;
     coords = null;
     fixAt = null;
     feeds.clear();
+    ui.setKey("");
     ui.setUser(null);
-    setStatus(t("glasses.signIn"));
     ui.showLogin();
+    setStatus(t("glasses.signIn"));
+    // Now the two things that need the token, before it is thrown away. The key
+    // is withdrawn before the session goes rather than after, because the
+    // withdrawal is spent on the very token /api/logout is about to invalidate;
+    // if the minute has already elapsed there is nothing left to withdraw.
+    if (burnTimer) await burnLinkKey();
+    await api.logout().catch(() => {});
+    // Which also takes it out of storage, so the next launch asks rather than
+    // letting itself back into the account the reader has just left.
+    api.setToken("");
   }
 
-  async function recordLocation(): Promise<void> {
-    if (!api.signedIn) {
-      ui.showLogin();
-      setStatus(t("glasses.signIn"));
-      return;
+  /* ----------------------------------------------- what a hold turns into */
+
+  /**
+   * The screen that asks a dictation what it is, put up or taken down. Drawn again
+   * on every turn of the wheel and not only on the way in, because the words on it
+   * change with the answer: lo keeps 48 characters of what was said as the name of
+   * a mark and 500 as the words of a post, and the preview shows what the answer
+   * the wheel is on would actually save (see pages/compose.ts).
+   *
+   * The takeover goes up before the status line is cleared, so what the reader
+   * sees is the question arriving rather than a flash of the page underneath it.
+   */
+  function showDraft(): void {
+    display.takeover(draft ? { id: COMPOSE, view: composeView(draft, t) } : null);
+    // The composer's footer carries its own instructions, so whatever was being
+    // said about the last step goes when the question arrives. This paints, which
+    // is why nothing that calls this has to.
+    setStatus("");
+  }
+
+  /** The wheel, while the composer has it: the other of the two answers. */
+  function chooseOther(): void {
+    if (!draft) return;
+    draft = { ...draft, kind: draft.kind === "mark" ? "post" : "mark" };
+    showDraft();
+  }
+
+  /**
+   * A tap on the composer, taken as the answer once it is clear it was not the
+   * first half of one. The wait is the whole of what this function is: a post
+   * cannot be unsaid, and a reader who meant to throw the sentence away would
+   * otherwise watch it go out on the first of their two taps.
+   *
+   * Whatever the wheel is on when the timer fires is what is saved, rather than
+   * what it was on when the tap landed. The half second is short enough that
+   * those are the same answer, and a reader still rolling has not finished
+   * choosing.
+   */
+  function armKeep(): void {
+    window.clearTimeout(tapTimer);
+    tapTimer = window.setTimeout(() => {
+      tapTimer = 0;
+      void keep();
+    }, DOUBLE_TAP_MS);
+  }
+
+  /**
+   * Everything an unfinished sentence is holding, put back. Quiet, because this is
+   * also what signing out and shutting down do and neither of those has anybody
+   * left to tell.
+   */
+  function discard(): void {
+    cancelRecording();
+    // The second tap of a drop arrives while the first one is still waiting to be
+    // read as an answer. Clearing the timer here is what makes the drop win.
+    window.clearTimeout(tapTimer);
+    tapTimer = 0;
+    // A transcript still on its way is now the answer to a question nobody is
+    // asking. Bumping the ticket is what tells it so.
+    dictation += 1;
+    transcribing = false;
+    if (draft) {
+      draft = null;
+      display.takeover(null);
     }
-    setStatus(t("mark.saving"));
-    const fix = await phoneLocation(true);
-    if (!fix) {
-      setStatus(t("glasses.noFix"), 2200);
-      return;
-    }
-    coords = fix;
-    fixAt = Date.now();
+  }
+
+  /**
+   * Everything in the air, dropped, and the reader told so. What reaches this is a
+   * tap while a recording is running or a transcript is on its way, and the double
+   * tap that answers the composer — a screen with no keyboard and no undo has to
+   * keep one way out of every state it can put a reader in.
+   *
+   * Which gesture that is depends on what the reader would lose. Before there is a
+   * draft there is nothing standing that a stray tap could destroy, so the way out
+   * is the single tap and it is taken at once. Once the question is up the sentence
+   * is worth something, and the way out becomes the deliberate gesture rather than
+   * the easy one.
+   */
+  function cancel(): void {
+    const something = recording || transcribing || draft !== null;
+    discard();
+    if (something) setStatus(t("compose.dropped"), 1600);
+  }
+
+  /** The answer, and the one round trip it turns into. */
+  async function keep(): Promise<void> {
+    if (!draft) return;
+    const { text, coords: spot, kind } = draft;
+    const shared = kind === "post";
+    draft = null;
+    display.takeover(null);
+    setStatus(t(shared ? "post.saving" : "mark.saving"));
     try {
-      await api.createMark(fix);
-      setStatus(`✓ ${t("mark.saved")}`, 2200);
+      if (shared) await api.createPost(spot, text);
+      else await api.createMark(spot, text);
+      // The words alone. There used to be a ✓ in front of them, and this face has
+      // no such character — it drew nothing and left four pixels of air where the
+      // tick was supposed to be (see the note under the table in metrics.ts).
+      setStatus(t(shared ? "post.saved" : "mark.saved"), 2500);
+      // What is on the ground here has just changed, and the page that lists it is
+      // one flick away: a reader who scrolled to it and did not find what they had
+      // just said would have every reason to think it was never written. A mark
+      // needs none of this — no page here lists them, because they are nobody's
+      // but the reader's and the phone is where they are read.
+      if (shared && coords) void feeds.wrote(coords, api.language);
     } catch (error) {
       console.error(error);
-      setStatus(t("glasses.markFailed"), 2200);
+      setStatus(t(shared ? "post.failed" : "glasses.markFailed"), 2500);
     }
   }
 
   async function startRecording(): Promise<void> {
-    window.clearTimeout(pendingTapTimer);
-    pendingTapTimer = 0;
     if (recording || !api.signedIn) {
       if (!api.signedIn) {
         ui.showLogin();
@@ -280,6 +454,12 @@ async function main() {
       }
       return;
     }
+    // A second hold before the first sentence has come back replaces it rather
+    // than racing it. Bumping the ticket is what tells the transcript still on its
+    // way that nobody is waiting for it — without this, it would land on top of
+    // the recording that has already started and put up a question about the
+    // wrong words.
+    if (transcribing) discard();
     recording = true;
     recordingStartedAt = Date.now();
     audioChunks = [];
@@ -292,7 +472,7 @@ async function main() {
     }
     if (!opened) {
       recording = false;
-      setStatus(t("glasses.postFailed"), 2200);
+      setStatus(t("glasses.markFailed"), 2200);
       return;
     }
     recordingTimer = window.setTimeout(() => void finishRecording(), MAX_RECORDING_MS);
@@ -326,30 +506,46 @@ async function main() {
       return;
     }
 
+    // Taken now rather than when the reader answers: the fix belongs to the spot
+    // they were standing on when they said it, not to wherever they had drifted to
+    // while deciding what it was.
     const fixPromise = phoneLocation(true);
+    const ticket = ++dictation;
+    transcribing = true;
     setStatus(t("glasses.transcribing"));
     try {
       const text = await transcribe(conditionPcm(raw), SAMPLE_RATE, api.language);
+      // Thrown away with a tap while this was coming back. Nothing it has to say
+      // is wanted, including its failures.
+      if (ticket !== dictation) return;
       if (!text) {
         setStatus(t("glasses.noSpeech"), 2200);
         return;
       }
-      setStatus(t("post.posting"));
       const fix = (await fixPromise) ?? coords;
+      if (ticket !== dictation) return;
       if (!fix) {
         setStatus(t("glasses.noFix"), 2200);
         return;
       }
       coords = fix;
       fixAt = Date.now();
-      const result = await api.createPost(fix, text);
-      // Straight onto the list rather than through a refetch: the writer is
-      // looking at the spot they just posted about.
-      feeds.addPost(result.post);
-      setStatus(`✓ ${t("post.posted")}`, 3000);
+      // Not saved — asked about. A hold used to be one verb: record, and file this
+      // spot under what was said. There turn out to be two things a sentence said
+      // out here can be, and only the reader knows which, so it stands on the
+      // screen until they say (see pages/compose.ts).
+      //
+      // It opens on the mark, and that is not a coin toss. A mark is the answer
+      // that can still be taken back by nobody having seen it; a wheel that
+      // started on the public one would make "everybody nearby reads this" the
+      // thing that happens when a reader taps the touchpad once without looking.
+      draft = { text, coords: fix, kind: "mark" };
+      showDraft();
     } catch (error) {
       console.error(error);
-      setStatus(t("glasses.postFailed"), 2500);
+      if (ticket === dictation) setStatus(t("glasses.markFailed"), 2500);
+    } finally {
+      if (ticket === dictation) transcribing = false;
     }
   }
 
@@ -375,13 +571,22 @@ async function main() {
   );
   ui.setUser(null);
 
-  // Every cold start asks for the password, because nothing from the last one was
-  // written down. It has to work this way now that the key is withdrawn a minute
-  // after each sign-in: no endpoint mints a key from a token, so a stored token
-  // could bring the glasses back but never the WebView, and an app that is half
-  // signed in is worse than one that asks.
-  setStatus(t("glasses.signIn"));
-  ui.showLogin();
+  // A cold start asks lo before it asks the reader. Every launch used to ask for
+  // the password, because the key is withdrawn a minute after each sign-in and
+  // nothing on the server would mint another from a token — so a stored session
+  // could bring the glasses back but never the WebView, and an app half signed in
+  // is worse than one that asks. `POST /api/me/link` is what closed that gap, and
+  // a session that comes back brings both sides of the app with it.
+  //
+  // Not awaited: the gestures and the beat below are this launch's, whether or
+  // not there is a session to come back on, and a package that ignores the
+  // touchpad until the network has answered is a package that looks broken to a
+  // reader whose phone is on a slow tether.
+  void resume().then((resumed) => {
+    if (resumed) return;
+    setStatus(t("glasses.signIn"));
+    ui.showLogin();
+  });
 
   bridge.onEvenHubEvent((event) => {
     const eventType = event.textEvent?.eventType ?? event.listEvent?.eventType ?? event.sysEvent?.eventType;
@@ -390,17 +595,29 @@ async function main() {
       const now = Date.now();
       if (now - lastScrollAt < SCROLL_COOLDOWN_MS) return;
       lastScrollAt = now;
-      // One line of screenfuls, walked a step at a time: a card with more rows
+      // The wheel belongs to whatever has the screen. While a draft is standing
+      // there are two answers and no pages, so it chooses between them — either
+      // direction, because two things have no order to walk in.
+      if (draft) {
+        chooseOther();
+        return;
+      }
+      // One line of screenfuls, walked a step at a time: a page with more rows
       // than fit contributes several steps, so scrolling reads down a long list
-      // and then carries on to the next card (see glasses.ts).
+      // and then carries on to the next page (see glasses.ts).
       display.scroll(eventType === OsEventTypeList.SCROLL_TOP_EVENT ? -1 : 1);
       ensureVisible();
       return;
     }
 
     if (eventType === OsEventTypeList.LONG_PRESS_EVENT) {
-      window.clearTimeout(pendingTapTimer);
-      pendingTapTimer = 0;
+      // The hold opens the microphone, and that is now the whole of what it does.
+      // It used to say yes at both ends of a dictation; the composer answers with
+      // taps now, and a hold there is ignored rather than made a second way to
+      // save — a reader who holds again is reaching for the gesture that records,
+      // and starting a new sentence over the one still standing would throw away
+      // exactly what they were about to be asked about.
+      if (draft) return;
       void startRecording();
       return;
     }
@@ -412,23 +629,36 @@ async function main() {
 
     const eventSource = event.sysEvent?.eventSource;
     if (eventType == null && eventSource != null && eventSource !== EventSourceType.TOUCH_EVENT_FORM_DUMMY_NULL) {
-      window.clearTimeout(pendingTapTimer);
-      pendingTapTimer = window.setTimeout(() => {
-        pendingTapTimer = 0;
-        void recordLocation();
-      }, SINGLE_TAP_DELAY_MS);
+      // The tap answers the composer, and it is the only gesture here that has to
+      // wait to find out what it was: a double tap begins with a press of this
+      // kind, and on this screen the two mean opposite things.
+      if (draft) {
+        armKeep();
+        return;
+      }
+      // Everywhere else it is the way out, taken at once. Both the tap and the
+      // double tap that leaves the app end with nothing saved, so the first press
+      // of an exit costing the reader a recording costs them nothing they were
+      // keeping — and a way out that hesitated would be a way out that felt broken.
+      cancel();
       return;
     }
 
     if (eventType === OsEventTypeList.DOUBLE_CLICK_EVENT) {
-      window.clearTimeout(pendingTapTimer);
-      pendingTapTimer = 0;
+      // While the question is up the double tap belongs to it rather than to the
+      // way out of the app. It arrives on top of the press that opened it, which
+      // is still sitting in the timer waiting to be read as the answer; dropping
+      // the draft takes that press with it (see discard).
+      if (draft) {
+        cancel();
+        return;
+      }
       void bridge.shutDownPageContainer(1);
       return;
     }
 
     if (eventType === OsEventTypeList.SYSTEM_EXIT_EVENT || eventType === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
-      cancelRecording();
+      discard();
       void display.shutdown();
       return;
     }
@@ -441,10 +671,10 @@ async function main() {
     }
   });
 
-  // The bearing, and only while it is the thing being looked at. These events
-  // arrive sixty times a second and the compass is one card of ten.
+  // The bearing, and only while it is on screen. These events arrive sixty times
+  // a second, and the line they feed is one line of the standing page.
   subscribeSensors(() => {
-    if (display.current() !== "direction" || recording) return;
+    if (display.current() !== "here" || recording) return;
     const now = Date.now();
     if (now - sensorPaintAt < SENSOR_PAINT_MS) return;
     sensorPaintAt = now;
@@ -464,11 +694,16 @@ async function main() {
   }
   scheduleMinute();
 
-  // lo's own beat: a fresh fix, published, and everyone else's back with it.
+  // lo's own beat: a fresh fix, published, everyone else's back with it, and what
+  // has been left on the ground here since the last one.
   window.setInterval(() => {
-    if (!api.signedIn || recording) return;
+    // Not while there is a sentence in the air. A reader holding the touchpad, or
+    // reading back what they just said, is not a reader who needs the street
+    // re-read underneath them — and the draft is filed at the fix it was spoken
+    // at, so moving that fix now could only make the saving wrong.
+    if (!api.signedIn || recording || transcribing || draft) return;
     void refresh();
-    if (coords) void feeds.presence(coords);
+    if (coords) void feeds.beat(coords, api.language);
   }, PRESENCE_MS);
 }
 

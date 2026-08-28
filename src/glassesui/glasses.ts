@@ -5,97 +5,118 @@
 // wheel turned and it moves to the next one. It owns exactly one piece of state,
 // which is where in the dashboard the reader has got to.
 //
-// **The sequence.** lo's dashboard is a grid cut into pages and turned with a
-// thumb. There is no grid up here — a card gets the whole screen — so the same
-// dashboard becomes one line of screenfuls: every card the place can feed, and
-// every card that has more rows than fit contributing as many screens as it
-// takes. Scrolling walks that line. A reader on the second page of the posts
-// scrolls once more and is on the news, which is the behaviour the phone has
-// when a page of tiles runs out.
+// **The sequence.** lo's dashboard is a grid of tiles turned with a thumb. There
+// is no grid up here and nothing to put a thumb on, so the same dashboard becomes
+// three screenfuls walked with the wheel: where you are, what is around you, what
+// is being said about the wider place. Each of them is built to come in at or
+// under the lines there are, so a scroll is always a page rather than sometimes
+// the rest of one — but a page that did overflow would contribute a second screen
+// rather than lose the difference (see layout.ts).
 //
-// **Where the reader is** is kept as a card and a page within it, never as an
-// index into that line. The line is rebuilt on every repaint — a card appears
-// when its feed lands, another grows a page when four posts become nine — and an
-// index into a list that grew underneath you is how a reader ends up looking at
-// something they did not scroll to. Named, it survives all of it.
+// **Where the reader is** is kept as a page and a screen within it, never as an
+// index into that line. The line is rebuilt on every repaint — a page appears
+// when the country turns out to feed it, another grows a screen when four posts
+// become nine — and an index into a list that grew underneath you is how a reader
+// ends up looking at something they did not scroll to. Named, it survives all of
+// it.
 
 import type { EvenAppBridge } from "@evenrealities/even_hub_sdk";
-import { offeredCards } from "./cards";
-import type { CardContext, CardDefinition, CardView } from "./cards/types";
+import { offeredPages } from "./pages";
+import type { PageContext, PageDefinition, PageView } from "./pages/types";
 import { formatPlace } from "./format";
-import { layout, pageCount, type Chrome, type Panel } from "./layout";
+import { clockFace } from "./pages/chrome";
+import { layout, screens, type Chrome, type Panel } from "./layout";
 import { createPainter, type Painter } from "./paint";
-import { HEAD_BAND, INK, NOTE, CONTAINER, MUTED, bandCells, cellsIn } from "./theme";
+import { BODY_LINES, BODY_WIDTH, FRAME, INK, CONTAINER, MUTED, cellsIn, frameCells, noteRect } from "./theme";
 import { clip, wrap } from "./metrics";
+
+/**
+ * A screen that is not part of the sequence and takes the display over while it
+ * is up. There is one of them — the composer, which asks a dictation what it is
+ * (see pages/compose.ts) — and it is named rather than anonymous so that anything
+ * asking what the reader is looking at gets an answer that is true.
+ */
+export interface Takeover {
+  id: string;
+  view: PageView;
+}
 
 export interface GlassesDisplay {
   /** Draw what is known now. Called on every change of data, status or minute. */
-  render(context: CardContext, status?: string): void;
-  /** The wheel turned: -1 towards the clock, +1 away from it. */
+  render(context: PageContext, status?: string): void;
+  /** The wheel turned: -1 back towards the standing page, +1 away from it. */
   scroll(direction: 1 | -1): void;
-  /** Which card the reader is looking at, for anything that needs to know. */
+  /**
+   * Put a screen in front of everything, or `null` to take it away. The anchor is
+   * not touched either way: a question asked in the middle of the dashboard puts
+   * the reader back on the page they were reading, which is the least a question
+   * that interrupted them can do.
+   */
+  takeover(screen: Takeover | null): void;
+  /** Which page the reader is looking at, for anything that needs to know. */
   current(): string | null;
   shutdown(): Promise<void>;
 }
 
-/** One screenful: a card, and which page of that card. */
+/** One screenful: a page, and which screen of that page. */
 interface Step {
-  card: CardDefinition;
-  view: CardView;
-  page: number;
+  page: PageDefinition;
+  view: PageView;
+  screen: number;
 }
 
 /** Where the reader is, by name rather than by index. */
 interface Anchor {
-  cardId: string;
-  page: number;
+  pageId: string;
+  screen: number;
 }
 
 /**
- * Every screenful the dashboard currently amounts to, in order. Rendering a card
- * to count its pages is not wasteful — a render is a pure read of data already
- * in hand, and it is the only way to know how many pages a card is worth.
+ * Every screenful the dashboard currently amounts to, in order. Rendering a page
+ * to count its screens is not wasteful — a render is a pure read of data already
+ * in hand, and it is the only way to know how many screens a page is worth.
  */
-function sequence(context: CardContext): Step[] {
+function sequence(context: PageContext): Step[] {
   const steps: Step[] = [];
-  for (const card of offeredCards(context)) {
-    const view = card.render(context);
-    const pages = pageCount(view.block);
-    for (let page = 0; page < pages; page += 1) steps.push({ card, view, page });
+  for (const page of offeredPages(context)) {
+    const view = page.render(context);
+    const total = screens(view);
+    for (let screen = 0; screen < total; screen += 1) steps.push({ page, view, screen });
   }
   return steps;
 }
 
 /**
- * Where the anchor points now. A page that is no longer there falls back to the
- * last page of the same card rather than to a different card — a list that
+ * Where the anchor points now. A screen that is no longer there falls back to the
+ * last screen of the same page rather than to a different page — a list that
  * shrank under the reader should leave them looking at the same thing, shorter.
  */
 function locate(steps: Step[], anchor: Anchor): number {
-  const exact = steps.findIndex((step) => step.card.id === anchor.cardId && step.page === anchor.page);
+  const exact = steps.findIndex((step) => step.page.id === anchor.pageId && step.screen === anchor.screen);
   if (exact !== -1) return exact;
-  const lastOfCard = steps.map((step) => step.card.id).lastIndexOf(anchor.cardId);
-  return lastOfCard === -1 ? 0 : lastOfCard;
+  const lastOfPage = steps.map((step) => step.page.id).lastIndexOf(anchor.pageId);
+  return lastOfPage === -1 ? 0 : lastOfPage;
 }
 
 /** The screen before there is anything to put on it. */
 function bootPanels(message: string): Panel[] {
+  const lines = wrap(message, cellsIn(BODY_WIDTH), BODY_LINES);
   return [
     {
-      id: CONTAINER.headBand,
-      rect: HEAD_BAND,
-      text: clip("lo", bandCells(HEAD_BAND)),
+      id: CONTAINER.frame,
+      rect: FRAME,
+      text: clip("lo", frameCells()),
       brightness: INK,
       bordered: true,
       zOrder: 0,
     },
     {
-      id: CONTAINER.bodyA,
-      rect: NOTE,
-      text: wrap(message, cellsIn(NOTE.width), 5).join("\n"),
+      id: CONTAINER.note,
+      rect: noteRect(lines),
+      text: lines.join("\n"),
       brightness: MUTED,
       bordered: false,
-      zOrder: 4,
+      zOrder: 7,
     },
   ];
 }
@@ -106,13 +127,31 @@ export async function createGlassesDisplay(
 ): Promise<GlassesDisplay> {
   const painter: Painter = await createPainter(bridge, bootPanels(bootMessage));
 
-  // The clock is where lo opens and so is this.
-  let anchor: Anchor = { cardId: "clock", page: 0 };
-  let latest: CardContext | null = null;
+  // Where you are standing is where lo opens and so is this.
+  let anchor: Anchor = { pageId: "here", screen: 0 };
+  let latest: PageContext | null = null;
   let latestStatus = "";
+  let taken: Takeover | null = null;
 
   function draw(): void {
     if (!latest) return;
+
+    // The screen in front of everything, where there is one. It wears the same
+    // chrome as a page — the place, the hour, whatever the status line has to say
+    // — because it is the same screen with a different question on it, and the
+    // reader should not have to work out that it is.
+    if (taken) {
+      painter.paint(
+        layout(taken.view, 0, {
+          place: formatPlace(latest.place),
+          time: clockFace(latest),
+          status: latestStatus,
+          unread: latest.unread,
+        }),
+      );
+      return;
+    }
+
     const steps = sequence(latest);
     if (steps.length === 0) {
       painter.paint(bootPanels(latest.t("glasses.empty")));
@@ -121,17 +160,19 @@ export async function createGlassesDisplay(
 
     const index = locate(steps, anchor);
     const step = steps[index];
-    // Written back, so that a page the anchor only reached by falling back is the
-    // page the next scroll moves on from.
-    anchor = { cardId: step.card.id, page: step.page };
+    // Written back, so that a screen the anchor only reached by falling back is
+    // the one the next scroll moves on from.
+    anchor = { pageId: step.page.id, screen: step.screen };
 
     const chrome: Chrome = {
       place: formatPlace(latest.place),
+      time: clockFace(latest),
       status: latestStatus,
+      unread: latest.unread,
       index: index + 1,
       total: steps.length,
     };
-    painter.paint(layout(step.view, step.page, chrome));
+    painter.paint(layout(step.view, step.screen, chrome));
   }
 
   return {
@@ -143,19 +184,30 @@ export async function createGlassesDisplay(
 
     scroll(direction) {
       if (!latest) return;
+      // The wheel belongs to whatever has the screen. While the composer has it
+      // the wheel is choosing between two answers rather than walking the pages,
+      // and a sequence that moved underneath it would put the reader somewhere
+      // they never scrolled to (see main.ts).
+      if (taken) return;
       const steps = sequence(latest);
       if (steps.length === 0) return;
       // Round rather than stopping at either end. On a phone a dashboard resists
       // at its edges because there is a thumb on it and the resistance is felt;
       // a wheel gives nothing back, so an edge there is just a scroll that did
-      // nothing — and the clock is never more than one flick away either way.
+      // nothing — and where you are standing is never more than one flick away
+      // either way.
       const next = (locate(steps, anchor) + direction + steps.length) % steps.length;
-      anchor = { cardId: steps[next].card.id, page: steps[next].page };
+      anchor = { pageId: steps[next].page.id, screen: steps[next].screen };
+      draw();
+    },
+
+    takeover(screen) {
+      taken = screen;
       draw();
     },
 
     current() {
-      return anchor.cardId;
+      return taken?.id ?? anchor.pageId;
     },
 
     shutdown() {
@@ -171,13 +223,19 @@ export async function createGlassesDisplay(
  * written once, against a display that is always there.
  */
 export function createBrowserDisplay(): GlassesDisplay {
-  let cardId: string | null = null;
+  let pageId: string | null = null;
+  let taken: string | null = null;
   return {
     render(context) {
-      cardId = offeredCards(context)[0]?.id ?? null;
+      pageId = offeredPages(context)[0]?.id ?? null;
     },
     scroll() {},
-    current: () => cardId,
+    // Nothing to draw, but the answer to `current` still has to be the truth: the
+    // gestures that drive the composer are gated on it (see main.ts).
+    takeover(screen) {
+      taken = screen?.id ?? null;
+    },
+    current: () => taken ?? pageId,
     async shutdown() {},
   };
 }

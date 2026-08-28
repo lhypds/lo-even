@@ -34,11 +34,11 @@ import {
 } from "@evenrealities/even_hub_sdk";
 import { signature, type Panel } from "./layout";
 import {
-  BAND_BORDER_COLOR,
-  BAND_BORDER_RADIUS,
-  BAND_BORDER_WIDTH,
-  BAND_PADDING,
   CONTAINER,
+  FRAME_BORDER_COLOR,
+  FRAME_BORDER_RADIUS,
+  FRAME_BORDER_WIDTH,
+  FRAME_PADDING,
 } from "./theme";
 
 export interface Painter {
@@ -72,14 +72,14 @@ function toProperty(panel: Panel): TextContainerProperty {
     yPosition: panel.rect.y,
     width: panel.rect.width,
     height: panel.rect.height,
-    borderWidth: panel.bordered ? BAND_BORDER_WIDTH : 0,
-    borderColor: panel.bordered ? BAND_BORDER_COLOR : 0,
-    borderRadius: panel.bordered ? BAND_BORDER_RADIUS : 0,
-    // Only a band keeps a gutter of its own; a body column is placed where it is
-    // meant to be and padding would shift it off the grid the columns share. It
-    // is charged vertically too, which is why a band is sized around it rather
-    // than given a round number (see BAND_HEIGHT).
-    paddingLength: panel.bordered ? BAND_PADDING : 0,
+    borderWidth: panel.bordered ? FRAME_BORDER_WIDTH : 0,
+    borderColor: panel.bordered ? FRAME_BORDER_COLOR : 0,
+    borderRadius: panel.bordered ? FRAME_BORDER_RADIUS : 0,
+    // Only the frame keeps a gutter of its own; a body column is placed where it
+    // is meant to be and padding would shift it off the grid the columns share.
+    // It is charged on the top and the bottom as well as the sides, which is what
+    // decides where the heading's line sits (see theme.ts).
+    paddingLength: panel.bordered ? FRAME_PADDING : 0,
     containerID: panel.id,
     containerName: nameFor(panel.id),
     content: panel.text,
@@ -89,7 +89,7 @@ function toProperty(panel: Panel): TextContainerProperty {
     // all. The events the app actually steers by are system-level anyway (a
     // scroll, a tap, a hold — see main.ts), so which container holds this makes
     // no difference beyond there being one.
-    isEventCapture: panel.id === CONTAINER.headBand ? 1 : 0,
+    isEventCapture: panel.id === CONTAINER.frame ? 1 : 0,
     zOrderIndex: panel.zOrder,
   });
 }

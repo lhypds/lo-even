@@ -147,3 +147,37 @@ export interface LoPerson {
   accuracy?: number | null;
   time: string;
 }
+
+/* --------------------------------------------------------------- messages -- */
+
+/**
+ * One correspondence, as the inbox lists it: who it is with, the last thing said
+ * in it, and how much of it has not been read. `mine` is whose line that last one
+ * was, which is the difference between a message waiting for an answer and one
+ * that is the answer.
+ */
+export interface LoThread {
+  username: string;
+  body: string;
+  time: string;
+  mine: boolean;
+  unread: number;
+}
+
+/* -------------------------------------------------------------- dashboard -- */
+
+/**
+ * Everything a screen standing at one spot opens with, in one answer — the read
+ * lo added for exactly this client (`POST /api/dashboard`). The regional feeds
+ * arrive as bare item lists rather than the `{ place, items }` the one-at-a-time
+ * endpoints wrap them in, because a dashboard has no room to name the region each
+ * of them answered for.
+ */
+export interface LoDashboard {
+  local: LoLocal;
+  nearby: LoFeedItem[];
+  events: LoFeedItem[];
+  trends: LoTrend[];
+  posts: LoPost[];
+  people: LoPerson[];
+}
