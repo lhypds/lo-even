@@ -29,6 +29,7 @@ import type {
   Coordinates,
   Language,
   LoArticle,
+  LoComment,
   LoFeedItem,
   LoMessage,
   LoPerson,
@@ -120,6 +121,17 @@ export interface PageContext {
    * be careful of in asking (see main.ts).
    */
   profile(username: string): Feed<LoPersonPage>;
+  /**
+   * What was said back about one post, for a post that has been opened. A read
+   * and never a request, for the reason all three above are: a page that asked lo
+   * about a post by drawing a row would ask it about the whole street.
+   *
+   * Idle until the reader opens one, and idle for good on a post nobody has
+   * answered — the count comes in on the post itself, so a column that is known to
+   * be empty is never asked for and stays at `idle` under a screen that has no
+   * question about it (see feeds.ts).
+   */
+  comments(postId: string): Feed<LoComment[]>;
 }
 
 /**

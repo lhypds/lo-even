@@ -61,11 +61,19 @@ not about the minute you are standing in, so it is the thing that gives way: the
 alternative was a page that spilled onto a second screenful, and the count of
 everything else in the app is on the last line of the first one.
 
-**2 · Who is here.** The last word of each exchange waiting in the inbox, the
-latest posts left on this street, what is on within walking distance, and the
-names of everyone else with a tab open nearby. The letters come first because
-they are the one thing on the page addressed to the reader by name — the posts
-are everybody's and the names are whoever happens to be about.
+**2 · Who is here.** The last word of each row waiting in the inbox, the latest
+posts left on this street, what is on within walking distance, and the names of
+everyone else with a tab open nearby. The messages come first because they are the
+one thing on the page addressed to the reader — the posts are everybody's and the
+names are whoever happens to be about.
+
+The inbox is two kinds of row in one list, which is lo's own arrangement: a word
+addressed to you and a word left under something you wrote are the same thing to
+whoever is reading them — somebody said something, and here is where to answer. A
+letter is headed by whoever wrote it; a column of remarks is headed by **the post
+everybody in it is talking about** — `On “the cherry blossom is out”` — because a
+column has as many voices in it as came past and no one of them is what the row is
+about. Under the heading, both say who spoke last and what they said.
 
 A name says how far away and how long ago, and never where. Somebody's fix
 written out to four decimal places is eleven metres of where they actually are,
@@ -116,12 +124,25 @@ cannot. Here you land on the first screenful and go forward a flick at a time, s
 the usual order would put the line you came for behind everything you had already
 read. The hour is on the heading rather than repeated down the margin.
 
-Every message the app draws — down that exchange, under a name in the list, and on
-the summary a page up — is written the same way: **a name, a colon, and the
-sentence**, `You:` for your own. Nothing in the words themselves says which
-direction a line went, and there is no left and right up here to say it with; lo's
-own sheet has bubbles and this has one column, so the attribution has to be in the
-type. The summary is the one row that names two people, because it is the only
+A post reads as a thing with a list under it, which is the same screen arranged
+the other way round: the words first, and then what was said back about them,
+**oldest at the top**. Nothing is upside down about that and it is not a different
+rule — the line you came for is the post, it is already at the top, and everything
+below it came after it. Where a letter has to be turned round to put the newest
+line on the first screenful, a post is on the first screenful whatever happens.
+
+Which is the same screen a column in the inbox opens into, and deliberately: a
+post read off the street and the same post reached through the row about it are
+one screen, so what you find is the same either way. It is why the inbox's row
+carries the post's own words — that is what it is headed by, and what it is read
+as.
+
+Every message the app draws — down that exchange, down the column under a post,
+under a name in the list, and on the summary a page up — is written the same way:
+**a name, a colon, and the sentence**, `You:` for your own. Nothing in the words
+themselves says which direction a line went, and there is no left and right up here
+to say it with; lo's own sheet has bubbles and this has one column, so the
+attribution has to be in the type. The summary is the one row that names two people, because it is the only
 place that says who a letter is with as well as who spoke: `@mari: on my way` when
 it is theirs, `@mari · You: on my way` when it is yours. The second shape never
 wears the unread disc — a thread you spoke in last is a thread with nothing waiting
@@ -170,14 +191,21 @@ gesture and a pointer that changed shape half way through would be two things to
 learn. On a list you get both: the box, and the entry written in ink with the two
 beside it muted.
 
-The things behind these pages that answer back are the two addressed to somebody:
-a letter, and a person. lo's own rows open a post *and its replies*, and a reply
-to a post needs a keyboard; the newswire's rows are links out to the article.
-These two are the exception because a message is one sentence said to one person,
-which is the whole of what a hold on the temple already records — so a hold on a
-letter answers it and a hold on somebody's page says the first thing to them, the
-same gesture into the same inbox, and everything else lo was told is read here and
-answered on the phone.
+The things behind these pages that answer back are the three that are somebody's:
+a letter, a person, and a post. lo's own row opens a post *and its replies*, and
+so does this one — the column of remarks comes up under the words, in the same
+name-colon-sentence every other message here is written in, oldest first because
+the post is already at the top and everything under it came after it. Only for a
+post that has been answered: the count rides in on the post itself, so a post
+nobody has replied to costs no request at all.
+
+These three are the exception because what they want back is one sentence said to
+somebody, which is the whole of what a hold on the temple already records — so a
+hold on a letter answers it, a hold on somebody's page says the first thing to
+them, and a hold on a post leaves a remark under it. The newswire's rows are links
+out to somebody else's article and have nothing to answer. What is still on the
+phone is everything with a keyboard or a camera behind it: a post's picture, and
+editing any of it afterwards.
 
 - **Scroll up/down** — the next page, group, entry or screenful, or the previous
   one.
@@ -187,8 +215,8 @@ answered on the phone.
   from, and it is the standard Even exit confirmation it has always been.
 - **Press and hold** — record from the glasses microphone. Release to stop, and
   what you said comes back as words on the screen with a question under it:
-  **mark** or **post**? — or, where you had a letter or one person's page open
-  when you started talking, whether that goes to them.
+  **mark** or **post**? — or, where you had a letter, one person's page or one
+  post open when you started talking, whether that goes to them.
 - **Scroll**, while that question is up — the other answer, where there are two.
 - **Single tap**, while that question is up — send it as the answer you are on.
 - **Double tap**, while that question is up — throw it away.
@@ -224,58 +252,69 @@ which, and there is no unsaying something to a street — so the glasses ask, an
 the wheel opens on the mark, which is the answer that can still be taken back by
 nobody having seen it.
 
-The third is a **reply**, and it is not on that wheel. What decides it is where
-you were standing when you started talking rather than anything in the words: hold
-while a letter is open and the sentence is an answer to that letter, hold anywhere
-else and it is about the ground under you. A wheel that could turn a letter meant
-for one person into a line left in the street would be one flick away from a
-mistake nobody should be able to make by rolling a thumb, and the address is the
-one thing here the reader has already stated — by opening that letter and not
-another.
+The other two are **answers to something**, and neither is on that wheel. What
+decides them is where you were standing when you started talking rather than
+anything in the words: hold while a letter or somebody's page is open and the
+sentence goes to them, hold while one post is open and it is a remark left in the
+column under that post, hold anywhere else and it is about the ground under you. A
+wheel that could turn a letter meant for one person into a line left in the street
+would be one flick away from a mistake nobody should be able to make by rolling a
+thumb, and the address is the one thing here the reader has already stated — by
+opening that letter, that name or that post and not another.
 
-So the reply screen asks the shorter question. There is nothing to choose, only
-whether it goes: the words as they were heard, the name of whoever is about to
-read them, a tap to send and two taps to drop it. It is asked at all because the
-words are a transcriber's rather than yours, and this is the one thing the glasses
-write that lands in somebody else's inbox with your name on it.
+So both of those screens ask the shorter question. There is nothing to choose, only
+whether it goes: the words as they were heard, who is about to read them, a tap to
+send and two taps to drop it. They are asked at all because the words are a
+transcriber's rather than yours, and these are the things the glasses write that
+land under somebody else's name — in their inbox, or in the column under something
+they left on the street. The last row is where the two differ: a letter names the
+person it is going to, and a remark names whose post it is going under and that
+everybody who comes past reads it.
 
 The words on those screens are the words the answer you are on would actually
-send: lo takes 48 characters as the name of a mark, 500 as the words of a post and
-1000 as the words of a letter, so a long sentence visibly loses its tail on the
-mark line and keeps it on the other two. Photos, replies to a *post*, and
-everything else with a keyboard or a camera behind it stay on the phone.
+send: lo takes 48 characters as the name of a mark, 300 as a remark under a post,
+500 as the words of a post and 1000 as the words of a letter, so a long sentence
+visibly loses its tail on the mark line and keeps it on the others. Photos, and
+everything else with a keyboard or a camera behind it, stay on the phone.
 
-The footer of that screen is the letter's own, where every other screen in the app
-has the place you are standing in there — a letter is not about a place. It says
-two things, in this order. While the rest of the exchange is on its way it says so:
-one line on a screen is a short correspondence and a long one that has not arrived
-yet, and without a word about it you would take the one line for the whole of it
-and leave. Once it is all there it says **hold to reply**, which is the verb this
-screen has and no other screen in the app does, and so the one verb nobody can be
-expected to find on their own. Where lo could not be reached it says that instead
-of either.
+The footer of those screens is the entry's own, where every other screen in the app
+has the place you are standing in there — a letter is not about a place, and a post
+carries its own. It says two things, in this order. While the rest of the exchange
+or the column is on its way it says so: one line on a screen is a short
+correspondence and a long one that has not arrived yet, and without a word about it
+you would take the one line for the whole of it and leave. Once it is all there it
+says **hold to reply**, which is the verb these screens have and no other screen in
+the app does, and so the one verb nobody can be expected to find on their own. Where
+lo could not be reached it says that instead of either. A post nobody has answered
+skips the first of the two and says the verb straight away — the count came in on
+the post, so there is nothing on its way to wait for.
 
-**A letter you stopped on has been read.** Three seconds on the screen that reads
-one and lo is told so — the dot goes out beside that name, here and on the phone,
-and whoever wrote it can see it arrived. There is no gesture for this and lo has
-never had one: a letter somebody has been shown is a letter they have seen, and a
-screen that asked you to confirm it afterwards would be asking you to file your own
-post. Three seconds rather than none because the wheel walks the letters a flick at
-a time and the screen changes with every flick — arriving on a letter is not
-reading one. It is only the screen that reads a letter whole, never the list: on a
-list you have chosen nothing yet.
+**Anything you stopped on has been read.** Three seconds on the screen that reads
+a letter and lo is told so — the dot goes out beside that name, here and on the
+phone, and whoever wrote it can see it arrived. The same three seconds on a post
+say the same thing about the column under it. There is no gesture for either and lo
+has never had one: something somebody has been shown is something they have seen,
+and a screen that asked you to confirm it afterwards would be asking you to file
+your own post. Three seconds rather than none because the wheel walks these a flick
+at a time and the screen changes with every flick — arriving on something is not
+reading it. It is only the screen that reads one whole, never the list: on a list
+you have chosen nothing yet.
 
-Those same three seconds are what fetch the exchange, because saying a letter has
-been read and asking for it are one request in lo and there is no wanting them
-apart. They are invisible all the same: what is on the screen until they are up is
-the last thing said, drawn exactly as the exchange will draw it, and the rest of
-the correspondence arrives *underneath* it. Nothing you are reading moves.
+Those same three seconds are what fetch the exchange, or the remarks, because
+saying a thing has been read and asking for it are one request in lo and there is
+no wanting them apart. They are invisible all the same: what is on the screen until
+they are up is the last thing said — or the post itself — drawn exactly as the rest
+will be drawn, and what arrives arrives *underneath* it. Nothing you are reading
+moves.
 
-This is the piece that had to wait for the reply. Marking a letter read from a
-screen that could not answer it would have cleared the badge on the phone for a
-letter you had been shown and could do nothing about — the reader would have gone
-home to an inbox that looked dealt with and was not. Now the same screen that says
-you read it is the screen you answer from, and the two halves are one gesture apart.
+This is the piece that had to wait for the reply. Marking anything read from a
+screen that could not answer it would have cleared the badge on the phone for
+something you had been shown and could do nothing about — the reader would have
+gone home to an inbox that looked dealt with and was not. Now the same screen that
+says you read it is the screen you answer from, and the two halves are one gesture
+apart. That is as true of a remark under your photo as of a letter, which is why
+the badge counts both: the dot means "somebody wrote", and which of the two it came
+from is the inbox's answer to give rather than the corner's.
 
 What a country cannot feed is a line or a group left off a page rather than a page
 left out: with three of them, a page that took itself off would move the other two

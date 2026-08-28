@@ -12,9 +12,10 @@ import { conditionPcm, transcribe } from "./utils/audio";
 import { sensorState, startSensors, subscribeSensors } from "./utils/sensors";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glassesui/glasses";
 import { PageRefused } from "./glassesui/paint";
-import { composeView, type Draft } from "./glassesui/pages/compose";
-import type { PageContext } from "./glassesui/pages/types";
-import { localeFor } from "./glassesui/format";
+import { composeView, type Answering, type Draft } from "./glassesui/pages/compose";
+import { threadRef } from "./glassesui/pages/nearby";
+import type { ItemRef, PageContext } from "./glassesui/pages/types";
+import { localeFor, postSays } from "./glassesui/format";
 import { translator } from "./glassesui/strings";
 import type { Coordinates, LoUser } from "./types";
 import { createWebUI, type WebUI } from "./webui/webui";
@@ -62,6 +63,11 @@ const LETTERS = "messages";
 // here whose entries are addressed to a person rather than to a place: opening
 // one is what fetches their profile, and a hold on one is a message to them.
 const PEOPLE = "people";
+// And what is on the ground here. Opening one of these fetches the column of
+// remarks under it, where lo has said there is one, and a hold on it leaves
+// another — the one write in this app that is addressed to a thing somebody left
+// rather than to a person or to a place.
+const POSTS = "posts";
 // How long one letter has to stay in front of the reader before lo is told they
 // have read it.
 //
@@ -159,10 +165,11 @@ async function main() {
   // letter that has been on screen for two and a half seconds already.
   let dwellTimer = 0;
   let dwellOn = "";
-  // Who the sentence now being recorded is an answer to, taken when the hold
-  // began. Empty for a hold that was not begun on a letter, which is every hold
-  // anywhere else in the app.
-  let replyTo = "";
+  // What the sentence now being recorded is an answer to, taken when the hold
+  // began: a letter or a person, which is somebody's inbox, or a post, which is
+  // the column under it. Null for a hold that was begun on none of those, which
+  // is every hold anywhere else in the app.
+  let replyTo: Answering | null = null;
 
   // What a sentence goes through between being said and being saved: heard, then
   // waited on while it is turned into words, then standing as a draft until the
@@ -204,6 +211,7 @@ async function main() {
       article: (link) => feeds.article(link),
       thread: (username) => feeds.thread(username),
       profile: (username) => feeds.profile(username),
+      comments: (postId) => feeds.comments(postId),
     };
   }
 
@@ -226,13 +234,17 @@ async function main() {
   //     same two depths, so a wheel walking a list of names asks lo about none of
   //     them.
   //
+  // What was said back about one post is not in that list, and it used to be: it
+  // turns out to be a read that files something, exactly as the exchange is, so it
+  // has moved behind the same clock (see `watchOpen`).
+  //
   // Called after every paint, every scroll and every step in or out; the feed
   // store decides whether any of them is actually a new question (see feeds.ts)
   // and does nothing when it is not.
   function ensureVisible(): void {
     // First, because this one is about a screen going away as much as about one
     // arriving, and a signed-out app has a clock to stop rather than nothing to do.
-    watchLetter();
+    watchOpen();
     if (!api.signedIn) return;
     if (display.current() === "nearby") feeds.inbox();
     const open = display.reading();
@@ -242,37 +254,57 @@ async function main() {
         kind: open.group === "events" ? "event" : "news",
       });
     }
-    // And the profile behind an open name. No clock in front of it, where the
-    // letter three lines up has three seconds: asking for an exchange is what
-    // tells lo it has been read, and asking for a profile tells lo nothing.
-    const person = display.opened();
-    if (person?.group === PEOPLE) feeds.meet(person.key);
+    // And the profile behind an open name. No clock in front of this one, where
+    // the two above `watchOpen` counts three seconds for: asking lo who somebody
+    // is files nothing, so there is nothing to be careful of in asking.
+    const entry = display.opened();
+    if (entry?.group === PEOPLE) feeds.meet(entry.key);
   }
 
   /**
-   * The clock that marks a letter read, started when one is opened and stopped
-   * when the reader moves off it. It is the only thing in this app that writes
-   * without being asked to, and the whole of what keeps that honest is the
-   * comparison below: the count belongs to a letter by name, so it survives every
-   * repaint of the screen it is on and does not survive a flick to the next one.
+   * What one open entry files, three seconds after it was opened — and nothing at
+   * all before that.
    *
-   * What counts as being on a letter is the reading screen and nothing above it.
-   * A list of correspondents is a list the wheel walks; opening one is the reader
-   * saying which, exactly as it is for a story (see feeds.read). And a composer
-   * standing in front of the screen answers `null` here, so a reader dictating a
-   * reply is not also being timed — the letter is behind the question they are
-   * looking at.
+   * These are the reads in lo that are also writes: asking for an exchange is what
+   * says the letter has been read, and asking for the remarks under a post is what
+   * says the column has. lo has a button for neither and wants none — something
+   * somebody has been shown is something they have seen — so the glasses say it the
+   * only way a screen with no spare gesture can, by the reader staying on it.
+   *
+   * It is the only thing in this app that writes without being asked to, and the
+   * whole of what keeps that honest is the comparison below: the count belongs to
+   * one entry by name, so it survives every repaint of the screen it is on and does
+   * not survive a flick to the next one. The name is the group and the key
+   * together, because a post read on the street and the same post read out of the
+   * inbox are two entries of two lists and only one of them is ever open.
+   *
+   * Three seconds, because arriving on something is not reading it. What counts as
+   * being on it is the reading screen and nothing above it: a list is a list the
+   * wheel walks, and opening one entry is the reader saying which, exactly as it is
+   * for a story (see feeds.read). A composer standing in front of the screen
+   * answers `null` here, so a reader dictating a reply is not also being timed —
+   * what they are answering is behind the question they are looking at.
    */
-  function watchLetter(): void {
+  function watchOpen(): void {
     const open = api.signedIn ? display.opened() : null;
-    const letter = open?.group === LETTERS ? open.key : "";
-    if (letter === dwellOn) return;
+    // Which of lo's two filings this entry is, and of what. A row of the inbox says
+    // in its own key which kind it is, because that list holds both (see `threadRef`
+    // in pages/nearby.ts); a post on the street is only ever the one.
+    const files =
+      open?.group === LETTERS
+        ? threadRef(open.key)
+        : open?.group === POSTS
+          ? ({ kind: "post", name: open.key } as const)
+          : null;
+    const on = files && open ? `${open.group}/${open.key}` : "";
+    if (on === dwellOn) return;
     window.clearTimeout(dwellTimer);
-    dwellOn = letter;
-    dwellTimer = letter
+    dwellOn = on;
+    dwellTimer = files
       ? window.setTimeout(() => {
           dwellTimer = 0;
-          feeds.seen(letter);
+          if (files.kind === "post") feeds.discuss(files.name);
+          else feeds.seen(files.name);
         }, READ_DWELL_MS)
       : 0;
   }
@@ -495,14 +527,15 @@ async function main() {
   /**
    * The wheel, while the composer has it: the other of the two answers.
    *
-   * A reply has no other answer. The sentence was said into one letter and there
-   * is nothing on that screen to choose between, so the wheel does nothing rather
-   * than being given something to do — the alternative would be offering to turn a
-   * letter meant for one person into a line left in the street, which is not a
-   * mistake a flick of the wheel should be able to make.
+   * An answer to something has no other answer. The sentence was said into one
+   * letter, or under one post, and there is nothing on either screen to choose
+   * between — so the wheel does nothing rather than being given something to do.
+   * The alternative would be offering to turn a letter meant for one person into a
+   * line left in the street, which is not a mistake a flick of the wheel should be
+   * able to make.
    */
   function chooseOther(): void {
-    if (!draft || draft.kind === "reply") return;
+    if (!draft || draft.kind === "reply" || draft.kind === "comment") return;
     draft = { ...draft, kind: draft.kind === "mark" ? "post" : "mark" };
     showDraft();
   }
@@ -567,11 +600,11 @@ async function main() {
     // asking. Bumping the ticket is what tells it so.
     dictation += 1;
     transcribing = false;
-    // And whoever the sentence was going to. `finishRecording` takes its own copy
+    // And whatever the sentence was going to. `finishRecording` takes its own copy
     // before it awaits anything, so clearing this cannot redirect a reply already
     // on its way to the screen — it is what stops the *next* hold inheriting the
     // last one's correspondent.
-    replyTo = "";
+    replyTo = null;
     if (draft) {
       draft = null;
       display.takeover(null);
@@ -619,6 +652,33 @@ async function main() {
         // did not find the answer in it would have every reason to think it never
         // went (see feeds.ts, which does the same for a post).
         feeds.replied(current.to);
+      } catch (error) {
+        console.error(error);
+        setStatus(t("reply.failed"), 2500);
+      }
+      return;
+    }
+
+    // A remark under somebody's post, which is the other thing addressed to a
+    // person rather than to a place — and the public one of the two. It carries no
+    // fix either, for a reason of its own: the post it goes under already says
+    // which ground this is about, and a second one taken from wherever the reader
+    // happened to be standing when they answered would be a different place
+    // claiming to be the same.
+    if (current.kind === "comment") {
+      setStatus(t("reply.sending"));
+      try {
+        await api.comment(current.post, current.text);
+        setStatus(t("reply.sent"), 2500);
+        // The column the reader is about to be put back on now ends with what they
+        // just said, and the post above it is carrying a count that is short by
+        // one — which is the count that decides whether the column is ever asked
+        // for at all. Both are re-asked rather than left to the next beat, for the
+        // reason a letter and a post are: a reader who answered something and did
+        // not find the answer under it would have every reason to think it never
+        // went.
+        feeds.commented(String(current.post));
+        if (coords) void feeds.wrote(coords, api.language);
       } catch (error) {
         console.error(error);
         setStatus(t("reply.failed"), 2500);
@@ -708,17 +768,54 @@ async function main() {
   }
 
   /**
-   * The microphone, opened. `answering` is the correspondent this sentence is a
-   * reply to, where the hold began on one letter read whole, and empty everywhere
-   * else — which is what decides, an entire dictation later, which of the two
-   * questions the reader is asked (see finishRecording).
+   * What a hold begun on one entry read whole is an answer to, where that entry is
+   * one that can be answered — and nothing anywhere else, which is every other
+   * screen in the app.
+   *
+   * A letter and a person come to the same thing, and deliberately: saying
+   * something to somebody who has not written yet and answering somebody who has
+   * are one act, one endpoint and one screen.
+   *
+   * A post is the other, and it is filed against the post rather than against
+   * anybody — so what it has to go and look up is not a person but what there is to
+   * call the post, for the screen that shows the sentence before it goes. There are
+   * two places to look, because there are two screens a post is read on: the street,
+   * where the whole post is in hand, and the inbox, where the row carries the post's
+   * words and where it was left. A post reached from the inbox is not necessarily
+   * anywhere near the reader, which is why the street is not the only place asked.
+   */
+  function addressee(open: ItemRef | null): Answering | null {
+    if (open?.group === PEOPLE) return { kind: "reply", to: open.key };
+
+    if (open?.group === LETTERS) {
+      const row = threadRef(open.key);
+      if (!row) return null;
+      if (row.kind === "person") return { kind: "reply", to: row.name };
+      const thread = (feeds.messages.data ?? []).find(
+        (each) => each.kind === "post" && String(each.postId) === row.name,
+      );
+      return thread?.kind === "post"
+        ? { kind: "comment", post: thread.postId, about: thread.post || thread.place || "" }
+        : null;
+    }
+
+    if (open?.group !== POSTS) return null;
+    const post = (feeds.posts.data ?? []).find((each) => String(each.id) === open.key);
+    return post ? { kind: "comment", post: post.id, about: postSays(post) } : null;
+  }
+
+  /**
+   * The microphone, opened. `answering` is what this sentence is a reply to, where
+   * the hold began on one letter, one person or one post read whole, and null
+   * everywhere else — which is what decides, an entire dictation later, which of
+   * the two questions the reader is asked (see finishRecording).
    *
    * It is settled here rather than when the recording ends because the wheel still
    * works while the microphone is open: a reader who says something into a letter
    * and then rolls on to the next one meant the first, and asking again at the far
    * end would send it to whoever they had drifted onto.
    */
-  async function startRecording(answering = ""): Promise<void> {
+  async function startRecording(answering: Answering | null = null): Promise<void> {
     if (recording || !api.signedIn) {
       if (!api.signedIn) {
         ui.showLogin();
@@ -802,16 +899,17 @@ async function main() {
       return;
     }
 
-    // Who this is an answer to, if it is one. Read now, before anything is
+    // What this is an answer to, if it is one. Read now, before anything is
     // awaited, for the same reason the ticket below exists: a second hold can
     // arrive while this transcript is still coming back, and it writes its own
     // correspondent over this one.
     const answering = replyTo;
     // Taken now rather than when the reader answers: the fix belongs to the spot
     // they were standing on when they said it, not to wherever they had drifted to
-    // while deciding what it was. A reply is filed under a person and carries no
-    // fix at all, so the GPS is not woken for one — the high-accuracy read is the
-    // most expensive thing a hold does and a letter has no use for the answer.
+    // while deciding what it was. A reply is filed under a person and a remark
+    // under a post, and neither carries a fix at all, so the GPS is not woken for
+    // either — the high-accuracy read is the most expensive thing a hold does, and
+    // an answer to something has no use for the answer.
     const fixPromise = answering ? null : phoneLocation(true);
     const ticket = ++dictation;
     transcribing = true;
@@ -825,14 +923,14 @@ async function main() {
         setStatus(t("glasses.noSpeech"), 2200);
         return;
       }
-      // An answer to the letter that was open when the hold began. Shown back
-      // before it goes rather than sent on the release: these are words a
-      // transcriber heard rather than words the reader typed, and they are about
-      // to arrive in somebody else's inbox with the reader's name on them. Every
-      // other write up here is a note about a place; this is the one that is a
-      // letter to a person, and there is no unsending one.
+      // An answer to whatever was open when the hold began. Shown back before it
+      // goes rather than sent on the release: these are words a transcriber heard
+      // rather than words the reader typed, and they are about to arrive under
+      // somebody else's name — in their inbox, or in the column under something
+      // they left on the street. Every other write up here is a note about a place;
+      // these are the two addressed to a person, and there is no unsending either.
       if (answering) {
-        draft = { kind: "reply", text, to: answering };
+        draft = { ...answering, text };
         showDraft();
         return;
       }
@@ -976,11 +1074,16 @@ async function main() {
       // hold that arrived half a second after a tap would otherwise send the very
       // sentence it was replacing.
       //
-      // A reply says it again to the same person. The composer has the display, so
-      // there is no open letter to read the address off any more; the draft is
-      // carrying it, which is what makes it the thing to ask.
+      // An answer says it again to the same place. The composer has the display, so
+      // there is no open letter or post to read the address off any more; the draft
+      // is carrying it, which is what makes it the thing to ask.
       if (draft) {
-        const again = draft.kind === "reply" ? draft.to : "";
+        const again: Answering | null =
+          draft.kind === "reply"
+            ? { kind: "reply", to: draft.to }
+            : draft.kind === "comment"
+              ? { kind: "comment", post: draft.post, about: draft.about }
+              : null;
         discard();
         void startRecording(again);
         return;
@@ -990,19 +1093,19 @@ async function main() {
       disarmEnter();
       // What the sentence is going to be is settled here, by where the reader was
       // standing when they started talking rather than by anything in the words.
-      // On one letter read whole it is an answer to that letter, and on one person
-      // read whole it is a message to them — the same gesture, the same composer
-      // and the same endpoint, because saying something to somebody who has not
-      // written yet is not a different act from answering somebody who has.
+      // On one letter read whole it is an answer to that letter, on one person read
+      // whole it is a message to them, and on one post read whole it is a remark
+      // left in the column under it. The first two are the same gesture, the same
+      // composer and the same endpoint, because saying something to somebody who
+      // has not written yet is not a different act from answering somebody who has;
+      // the third is the same gesture and the same composer into lo's other column.
       // Anywhere else in the app it is about the ground under them and the composer
       // asks which of the two things it is (see pages/compose.ts).
       //
-      // Only on the letter or the person itself, and not on the list of either:
-      // the list is what the wheel walks, and a hold there would be a message
-      // addressed to whoever the reader happened to have rolled onto.
-      const open = display.opened();
-      const addressed = open?.group === LETTERS || open?.group === PEOPLE;
-      void startRecording(addressed ? open.key : "");
+      // Only on the letter, the person or the post itself, and never on the list of
+      // any of them: the list is what the wheel walks, and a hold there would be a
+      // sentence addressed to whatever the reader happened to have rolled onto.
+      void startRecording(addressee(display.opened()));
       return;
     }
 

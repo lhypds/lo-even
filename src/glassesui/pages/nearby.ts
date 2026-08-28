@@ -30,14 +30,18 @@
 // This page is a summary of four lists, and the four are behind it: a tap puts a
 // box round one of the groups, another opens it — the same rows with two lines
 // apiece and no summary to fit around — and a third opens whichever entry the
-// reader is on. What is still not here is anything that writes: the website's
-// rows open the post *and its replies*, and a reply needs a keyboard, so the
-// deepest this goes is reading and the answering stays on the phone.
+// reader is on. The website's row opens the post *and its replies*, and so does
+// this one now: the column comes up under the words, in the shape every message in
+// this app is written in.
 //
-// Two of those bottom screens are the exception, and they are the same exception:
-// a letter and a person are both addressed to somebody, and a hold on either of
-// them dictates a message that goes to them. That is the one verb down here, and
-// both screens say so in the same words in the same corner (see pages/person.ts).
+// Three of those bottom screens can be answered from, and they are the same
+// exception three times: a letter, a person and a post are all somebody's, and a
+// hold on any of them dictates a sentence that goes to them — into their inbox for
+// the first two, into the column under their post for the third. That is the one
+// verb down here, and all three screens say so in the same words in the same
+// corner (see pages/person.ts). What is still on the phone is everything with a
+// keyboard or a camera behind it: a post's picture, and editing any of it after
+// the fact.
 
 import {
   distanceMeters,
@@ -54,7 +58,7 @@ import { nothing } from "./list";
 import { personBody } from "./person";
 import { stack, type Group } from "./stack";
 import type { Translate } from "../strings";
-import type { LoMessage, LoThread } from "../../types";
+import type { LoMessage, LoPersonThread, LoPostThread, LoThread } from "../../types";
 import type { Item, PageContext, PageDefinition, PageView } from "./types";
 
 // How many names the line carries before it starts counting instead. Four is
@@ -140,7 +144,68 @@ function said(line: { body: string; mine: boolean }, them: string, t: Translate)
  * construction, and a column of relative times down a screen this narrow would
  * cost a fifth of every line to say what the order already says.
  */
-function exchange(thread: LoThread, { thread: read, t }: PageContext): string {
+/**
+ * Which row a row is, across the two kinds the inbox now holds.
+ *
+ * A letter is named by its correspondent and a column by its post, and neither
+ * name is unique against the other's — `@mari` and post 7 could both be `7` on a
+ * bad day, and a reader's place in a list is held by name rather than by number
+ * (see pages/list.ts). So each says which of the two it is, exactly as lo's own
+ * inbox keys its rows (see `rowKey` in lo/src/components/MessagesModal).
+ */
+function threadKey(thread: LoThread): string {
+  return thread.kind === "post" ? `${POST_ROW}${thread.postId}` : `${PERSON_ROW}${thread.username}`;
+}
+
+const POST_ROW = "post:";
+const PERSON_ROW = "person:";
+
+/**
+ * And the same key read back, for the two errands that have only the key: the
+ * clock that files a row as read, and the hold that answers it (see main.ts).
+ *
+ * Both of those are about the row in front of the reader and neither of them has
+ * the row — what the display keeps is a group and a key, by name rather than by
+ * position, because the list is rebuilt under the reader on every paint (see
+ * pages/list.ts). So the key has to carry which kind it is, and this is the other
+ * half of the pair that puts it there.
+ */
+export function threadRef(key: string): { kind: "person" | "post"; name: string } | null {
+  if (key.startsWith(POST_ROW)) return { kind: "post", name: key.slice(POST_ROW.length) };
+  if (key.startsWith(PERSON_ROW)) return { kind: "person", name: key.slice(PERSON_ROW.length) };
+  return null;
+}
+
+/**
+ * What there is to call a post, which is lo's own three answers in lo's own
+ * order: its words, else where it was left, else the plainest thing there is to
+ * call a post with neither.
+ *
+ * The same chain `postSays` walks for a post on the street, one link shorter: a
+ * row of the inbox carries no coordinates to fall back to, and would not want
+ * them if it did — a column is named by what it is under, and "35.6580°N" is not
+ * something a reader recognises a post by.
+ */
+function names(thread: LoPostThread, t: Translate): string {
+  return thread.post || thread.place || t("comments.aboutPost");
+}
+
+/**
+ * And the row's own heading: not who, but what it is about.
+ *
+ * This is the one line that makes a column readable as a column. Until it existed
+ * every row of this list was headed by a person, and a column headed by a person
+ * is headed by whoever happened to come past last — which names none of what the
+ * row is, and reads as a letter from somebody who never wrote one. lo's own
+ * wording, key for key (`messages.onPost`), quotation marks and all: the marks are
+ * what stop `On the cherry blossom is out` reading as a sentence the app is saying
+ * rather than one it is quoting.
+ */
+function about(thread: LoPostThread, t: Translate): string {
+  return t("messages.onPost", { post: names(thread, t) });
+}
+
+function exchange(thread: LoPersonThread, { thread: read, t }: PageContext): string {
   const history = read(thread.username).data;
   // Newest first out of an answer that arrives oldest first, and a one-line stand-in
   // built out of the inbox's own row where nothing has arrived yet.
@@ -184,10 +249,79 @@ function exchange(thread: LoThread, { thread: read, t }: PageContext): string {
  * that went on promising the rest of an exchange that is not coming would be worse
  * than one that says the line it did show is all there is for now.
  */
-function letterFoot(thread: LoThread, { thread: read, t }: PageContext): string {
+function letterFoot(thread: LoPersonThread, { thread: read, t }: PageContext): string {
   const { status } = read(thread.username);
   if (status === "failed") return t("glasses.offline");
   return status === "ready" ? t("messages.reply") : t("messages.reading");
+}
+
+/**
+ * What was said back about one post, written out under it — which is what the
+ * website's own row opens into, and which used to be the one thing on that row
+ * the glasses had no answer for.
+ *
+ * **Oldest first, where the exchange above is newest first.** That is not an
+ * inconsistency between two lists of the same kind; they are lists of different
+ * kinds. A letter is the whole of its screen and the line the reader came for is
+ * the last one said, so the wheel has to start there. A post is the thing the
+ * reader came for and it is already at the top, in the heading and the first
+ * paragraph — everything under it is what came after it, and what came after it
+ * reads in the order it was said. It is also the order lo draws this column in, for
+ * lo's own reason: every other list on lo answers "what has been happening" and
+ * this one answers "what was said".
+ *
+ * Each remark is a name, a colon and the sentence, which is how every message in
+ * this app is written (see `said`). The reader's own says `You`, worked out from
+ * the name rather than taken off the answer: lo's own column has a face beside
+ * each line and needs no such field, and up here there is neither a face nor a
+ * side of the screen to put one on.
+ *
+ * `words` is what the post itself says rather than the post, because the two
+ * screens that come here have two different amounts of it. One is standing on the
+ * street with the whole post in hand; the other is in the inbox, where lo hands
+ * over the post's words and where it was left and nothing else. Both name it the
+ * same way, so a post read from either screen reads the same.
+ */
+function column(postId: number, words: string, { comments, username, t }: PageContext): string {
+  // Nothing to draw and nothing on its way. Both the ordinary case — most posts
+  // have no column at all — and the moment before the answer lands, which is a
+  // moment the footer is already accounting for: the words the reader stepped in
+  // for are on the screen either way, and lines appear under them rather than the
+  // screen rearranging itself.
+  const rows = comments(String(postId)).data ?? [];
+  if (rows.length === 0) return words;
+  // One paragraph each, laid end to end by the reading screen with no air between
+  // (see proseLines in layout.ts) — so the post is the block at the top and every
+  // line starting at the margin under it is somebody answering it.
+  return [
+    words,
+    ...rows.map((remark) =>
+      said(
+        { body: remark.body, mine: remark.username === username },
+        formatUsername(remark.username),
+        t,
+      ),
+    ),
+  ].join("\n");
+}
+
+/**
+ * And what the footer says while a post is open, which is the letter's two
+ * sentences again for the same two reasons (see `letterFoot`).
+ *
+ * **A post with nothing under it says the verb straight away**, which is what
+ * `empty` is for. The count comes in on a post on the street, so that screen can
+ * tell an empty column from one that has not arrived without asking anybody — and
+ * lo is never asked about a post nobody has answered (see feeds.ts). "Reading the
+ * replies" over a post that has none would be a screen waiting for an answer it
+ * already has. A column reached from the inbox is never empty: a thread with no
+ * lines in it is not in the inbox at all.
+ */
+function postFoot(postId: number, empty: boolean, { comments, t }: PageContext): string {
+  if (empty) return t("posts.reply");
+  const { status } = comments(String(postId));
+  if (status === "failed") return t("glasses.offline");
+  return status === "ready" ? t("posts.reply") : t("posts.reading");
 }
 
 /**
@@ -203,27 +337,59 @@ function nearbyItems(context: PageContext): Item[] {
   const { posts, people, events, messages, components, locale, profile, t } = context;
 
   const messageItems: Item[] = (messages.data ?? []).length
-    ? (messages.data ?? []).map((thread) => ({
-        group: "messages",
-        key: thread.username,
+    ? (messages.data ?? []).map((thread) => {
         // The disc is lo's own dot on the letter in its top bar: something in
-        // this exchange has not been read. It stays in front of the name here
+        // this row has not been read. It stays in front of the heading here
         // rather than moving to the margin, because the margin is gone — an
         // entry is one container and one brightness, and the bright one is the
         // one the reader is on (see layout.ts).
-        head: `${thread.unread > 0 ? "● " : ""}${joined(formatUsername(thread.username), relativeTime(thread.time, locale, t))}`,
-        // Who spoke last and what they said. The heading above already names the
-        // exchange, so this line names only the speaker — which is the one thing
-        // the heading cannot say, an exchange being two people.
-        line: said(thread, formatUsername(thread.username), t),
-        // The exchange, newest first — the one entry in this app whose reading
-        // screen is a list rather than a thing. `GET /api/messages` answers with
-        // one line per correspondent, which is what the row above shows; the rest
-        // of it arrives with the request that marks the letter read, and until it
-        // does this is that same one line (see `exchange`).
-        body: exchange(thread, context),
-        context: letterFoot(thread, context),
-      }))
+        const dot = thread.unread > 0 ? "● " : "";
+        const when = relativeTime(thread.time, locale, t);
+        const who = formatUsername(thread.username);
+        // Who spoke last and what they said, which is the same line on both kinds
+        // and says two different things because of what is over it. On a letter the
+        // heading already names the exchange, so this names only the speaker —
+        // which is the one thing the heading cannot say, an exchange being two
+        // people. On a column the heading names the post, so this is the only place
+        // any of the voices under it is named at all.
+        const last = said(thread, who, t);
+
+        // A column of remarks rather than a letter. Everything about the row
+        // changes with it, because it is a row about a thing rather than about a
+        // person: what heads it, what is behind it, and which of lo's two reads a
+        // press turns into.
+        if (thread.kind === "post") {
+          return {
+            group: "messages",
+            key: threadKey(thread),
+            // What it is about, not who wrote last. A column headed by a person
+            // would be headed by whoever happened to come past most recently, which
+            // names none of what the row is (see `about`).
+            head: `${dot}${joined(about(thread, t), when)}`,
+            line: last,
+            // The post, and the column under it — the same screen the post's own
+            // entry on the street opens into, so a post read from either place
+            // reads the same. The remarks arrive with the request that marks the
+            // column read, and until they do this is the post on its own.
+            body: column(thread.postId, names(thread, t), context),
+            context: postFoot(thread.postId, false, context),
+          };
+        }
+
+        return {
+          group: "messages",
+          key: threadKey(thread),
+          head: `${dot}${joined(who, when)}`,
+          line: last,
+          // The exchange, newest first — the one entry in this app whose reading
+          // screen is a list rather than a thing. `GET /api/messages` answers with
+          // one line per correspondent, which is what the row above shows; the rest
+          // of it arrives with the request that marks the letter read, and until it
+          // does this is that same one line (see `exchange`).
+          body: exchange(thread, context),
+          context: letterFoot(thread, context),
+        };
+      })
     : [nothing("messages", feedWord(messages, t, WORDS.messages))];
 
   const near = others(context);
@@ -275,7 +441,17 @@ function nearbyItems(context: PageContext): Item[] {
         // and the reader standing in it always wants.
         meta: post.place || undefined,
         line: postSays(post),
-        body: postSays(post),
+        // The post, and what was said back about it underneath — which is what
+        // lo's own row opens into, and which the summary above has no room for
+        // (see `column`). The remarks are fetched when the reader opens this one
+        // post, and only where lo has already said there are any.
+        body: column(post.id, postSays(post), context),
+        // The third screen in the app with a verb of its own, and the same
+        // gesture as the two above it: a hold here is a remark left under this
+        // post. It is the public one of the three — a letter lands in one inbox,
+        // and this lands in the street beside whatever it is answering — which is
+        // why the screen that shows it before it goes says who reads it.
+        context: postFoot(post.id, post.comments === 0, context),
       }))
     : [nothing("posts", feedWord(posts, t, WORDS.posts))];
 
@@ -311,9 +487,15 @@ export const nearbyPage: PageDefinition = {
         label: t("messages.title"),
         lines: (messages.data ?? []).map((thread) => {
           // The disc is the dot lo draws on the letter in its top bar: something
-          // in this exchange has not been read.
+          // in this row has not been read.
           const dot = thread.unread > 0 ? "● " : "";
           const who = formatUsername(thread.username);
+          // A column says what it is about and then who spoke, always both: the
+          // post is what the row is and the name is the one thing the post cannot
+          // say, a column having as many voices in it as came past. There is no
+          // short shape for it — `You: …` under no heading would be a remark about
+          // nothing, and this line is the whole of the summary's row.
+          if (thread.kind === "post") return dot + joined(about(thread, t), said(thread, who, t));
           // The name once where the correspondent is the one who spoke, and twice
           // over — as the exchange and again as the speaker — where they are not.
           // This line is the only place the summary says who a letter is with, so

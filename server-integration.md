@@ -147,12 +147,14 @@ has just left.
 | The place, its weather, its components, the newswire, what is on, the trends, the posts within reach and who else is about | `POST /api/dashboard?lang=` | Every new fix |
 | Warnings in force | `GET /api/warnings?lat&lon` | Every new fix |
 | Publish our fix, get everyone else's and the unread count | `PUT /api/position` | Every minute |
-| The inbox | `GET /api/messages` | While the second page or anything under it is up, at most once a minute |
+| The inbox — letters and comment columns in one list | `GET /api/messages` | While the second page or anything under it is up, at most once a minute |
 | One exchange, which marks it read | `GET /api/messages/:username` | Three seconds after the reader has opened one letter and stayed on it |
 | Who somebody is: bio, contacts, follow figures, last posts | `GET /api/users/:username` | When the reader opens one of the names on the street |
+| One column of remarks, which marks it read | `GET /api/posts/:postId/comments` | Three seconds after the reader has opened one post — on the street, where lo has said it has any, or out of the inbox |
 | Save a mark | `POST /api/marks?lang=` | On a hold, where the reader answered *mark*, with what was said as its `label` |
 | Leave a post | `POST /api/posts?lang=` | On the same hold, where they answered *post*, with what was said as its `body` |
 | Say something to a person | `POST /api/messages/:username` | On a hold begun while that letter — or that person's page — was open, with what was said as its `body` |
+| Answer a post | `POST /api/posts/:postId/comments` | On a hold begun while that post was open — from either screen — with what was said as its `body` |
 
 Every one of these is an endpoint the website already calls except two, and both
 of those lo added for a client like this: `POST /api/dashboard`, which is the
@@ -176,28 +178,53 @@ to see is a warning that was not issued — and Yahoo answers them per municipal
 so they are keyed two decimal places where the dashboard is keyed three. The inbox
 has nothing to do with where anybody is standing, so it is asked for only while the
 page that shows it is up, and at most once a minute. Reading `GET /api/messages`
-marks nothing read; only opening one conversation does that, which is why the
-glasses can list who is waiting without answering for the reader.
+marks nothing read; only opening one row does that, which is why the glasses can
+list what is waiting without answering for the reader.
 
 The cost is one round trip for feeds a given session might never read. The saving
 is a launch that reaches a full first screen after two reads instead of seven, and
 a scroll that costs nothing at all.
 
-**The read that is really a write.** `GET /api/messages/:username` answers with one
-exchange and marks it read on the way past, and there is no endpoint that does only
-the second half. None was added, because lo does not want one: it has never had a
-button for this on its own sheet either — a conversation somebody has been shown is
-one they have seen, and a sheet that made the reader press something afterwards
-would be asking them to file their own post.
+**Two kinds of row, one list.** `GET /api/messages` answers with lo's whole inbox,
+which is two tables merged: a letter addressed to the reader, and a column of
+remarks under a post that is theirs or that they have written under. They come down
+one list because they are one thing to whoever is reading them — somebody said
+something, and here is where to answer — and what tells them apart is `kind`.
 
-What decides it up here is three seconds. The glasses ask for the exchange once the
-reader has opened one letter and is still on it, which is the same claim the sheet
-makes by being open, made by the only means a screen with no scrollbar has. Not on
-arrival: the wheel walks a list of letters a flick at a time and the screen changes
-with every flick, so a letter passed through would otherwise be a letter marked
-read. Not from the list either — a reader walking a list of correspondents has
-opened none of them, which is the same rule that keeps a newswire row's story
-unfetched until it is tapped.
+What `kind` decides is where a press goes, so the glasses cannot ignore it: a
+person opens the exchange and a post opens its comment column, and a client that
+took every row for a letter would answer a `post` row by fetching a private
+conversation with whoever happened to comment last. It decides the heading too. A
+letter is headed by its correspondent, because that is the whole of what the
+exchange is about; a column is headed by the post — lo's own `messages.onPost`,
+`On “…”`, filled with the post's words, else where it was left, else
+`comments.aboutPost` — because a column has as many voices in it as came past and
+none of them is what the row is about. Both rows then say who spoke last and what
+they said, which on a column is the only place any of those voices is named at all.
+
+Because two rows can be named the same thing, each carries its kind in the key the
+display holds it by (`person:mari`, `post:12`). A reader's place in a list is held
+by name rather than by position, the list being rebuilt under them on every paint —
+so the name has to say which list it is a name in.
+
+**The reads that are really writes.** `GET /api/messages/:username` answers with one
+exchange and marks it read on the way past, and `GET /api/posts/:postId/comments`
+does the same for a column. There is no endpoint that does only the second half of
+either. None was added, because lo does not want one: it has never had a button for
+this on its own sheets either — something somebody has been shown is something they
+have seen, and a sheet that made the reader press something afterwards would be
+asking them to file their own post.
+
+What decides it up here is three seconds, for both. The glasses ask once the reader
+has opened one row and is still on it, which is the same claim the sheet makes by
+being open, made by the only means a screen with no scrollbar has. Not on arrival:
+the wheel walks a list a flick at a time and the screen changes with every flick,
+so something passed through would otherwise be something marked read. Not from the
+list either — a reader walking a list of rows has opened none of them, which is the
+same rule that keeps a newswire row's story unfetched until it is tapped. The
+column is behind that clock on both of the screens it is read from, the street's
+post as well as the inbox's row: the request is the same request and it files the
+same thing whichever screen asked.
 
 This is the piece that had to wait for the reply below. The earlier version of this
 file argued against marking anything read from up here, and the argument was right
@@ -274,7 +301,37 @@ and five minutes: a bio changes about never, and what moves underneath is the
 handful of recent posts. Profiles are kept per person and bounded at ten, the way
 exchanges and stories are.
 
-**The three writes, and why there is a question in front of each.** The glasses used
+**What was said back about a post.** `GET /api/posts/:postId/comments` is lo's own
+column under a post, and it is reached from two screens: the post on the street, and
+the row in the inbox that is about it. Both draw the same screen, so what the reader
+finds is the same either way — and both are behind the three seconds above, because
+asking for it is what files it as read.
+
+It is the cheapest of these reads on one of those two screens, because it is the
+only one that can know in advance whether there is an answer to be had: a post on
+the street arrives carrying the number of remarks under it, so a post nobody has
+replied to, which is most of them, costs no request at all and the screen behind it
+can say so without waiting. The guard is written as "this post, and lo said nothing
+is under it" rather than as "a post I can find" — a post the street has never heard
+of is one the inbox is asking about, and the inbox lists no column that is empty.
+
+The column is drawn oldest first, where the exchange above is drawn newest first,
+and the two are not inconsistent. A letter is the whole of its screen and the line
+the reader came for is the last one said, so the wheel has to start there; a post is
+the thing the reader came for and it is already at the top, in the heading and the
+first paragraph, and everything under it came after it. It is also the order lo
+draws this column in, for lo's own reason: every other list on lo answers "what has
+been happening" and this one answers "what was said".
+
+Each remark is written the way every message in this app is — a name, a colon and
+the sentence, `You:` for the reader's own. lo's rows carry no `mine` here, and want
+none: its column has a face beside each line, where this display has neither a face
+nor a side of the screen to put one on. So the side is worked out from the name
+against the signed-in account, which is the one piece of this the glasses decide for
+themselves. Columns are kept per post and bounded at ten, the way exchanges,
+profiles and stories are.
+
+**The four writes, and why there is a question in front of each.** The glasses used
 to write only marks: there were two gestures and both were the same verb — a tap
 saved the spot, a hold saved it with what you said about it. That was one thing too
 few. A sentence said out here is a mark when it is a note to yourself and a post
@@ -313,16 +370,36 @@ reader had rolled onto.
 So the reply gets its own screen with the shorter question on it: the words as they
 were heard, the name of whoever is about to read them, a tap to send and two taps
 to drop. It is confirmed rather than sent on the release because the words are a
-transcriber's and not the reader's, and this is the one write here that lands in
-somebody else's inbox with the reader's name on it. It is also the only write in
-the app with no fix in it — a letter is filed under a person, and where the writer
-was standing when they answered is nobody's business — so a hold begun on a letter
-does not wake the GPS at all, where every other hold ends in a high-accuracy read.
-The `body` is cut to lo's 1000 characters, which a minute of talking does not
-reach. Sending is followed by a re-read of the exchange and a dropped inbox key,
-for the reason a post is followed by a re-read of `GET /api/posts`: the reader is
-put straight back on the screen that lists what they just said, and one that did
-not have it on it would be a screen saying the letter never went.
+transcriber's and not the reader's, and this is the write here that lands in
+somebody else's inbox with the reader's name on it. It carries no fix — a letter is
+filed under a person, and where the writer was standing when they answered is
+nobody's business — so a hold begun on a letter does not wake the GPS at all, where
+a hold about the ground ends in a high-accuracy read. The `body` is cut to lo's 1000
+characters, which a minute of talking does not reach. Sending is followed by a
+re-read of the exchange and a dropped inbox key, for the reason a post is followed
+by a re-read of `GET /api/posts`: the reader is put straight back on the screen that
+lists what they just said, and one that did not have it on it would be a screen
+saying the letter never went.
+
+**The fourth is a remark under a post**, and it is not on that wheel either.
+`POST /api/posts/:postId/comments` is reached by holding while one post is open, and
+what decides it is the same thing that decides the message: the reader has already
+said which post by opening that one and not another. It is the public one of the two
+— a letter lands in one inbox and this lands in the street beside what it answers —
+which is why the screen that shows it before it goes names both whose post it is
+going under and that everybody who comes past will read it.
+
+It carries no fix either, and for a reason of its own: the post it goes under
+already says which ground this is about, and a second fix taken from wherever the
+reader happened to be standing when they answered would be a different place
+claiming to be the same one. The `body` is cut to lo's 300 characters, which is the
+one of the four cuts a spoken sentence actually reaches — about ninety seconds of
+ordinary English and a good deal less in the other two languages — so the preview
+earns its place here more than anywhere else. Sending is followed by a re-read of
+the column *and* of `GET /api/posts`: the post is carrying a count that is now short
+by one, and that count is what decides whether the column is ever asked for at all,
+so a remark under a post nobody had answered would otherwise leave a nought behind
+it and a screen saying the remark was never made.
 
 A post made here is followed by a re-read of `GET /api/posts` rather than left to
 the next minute: the page listing what is on this street is one flick away, and a
@@ -330,8 +407,7 @@ reader who scrolled to it and did not find what they had just said would have
 every reason to think it was never written.
 
 What still belongs on the phone is everything with a keyboard or a camera behind
-it — a post's picture, a reply to a *post* and its thread, and editing any of the
-three after the fact.
+it — a post's picture, and editing any of the four after the fact.
 
 `PUT /api/position` is doing double duty here exactly as it does on the website:
 it files where we are and answers with who else is about and how much is waiting to

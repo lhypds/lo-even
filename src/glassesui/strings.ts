@@ -19,17 +19,17 @@ const en: Dict = {
   "common.loading": "Loading.",
   "clock.title": "Time",
   "clock.offset": "UTC{{offset}}",
-  // The label on the row that holds all of them, and the words that name the days
-  // *inside* it. Three days on one line is what this row is now — the readings
-  // are two figures and a dash apiece, and three of those fit the column in every
-  // language with room over, where three rows of them would have been half the
+  // The label on the row that holds both of them, and the words that name the
+  // days *inside* it. Two days on one line is what this row is now — the readings
+  // are two figures and a dash apiece, and both of them fit the column with a
+  // condition after the second, where two rows of them would have been half the
   // screen — so "Today" is no longer a label with a line to itself but the first
   // word on the forecast's.
   //
-  // The first day after this one is a word rather than a weekday: "Tomorrow" is
-  // what a reader thinks, where "Sat" is something they have to work out. The
-  // ones after it are the short weekday, because by then the word would be "the
-  // day after tomorrow" and no language says that in the room left on a line.
+  // The day after this one is a word rather than a weekday: "Tomorrow" is what a
+  // reader thinks, where "Sat" is something they have to work out. There is no
+  // third day to name — the row stops at tomorrow, and it stops there whatever
+  // the weather is called (see skyRows in pages/here.ts).
   "weather.forecast": "Forecast",
   "weather.today": "Today",
   "weather.tomorrow": "Tomorrow",
@@ -73,6 +73,17 @@ const en: Dict = {
   // screenshot would settle it.
   "messages.said": "You: {{body}}",
   "messages.from": "{{name}}: {{body}}",
+  // What heads a row of the inbox that is a column of remarks rather than a
+  // letter. lo's own key and lo's own wording, quotation marks included: a column
+  // is filed under the post everybody in it is talking about, and a row headed by
+  // a person would be headed by whoever happened to come past last. The marks are
+  // what stop `On the cherry blossom is out` reading as a sentence the app is
+  // saying rather than one it is quoting.
+  "messages.onPost": "On “{{post}}”",
+  // And what a post with neither words nor a place is called, which is the last
+  // link of the chain that names one (see `names` in pages/nearby.ts). lo's key
+  // again, off the sheet this column is drawn in on the phone.
+  "comments.aboutPost": "This post",
   // The two things the footer of an open letter says, in the order it says them:
   // that the rest of the exchange is on its way, and then — once it is all there —
   // the verb this screen has that no other screen in the app does (see
@@ -83,6 +94,14 @@ const en: Dict = {
   // letter's above, because it is the same gesture, the same composer and the same
   // endpoint (see pages/person.ts).
   "people.message": "Hold to send a message.",
+  // And the same pair again for one post read whole, where what is on its way is
+  // the column of remarks under it rather than an exchange, and where the verb is
+  // the public one. Its own keys rather than the letter's because the two are not
+  // the same act in every language: English says "reply" to both, where Chinese
+  // has a word for answering a letter that is not the word for answering a remark
+  // somebody left in the street.
+  "posts.reading": "Reading the replies.",
+  "posts.reply": "Hold to reply.",
   // The two follow figures, and lo's own words for them. English is the only one
   // of these three languages with an opinion about a single follower, which is
   // why the singular is a key of its own and the other two dictionaries answer
@@ -152,6 +171,18 @@ const en: Dict = {
   "compose.replyTitle": "send this reply?",
   "compose.sendTo": "Send to",
   "compose.replyHint": "Tap to send · twice to drop.",
+  // And the third composer: a dictation said while one post was open, which is a
+  // remark left under it. `post` rather than `send` in the question, because that
+  // is what it is — a comment is not addressed to anybody, it is left in the column
+  // under something for whoever comes past to read, which is why the row naming its
+  // destination names a post and its audience rather than a recipient.
+  "compose.commentTitle": "post this reply?",
+  "compose.replyUnder": "Reply to",
+  // The post that row names, in quotation marks and nothing else — the marks
+  // being their own word of the dictionary for the reason the interpunct is:
+  // punctuation is part of a language, and two of these three quote with a
+  // different pair of characters (see `tally.join`).
+  "compose.quoted": "“{{post}}”",
   "reply.sending": "Sending.",
   "reply.sent": "Replied.",
   "reply.failed": "Could not send this.",
@@ -267,9 +298,13 @@ const ja: Dict = {
   "messages.empty": "未読のメッセージはありません。",
   "messages.said": "自分: {{body}}",
   "messages.from": "{{name}}: {{body}}",
+  "messages.onPost": "「{{post}}」について",
+  "comments.aboutPost": "この post",
   "messages.reading": "やり取りを読み込み中。",
   "messages.reply": "長押しで返信。",
   "people.message": "長押しでメッセージ。",
+  "posts.reading": "返信を読み込み中。",
+  "posts.reply": "長押しで返信。",
   "user.followers": "フォロワー {{n}}",
   "user.follower": "フォロワー {{n}}",
   "user.following": "フォロー中 {{n}}",
@@ -321,6 +356,9 @@ const ja: Dict = {
   "compose.replyTitle": "この返信を送る？",
   "compose.sendTo": "宛先",
   "compose.replyHint": "タップで送信 · 2回で破棄。",
+  "compose.commentTitle": "この返信を投稿する？",
+  "compose.replyUnder": "返信先",
+  "compose.quoted": "「{{post}}」",
   "reply.sending": "送信中。",
   "reply.sent": "返信しました。",
   "reply.failed": "送信できません。",
@@ -422,9 +460,13 @@ const zh: Dict = {
   "messages.empty": "没有未读消息。",
   "messages.said": "我: {{body}}",
   "messages.from": "{{name}}: {{body}}",
+  "messages.onPost": "关于“{{post}}”",
+  "comments.aboutPost": "这条 post",
   "messages.reading": "正在读取对话。",
   "messages.reply": "长按回信。",
   "people.message": "长按发消息。",
+  "posts.reading": "正在读取回复。",
+  "posts.reply": "长按回复。",
   "user.followers": "关注者 {{n}}",
   "user.follower": "关注者 {{n}}",
   "user.following": "关注中 {{n}}",
@@ -476,6 +518,9 @@ const zh: Dict = {
   "compose.replyTitle": "发送这条回复？",
   "compose.sendTo": "发送给",
   "compose.replyHint": "轻触发送 · 连按两次丢弃。",
+  "compose.commentTitle": "发布这条回复？",
+  "compose.replyUnder": "回复",
+  "compose.quoted": "“{{post}}”",
   "reply.sending": "发送中。",
   "reply.sent": "已回复。",
   "reply.failed": "无法发送。",

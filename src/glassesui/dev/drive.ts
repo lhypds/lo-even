@@ -75,10 +75,13 @@ function context(over: Partial<PageContext> = {}): PageContext {
     // exchange either, which is the state a letter's screen is met in for the
     // three seconds before the request that fetches it has been made, nor any
     // profile, which is the state a person's screen is met in for the moment
-    // before the same paint's request comes back.
+    // before the same paint's request comes back. The column under a post is the
+    // one of the four that is idle for good rather than briefly: every post above
+    // carries a count of nought, and lo is never asked about one of those.
     article: () => ({ status: "idle", data: null }),
     thread: () => ({ status: "idle", data: null }),
     profile: () => ({ status: "idle", data: null }),
+    comments: () => ({ status: "idle", data: null }),
     news: { status: "idle", data: null },
     events: { status: "idle", data: null },
     trends: { status: "idle", data: null },
@@ -233,15 +236,30 @@ function busy(over: Partial<PageContext> = {}): PageContext {
         time: new Date(Date.now() + (i + 1) * 86_400_000).toISOString(),
       })),
     },
+    // Both halves of lo's inbox, because they are one list: two letters and one
+    // column of remarks. The column comes last in the fixture and is walked to
+    // last, which is also where lo's own merge would put the oldest of the three.
     messages: {
       status: "ready",
-      data: Array.from({ length: 2 }, (_, i) => ({
-        username: `wrote${i}`,
-        body: `the last thing said ${i}`,
-        time: new Date(Date.now() - i * 3_600_000).toISOString(),
-        mine: false,
-        unread: i,
-      })),
+      data: [
+        ...Array.from({ length: 2 }, (_, i) => ({
+          username: `wrote${i}`,
+          body: `the last thing said ${i}`,
+          time: new Date(Date.now() - i * 3_600_000).toISOString(),
+          mine: false,
+          unread: i,
+        })),
+        {
+          kind: "post" as const,
+          postId: 9,
+          post: "a post somebody answered",
+          username: "near0",
+          body: "which one?",
+          time: new Date().toISOString(),
+          mine: false,
+          unread: 1,
+        },
+      ],
     },
     // One exchange fetched and one not, which is the pair of states the screen
     // behind a letter is met in — the whole correspondence once the three seconds
@@ -259,6 +277,27 @@ function busy(over: Partial<PageContext> = {}): PageContext {
               mine: i % 2 === 1,
               read: true,
             })),
+          }
+        : { status: "idle" as const, data: null },
+    // One post that has been answered and fifteen that have not, which is the
+    // shape of an ordinary street: the count comes in on the post itself and is
+    // what decides whether lo is asked for a column at all.
+    posts: {
+      status: "ready",
+      data: (context().posts.data ?? []).map((post, i) => (i === 0 ? { ...post, comments: 2 } : post)),
+    },
+    // And the column behind that one, which is the third of these read-and-never-
+    // request answers. Everything else comes back idle, which for a post is the
+    // state it stays in rather than passes through — nobody has answered it, so
+    // nobody asks.
+    comments: (postId: string) =>
+      postId === "0" || postId === "9"
+        ? {
+            status: "ready" as const,
+            data: [
+              { id: 1, body: "which one?", time: new Date(Date.now() - 120_000).toISOString(), username: "near0" },
+              { id: 2, body: "behind the station", time: new Date(Date.now() - 60_000).toISOString(), username: "heyang" },
+            ],
           }
         : { status: "idle" as const, data: null },
     // And one profile fetched and one not, which is the same pair of states for
@@ -557,7 +596,7 @@ display.enter();
 await settle();
 check(
   "the letter is named once it is open",
-  display.opened()?.group === "messages" && display.opened()?.key === "wrote0",
+  display.opened()?.group === "messages" && display.opened()?.key === "person:wrote0",
   `${display.path()} → ${display.opened()?.key ?? "null"}`,
 );
 
@@ -565,7 +604,11 @@ check(
 // letters, so reading a long correspondence to its end is not a dozen letters
 // being marked read on the way past.
 await roll(4);
-check("the wheel inside a letter stays on it", display.opened()?.key === "wrote0", String(display.opened()?.key));
+check(
+  "the wheel inside a letter stays on it",
+  display.opened()?.key === "person:wrote0",
+  String(display.opened()?.key),
+);
 
 // A composer standing in front of the screen answers nothing, which is what stops
 // a reader dictating a reply from also being timed as reading the letter behind
@@ -577,7 +620,11 @@ check("a composer in front of it hides the letter", display.opened() === null, S
 
 display.takeover(null);
 await settle();
-check("and putting it away brings the letter back", display.opened()?.key === "wrote0", String(display.opened()?.key));
+check(
+  "and putting it away brings the letter back",
+  display.opened()?.key === "person:wrote0",
+  String(display.opened()?.key),
+);
 
 display.back();
 await settle();
@@ -591,8 +638,41 @@ display.enter();
 await settle();
 check(
   "the next letter is named when that one is opened",
-  display.opened()?.key === "wrote1",
+  display.opened()?.key === "person:wrote1",
   String(display.opened()?.key),
+);
+
+// And the row after the letters is a column of remarks, which is the other half
+// of this list. It has to be told apart from a letter by its key alone: what a
+// press files is a different request for each of them, and what a hold writes is
+// a different endpoint (see `watchOpen` and `addressee` in main.ts).
+display.back();
+await settle();
+display.scroll(1);
+await settle();
+display.enter();
+await settle();
+check(
+  "a column of remarks is named as a post, not as whoever spoke last",
+  display.opened()?.key === "post:9",
+  String(display.opened()?.key),
+);
+
+// What the row says it is about, which is the whole of what makes it readable as
+// a column: headed by the post everybody in it is talking about rather than by
+// whoever came past most recently.
+const rows = nearbyPage?.items?.(busy()).filter((item) => item.group === "messages") ?? [];
+const onPost = rows.find((item) => item.key === "post:9");
+check(
+  "and it is headed by the post rather than by a person",
+  onPost?.head === "● On “a post somebody answered” · just now",
+  onPost?.head ?? "(no such row)",
+);
+check(
+  "with the column under it and the verb in the corner",
+  onPost?.body === "a post somebody answered\n@near0: which one?\nYou: behind the station" &&
+    onPost?.context === "Hold to reply.",
+  `${onPost?.body.split("\n").join(" | ")} / ${onPost?.context ?? "(none)"}`,
 );
 while (display.back()) await settle();
 
@@ -641,6 +721,58 @@ while (display.back()) await settle();
 const nearest = nearbyPage?.items?.(busy()).find((item) => item.group === "people" && item.key === "near0");
 const drawn = (nearest?.body.match(/something left on the ground/g) ?? []).length;
 check("a profile carries five of their posts at most", drawn === 5, `${drawn} of 8 drawn`);
+
+// --- and the post in front of the reader ------------------------------------
+// The third group down here that can be answered, and the third time the same
+// question matters: which entry is open is what fetches the column of remarks
+// under it and what a hold leaves another one under. The two errands are safe in
+// the same place the other two are — a wheel walking sixteen posts must not be
+// asking lo about the column under each of them on the way past.
+while (display.back()) await settle();
+display.render(busy());
+await settle();
+while (display.current() !== "nearby") {
+  display.scroll(1);
+  await settle();
+}
+display.enter();
+await settle();
+while ((await opens()) !== "lo/nearby/posts") await roll(1);
+check("no post is open while the group is only picked out", display.opened() === null, String(display.opened()));
+
+display.enter();
+await settle();
+check("nor from the list of posts", display.opened() === null, `${display.path()} → ${display.opened()}`);
+
+display.enter();
+await settle();
+check(
+  "the post is named once it is open",
+  display.opened()?.group === "posts" && display.opened()?.key === "0",
+  `${display.path()} → ${display.opened()?.key ?? "null"}`,
+);
+while (display.back()) await settle();
+
+// What is behind an open post: its own words, and under them what was said back
+// about it, each remark a name and a colon and the sentence — the reader's own
+// side saying so in a word rather than in their handle, exactly as every other
+// message this app draws does.
+const answered = nearbyPage?.items?.(busy()).find((item) => item.group === "posts" && item.key === "0");
+check(
+  "an answered post carries its column under it",
+  answered?.body.split("\n").slice(1).join(" | ") === "@near0: which one? | You: behind the station",
+  answered?.body.split("\n").slice(1).join(" | ") || "(nothing under it)",
+);
+
+// And the footer, which is the one place the gesture that answers it is written
+// down. A post nobody has answered says the verb straight away: the count came in
+// on the post, so there is no column on its way to wait for.
+const quiet = nearbyPage?.items?.(busy()).find((item) => item.group === "posts" && item.key === "1");
+check(
+  "both post screens say how to answer them",
+  answered?.context === "Hold to reply." && quiet?.context === "Hold to reply.",
+  `${answered?.context ?? "(none)"} / ${quiet?.context ?? "(none)"}`,
+);
 
 // And the one check in this file about what must *not* be on a screen. A
 // person's fix to four decimal places is eleven metres of where somebody

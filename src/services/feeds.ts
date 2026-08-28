@@ -31,6 +31,13 @@
 //     it files nothing — and made for that one name rather than for everybody
 //     about, because a street the reader is walking past is four profiles a
 //     minute nobody asked for.
+//   • `GET /api/posts/:postId/comments` once the reader has stopped on one post
+//     for three seconds: what was said back about it, which is the other half of
+//     what a passer-by finds on the ground. It is behind the same clock as the
+//     exchange above and for the same reason — asking for a column is what tells lo
+//     it has been read — and it has one saving neither of them has: a post on the
+//     street arrives with the number of remarks on it, so a post nobody has
+//     answered is a read this never makes (see `discuss`).
 //
 // And two on the minute beat, neither of which asks lo to look anything up
 // elsewhere: `PUT /api/position`, which files where we are and takes back
@@ -49,6 +56,7 @@ import type {
   Coordinates,
   Language,
   LoArticle,
+  LoComment,
   LoDashboard,
   LoFeedItem,
   LoMessage,
@@ -129,6 +137,17 @@ const PROFILES_KEPT = 10;
 // minutes in front of one profile is a long way past what this screen is for.
 const PROFILE_MS = 5 * 60_000;
 
+// And how many columns of remarks. The same bound as the exchanges and the
+// profiles, for the third time and the same reason: this store grows with which
+// of the posts on a street the reader has opened rather than with the street.
+const COMMENTS_KEPT = 10;
+
+// A column under a post is re-asked on the same beat as the inbox and the posts
+// themselves, because it changes for the same reason all three of those do: a
+// person somewhere else typing. It is also the beat a reader's own remark comes
+// back on, where they left one and the key below has been dropped.
+const COMMENTS_MS = 60_000;
+
 /** The stretch of time an answer belongs to, which is the rest of every key. */
 function within(every: number): string {
   return String(Math.floor(Date.now() / every));
@@ -176,6 +195,10 @@ export class Feeds {
   // which of the names on a street they will open, and lo must not be asked about
   // the ones they do not.
   private profileSlots = new Map<string, Slot<LoPersonPage>>();
+  // One per post the reader has opened, keyed by its id as a string — which is
+  // how the entry on the list is keyed, so the two never have to be converted
+  // into one another anywhere but here (see pages/nearby.ts).
+  private commentSlots = new Map<string, Slot<LoComment[]>>();
   // One per story the reader has opened, keyed by the link that opened it.
   // A Map rather than a field because there is no telling in advance which of a
   // list they will read, and insertion order is what makes the cap above a
@@ -494,6 +517,99 @@ export class Feeds {
     );
   }
 
+  /**
+   * What was said back about one post, if it has been asked for. A pure read,
+   * like `article`, `thread` and `profile` above and for their common reason: the
+   * page behind a post is rebuilt on every paint, and drawing a list of them must
+   * not be the thing that asks lo about any of them.
+   */
+  comments(postId: string): Feed<LoComment[]> {
+    const found = this.commentSlots.get(postId);
+    return found ? view(found) : { status: "idle", data: null };
+  }
+
+  /**
+   * The reader has opened one post — either one on the street, or one of the
+   * columns waiting in the inbox. What was said back about it is the other half of
+   * what somebody coming past finds on the ground, and it is one read rather than
+   * part of the answer that listed the post: lo answers a column per post, and a
+   * street with twenty posts on it is twenty reads nobody asked for.
+   *
+   * **A post on the street with nothing under it costs nothing.** The count rides
+   * in on the post itself, which is the one thing that separates this from the
+   * three reads above: they have to ask before they know whether there is anything
+   * to have, and this has already been told. So the commonest post on lo — one
+   * nobody has answered — is opened without lo being asked anything at all, and the
+   * screen behind it says "hold to reply" straight away rather than waiting on an
+   * answer that would come back empty.
+   *
+   * A post the street has never heard of is one the *inbox* is asking about, and
+   * the inbox lists no column that is empty — a thread with no lines in it is not a
+   * thread yet (see `INVOLVED_POSTS` in lo/server/db.js). So the guard is written
+   * as "this post, and lo said nothing is under it" rather than as "a post I can
+   * find": not finding it is not the same as knowing there is nothing there.
+   */
+  discuss(postId: string): void {
+    const post = (this.posts.data ?? []).find((each) => String(each.id) === postId);
+    if (post && post.comments === 0) return;
+    this.readColumn(postId);
+  }
+
+  /**
+   * The reader has just said something under one. Two things are a version behind
+   * — the column, which is the screen they are looking at, and the post's own count
+   * of it, which is what decides whether that column is ever asked for at all.
+   *
+   * The first is re-asked here and the second by the posts being re-read, which is
+   * the caller's errand because it is the one that knows where we are standing
+   * (see `wrote`, which a post of one's own makes for the same reason). Both matter
+   * on the same walk: a remark under a post nobody had answered yet leaves a count
+   * of nought behind it, and a screen that went on saying nought would be a screen
+   * saying the remark was never made.
+   *
+   * The key goes first, which is what makes this a re-ask rather than a no-op: the
+   * minute the remark was made in has an answer already and that answer is now
+   * wrong by exactly one line. It goes round the count rather than through it, for
+   * the same reason — a post that had none is carrying a nought this very column is
+   * about to disprove, and `discuss` would take that nought at its word.
+   */
+  commented(postId: string): void {
+    const standing = this.commentSlots.get(postId);
+    if (standing) standing.key = "";
+    this.readColumn(postId);
+  }
+
+  /**
+   * The one read behind both of those, so that the question and the re-asking of
+   * it are the same question — and the one place the fact that this read is also a
+   * write is accounted for.
+   *
+   * **Asking for a column is what marks it read**, exactly as asking for an
+   * exchange is (see `seen`), so the same two things follow it. The recounted
+   * figure comes off the answer, already counted down by this reading, so the badge
+   * in the corner goes out as the words arrive rather than on the inbox's next
+   * beat. And the inbox's own key is dropped, because the disc beside this row is
+   * now wrong by one and the next paint should ask lo rather than have this client
+   * decide what lo would have said.
+   *
+   * Quietly: the post's own words are already on the screen and are what the reader
+   * stepped in for, so neither the minute beat nor a remark of their own may flip
+   * the column back to a word about itself underneath them.
+   */
+  private readColumn(postId: string): void {
+    void this.fill(
+      keyed(this.commentSlots, postId, COMMENTS_KEPT),
+      `${postId}:${within(COMMENTS_MS)}`,
+      async () => {
+        const answer = await this.api.comments(Number(postId));
+        this.unreadCount = answer.unread ?? this.unreadCount;
+        this.inboxSlot.key = "";
+        return answer.comments;
+      },
+      true,
+    );
+  }
+
   /** Signed out: nothing here belongs to whoever signs in next. */
   clear(): void {
     this.dashSlot = slot();
@@ -503,6 +619,7 @@ export class Feeds {
     this.peopleSlot = slot();
     this.threadSlots.clear();
     this.profileSlots.clear();
+    this.commentSlots.clear();
     this.articleSlots.clear();
     this.unreadCount = 0;
     this.changed();

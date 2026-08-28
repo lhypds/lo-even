@@ -7,12 +7,13 @@
 // put back somewhere else would have paid for the question twice.
 //
 // **Why there is a question at all.** A hold used to be one verb: record, and save
-// the spot with what was said as its name. There are three things a sentence
+// the spot with what was said as its name. There are four things a sentence
 // spoken up here can be, though, and the differences between them are not details
 // of filing — a mark is a name only its author will ever read, a post is a line
-// left on the ground for whoever comes past, and a reply is a letter to one named
-// person. Nothing about the words says which, and there is no unsaying any of the
-// two that other people see.
+// left on the ground for whoever comes past, a reply is a letter to one named
+// person, and a remark under somebody's post is that person's ground with the
+// reader's name written on it. Nothing about the words says which, and there is no
+// unsaying any of the three that other people see.
 //
 // **Two screens, because the hold is asked two different questions.** Where the
 // reader was standing when they held decides which:
@@ -20,15 +21,16 @@
 //   • Anywhere on the dashboard, the sentence is about the ground under them and
 //     the question is which of the two things it is. The wheel chooses, a tap
 //     keeps, two taps throw it away.
-//   • On one letter, read whole, the sentence is an answer to it and the only
-//     question left is whether to send it. There is nothing for the wheel to do
-//     and it does nothing; a tap sends, two taps throw it away.
+//   • On one thing read whole that can be answered — a letter, a person, a post —
+//     the sentence is an answer to it and the only question left is whether to
+//     send it. There is nothing for the wheel to do and it does nothing; a tap
+//     sends, two taps throw it away.
 //
 // The second screen exists because the reader asked for the sentence to be shown
 // back before it goes. A dictation is not a keyboard — the words on the screen are
-// what a transcriber heard rather than what the reader typed — and a letter to a
-// named person is the one write here that lands in somebody else's inbox with a
-// name on it.
+// what a transcriber heard rather than what the reader typed — and these are the
+// writes that land under somebody else's name: in their inbox, or in the column
+// under something they left on the street.
 //
 // **Why the drop is the harder gesture.** Everywhere else in this app a single tap
 // is the way out, because before there is a draft there is nothing standing that a
@@ -51,16 +53,20 @@
 // that said so would be teaching the reader the one thing they already know.
 //
 // **What the preview is for.** It shows the words as the chosen answer would
-// actually send them, which is not the same string three times: lo takes 48
-// characters as the name of a mark, 500 as the words of a post and 1000 as the
-// words of a letter, so a spoken sentence that arrives whole on the post line
-// arrives cut on the mark line. Showing the cut is the point. A reader who can see
-// which of the two keeps the sentence they said is choosing between the two things
-// on offer rather than between two words. A reply is never cut in practice — a
-// minute of talking is the most the microphone will take and it does not reach a
-// thousand characters — so what that screen shows is simply the whole of it.
+// actually send them, which is not the same string four times: lo takes 48
+// characters as the name of a mark, 300 as a remark under a post, 500 as the words
+// of a post and 1000 as the words of a letter, so a spoken sentence that arrives
+// whole on the post line arrives cut on the mark line. Showing the cut is the
+// point. A reader who can see which of the two keeps the sentence they said is
+// choosing between the two things on offer rather than between two words. A reply
+// is never cut in practice — a minute of talking is the most the microphone will
+// take and it does not reach a thousand characters — so what that screen shows is
+// simply the whole of it. A remark can be: three hundred is about ninety seconds
+// of ordinary speech in English and a good deal less in the other two, and a
+// reader whose last sentence is not going to arrive should be able to see that
+// before they tap rather than afterwards on the phone.
 
-import { markLabel, messageBody, postBody } from "../../services/api";
+import { commentBody, markLabel, messageBody, postBody } from "../../services/api";
 import { formatUsername } from "../format";
 import { READING_VALUES } from "../theme";
 import { wrap } from "../metrics";
@@ -68,18 +74,55 @@ import type { Translate } from "../strings";
 import type { Coordinates } from "../../types";
 import type { PageView, ReadingRow } from "./types";
 
-/** The three things a dictation can turn into, which is the whole of the question. */
-export type DraftKind = "mark" | "post" | "reply";
+/** The four things a dictation can turn into, which is the whole of the question. */
+export type DraftKind = "mark" | "post" | "reply" | "comment";
+
+/**
+ * What a sentence is an answer *to*, where it is an answer to something rather
+ * than about the ground.
+ *
+ * Taken when the hold began rather than when it ended, and this is the shape that
+ * carries it from one end of a dictation to the other. The screen the reader was
+ * on when they started talking is what they meant, and the wheel keeps working
+ * while the microphone is open — so a reader who says something into a letter and
+ * then rolls on to the next one would otherwise have it sent to whoever they had
+ * drifted onto (see main.ts).
+ */
+export type Answering =
+  | {
+      kind: "reply";
+      /** Whose inbox it lands in, which is the letter or the person that was open. */
+      to: string;
+    }
+  | {
+      kind: "comment";
+      /** Which post it goes under, by the id lo files it against. */
+      post: number;
+      /**
+       * And what there is to call that post — its own words, or where it was left,
+       * or nothing where the screen it came from had neither.
+       *
+       * Not a person, which is what this used to be. A comment is filed under a
+       * post rather than addressed to anybody, and the post is the one thing every
+       * screen a hold can begin on knows: the street has the post in hand and the
+       * inbox row carries its words, where neither of them is told who wrote it
+       * (see `selectPostThreads` in lo/server/db.js). Naming the post is also the
+       * truer answer — it is what the remark will appear under, and it is how lo
+       * itself heads the column.
+       */
+      about: string;
+    };
 
 /**
  * A sentence that has been said and not yet been sent anywhere.
  *
- * A union rather than one shape with optional halves, because the two kinds of
- * draft are answerable to different facts and neither can stand in for the other:
- * a mark and a post are filed at a spot on the ground and a reply is filed under
- * a person. There is no fix on a reply at all — where the reader was standing when
- * they answered a letter is nobody's business — and asking for one would have been
- * a GPS read spent on a field no endpoint takes.
+ * A union rather than one shape with optional halves, because the kinds of draft
+ * are answerable to different facts and none can stand in for another: a mark and
+ * a post are filed at a spot on the ground, a reply under a person, a comment
+ * under a post. There is no fix on either of the last two — where the reader was
+ * standing when they answered something is nobody's business, and the post they
+ * answered already says where the ground is — and asking for one would have been a
+ * GPS read spent on a field no endpoint takes.
  */
 export type Draft =
   | {
@@ -94,17 +137,7 @@ export type Draft =
        */
       coords: Coordinates;
     }
-  | {
-      kind: "reply";
-      text: string;
-      /**
-       * Who it is to, taken when the hold began rather than when it ended. The
-       * letter on the screen at the moment the reader started talking is the one
-       * they are answering, and the wheel can carry them off it while the
-       * microphone is still open.
-       */
-      to: string;
-    };
+  | ({ text: string } & Answering);
 
 // How much of the sentence is shown on the screen with two answers on it. Three
 // of the seven lines: one goes to the air above the answers, two to the answers
@@ -121,6 +154,7 @@ const REPLY_LINES = 4;
 /** What the answer would actually send, which is the transcript cut where lo cuts it. */
 function kept(draft: Draft): string {
   if (draft.kind === "reply") return messageBody(draft.text);
+  if (draft.kind === "comment") return commentBody(draft.text);
   return draft.kind === "mark" ? markLabel(draft.text) : postBody(draft.text);
 }
 
@@ -166,21 +200,57 @@ function answer(draft: Draft, kind: "mark" | "post", t: Translate): ReadingRow {
 
 /** What the reader is being asked, as one screenful. */
 export function composeView(draft: Draft, t: Translate): PageView {
-  // A reply asks the shorter question, and asks it in the same furniture: the
-  // words that were heard, air, and then who is going to read them. What the last
-  // row does not carry is a disc. The disc means "the one the wheel is on", and
-  // there is nothing here for the wheel to be on — a lone filled one would be a
-  // radio button with a single choice, which is a control describing itself
-  // wrongly rather than a control saying nothing.
-  if (draft.kind === "reply") {
+  // The two answers that are answers to something ask the shorter question, and
+  // ask it in the same furniture: the words that were heard, air, and then who is
+  // going to read them. What the last row does not carry is a disc. The disc means
+  // "the one the wheel is on", and there is nothing here for the wheel to be on —
+  // a lone filled one would be a radio button with a single choice, which is a
+  // control describing itself wrongly rather than a control saying nothing.
+  //
+  // The last row is where the two differ, and it is the only place they can: a
+  // letter has an addressee and a remark under a post has not. So one names the
+  // person it lands with, and the other names the post it is going under — in lo's
+  // own words for exactly that, quotation marks and all (`messages.onPost`), which
+  // is how lo heads the same column on the phone.
+  //
+  // Nothing about the audience on either. The letter's is in the name and the
+  // remark's is in the verb: this screen asks whether to *post* a reply where the
+  // other asks whether to send one, and a line spelling out "everyone here" would
+  // be a second answer to a question the heading has already answered — and a
+  // wrong one for a post read out of the inbox, which need not be anywhere near
+  // the reader at all.
+  if (draft.kind === "reply" || draft.kind === "comment") {
     const rows = heard(draft, t, REPLY_LINES);
     rows.push({ label: "", value: "" });
-    rows.push({ label: t("compose.sendTo"), value: formatUsername(draft.to) });
+    rows.push(
+      draft.kind === "reply"
+        ? { label: t("compose.sendTo"), value: formatUsername(draft.to) }
+        : {
+            label: t("compose.replyUnder"),
+            // The post in quotation marks and nothing else. The row already says
+            // what is being done with it, so `messages.onPost` — which is the same
+            // name with `On` in front of it, and is right at the head of a row in a
+            // list of mixed kinds — would read here as `Reply to On “…”`.
+            //
+            // The marks stay, and they are their own word of the dictionary for the
+            // reason the interpunct is: punctuation is part of a language, and two
+            // of these three languages quote with a different pair of characters
+            // (see `tally.join`). Without them a post beginning with a verb reads as
+            // a sentence this screen is saying rather than one it is quoting.
+            //
+            // A post with neither words nor a place to its name still has to be
+            // called something, and lo has the word for that too.
+            value: t("compose.quoted", { post: draft.about || t("comments.aboutPost") }),
+          },
+    );
     return {
       // The question, in full, because it is the whole of what this screen is for:
       // the reader asked to be shown a dictation before it went to somebody.
-      title: t("compose.replyTitle"),
+      title: t(draft.kind === "reply" ? "compose.replyTitle" : "compose.commentTitle"),
       block: { kind: "readings", rows },
+      // The same two gestures on both, because they are the same two gestures:
+      // there is nothing to choose between and the only question left is whether
+      // it goes.
       context: t("compose.replyHint"),
     };
   }

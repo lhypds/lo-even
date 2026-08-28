@@ -64,10 +64,12 @@ const ctx: PageContext = {
     elevation: 38,
     current: { temperature: 23.4, apparent: 24.1, humidity: 61, weatherCode: 2, windSpeed: 12.3, isDay: true },
     today: { date: "2026-08-28", weatherCode: 2, tempMax: 27.8, tempMin: 19.2, sunrise: "2026-08-28T05:12", sunset: "2026-08-28T18:20" },
-    // The two days lo hands over with every forecast, which the standing page
-    // writes into whatever lines the rest of it did not want. The sunrise on the
-    // first of them is what the light reading counts to after dark, so it has to
-    // be here for the evening half of that line to be checkable at all.
+    // The two days lo hands over with every forecast. Only the first of them is
+    // drawn — the forecast row is today, tomorrow and what tomorrow is doing (see
+    // skyRows) — and the second is here because lo sends it and a fixture that
+    // quietly trimmed the answer would be proving the wrong thing. The sunrise on
+    // the first is what the light reading counts to after dark, so it has to be
+    // here for the evening half of that line to be checkable at all.
     upcoming: [
       { date: "2026-08-29", weatherCode: 61, tempMax: 26.1, tempMin: 20.4, sunrise: "2026-08-29T05:13", sunset: "2026-08-29T18:19" },
       { date: "2026-08-30", weatherCode: 3, tempMax: 24.9, tempMin: 19.8, sunrise: "2026-08-30T05:14", sunset: "2026-08-30T18:17" },
@@ -85,7 +87,7 @@ const ctx: PageContext = {
       // characters, which is more than three screenfuls of this display. It is
       // the one thing on these pages that can overrun the screen it is read on,
       // so the proof sheet has to carry one (see the prose block in layout.ts).
-      { id: 6, time: new Date(Date.now() - 26 * 3600_000).toISOString(), latitude: 35.6400, longitude: 139.7400, body: "桜が咲いた。代々木公園の南門から入ってすぐの並木がいちばん早くて、もう七分咲きくらいになっている。朝のうちは人もまばらで、ベンチに座って十五分ほど眺めていた。屋台はまだ出ていないけれど、来週の週末には出るらしい。夜はライトアップもあるという話を近くの人に聞いた。花見の場所取りをするなら参道側より池のほうが空いているし、コンビニも駅の反対側まで行かずに済む。去年は満開の三日後に雨が降って一気に散ってしまったので、今年は早めに来てよかったと思う。", username: "yuki", comments: 1 },
+      { id: 6, time: new Date(Date.now() - 26 * 3600_000).toISOString(), latitude: 35.6400, longitude: 139.7400, body: "桜が咲いた。代々木公園の南門から入ってすぐの並木がいちばん早くて、もう七分咲きくらいになっている。朝のうちは人もまばらで、ベンチに座って十五分ほど眺めていた。屋台はまだ出ていないけれど、来週の週末には出るらしい。夜はライトアップもあるという話を近くの人に聞いた。花見の場所取りをするなら参道側より池のほうが空いているし、コンビニも駅の反対側まで行かずに済む。去年は満開の三日後に雨が降って一気に散ってしまったので、今年は早めに来てよかったと思う。", username: "yuki", comments: 2 },
     ],
   },
   people: {
@@ -165,6 +167,16 @@ const ctx: PageContext = {
       // as the speaker when they are not the same person, and a thread nobody is
       // waiting on never wears the disc (see pages/nearby.ts).
       { username: "tom", body: "Any time — the cat is the real draw", time: new Date(Date.now() - 5 * 3600_000).toISOString(), mine: true, unread: 0 },
+      // And the other half of lo's inbox: a column of remarks rather than a
+      // letter, which this list holds because the post is the reader's or because
+      // they have written under it. It is the row that has to be headed by what it
+      // is about — headed by a person it would be headed by whoever came past most
+      // recently, which names none of what the row is — so the sheet carries one to
+      // show that heading at the width it actually gets (see pages/nearby.ts).
+      //
+      // Post 6, which is the long one above: the same post the posts group reads
+      // whole further down, so the two screens can be read against each other.
+      { kind: "post" as const, postId: 6, post: "桜が咲いた。代々木公園の南門から入ってすぐの並木がいちばん早くて、もう七分咲きくらいになっている。", username: "mari", body: "南門は今日も混んでた？", time: new Date(Date.now() - 2 * 3600_000).toISOString(), mine: false, unread: 1 },
     ],
   },
   // One of the two exchanges has been opened and the other has not, which is the
@@ -216,6 +228,28 @@ const ctx: PageContext = {
               { id: 1, time: new Date(Date.now() - 14 * 86400_000).toISOString(), latitude: 35.6666, longitude: 139.6954, body: "the sixth post, which this screen never draws", username: "mari", comments: 0 },
             ],
           },
+        }
+      : { status: "idle" as const, data: null },
+  // And the same pair for the column under a post: one post opened and the rest
+  // not. It is the one of the three where the second state is where most posts
+  // stay rather than a moment they pass through — a post that nobody has answered
+  // says so on its own count, and lo is never asked about it (see feeds.ts).
+  //
+  // Oldest first, which is how lo answers and how this one is drawn: the post is
+  // the thing at the top of the screen and everything under it came after it, where
+  // an exchange has to be turned round (see `column` in pages/nearby.ts).
+  // The one answered is the long one, because that is the post this sheet reads:
+  // it draws the longest entry of each group, on purpose, being the only screen in
+  // the app that can run past its own bottom edge — and a column under a post that
+  // already overruns is exactly the case worth looking at.
+  comments: (postId: string) =>
+    postId === "6"
+      ? {
+          status: "ready" as const,
+          data: [
+            { id: 1, body: "南門は今日も混んでた？", time: new Date(Date.now() - 2 * 3600_000).toISOString(), username: "mari" },
+            { id: 2, body: "朝のうちなら空いてる。九時をすぎると場所取りが始まる", time: new Date(Date.now() - 3600_000).toISOString(), username: "heyang" },
+          ],
         }
       : { status: "idle" as const, data: null },
   unread: 2,
@@ -483,6 +517,18 @@ const DRAFTS: Draft[] = [
   // asked the shorter question: not which of two things this is, only whether it
   // goes. `mari` is the correspondent the inbox above is holding a letter from.
   { kind: "reply", text: SPOKEN, to: "mari" },
+  // And said under one open post, which is that same shorter question about the
+  // other of the two things a hold can answer. The last row is where they differ:
+  // a letter has somebody to be addressed to and this has not, so it names the post
+  // instead — the same words lo heads the column with on the phone. This is the
+  // post the sheet reads whole above, which is also the longest, so the row is
+  // drawn here at the width it actually has to survive.
+  {
+    kind: "comment",
+    text: SPOKEN,
+    post: 6,
+    about: ctx.posts.data?.find((post) => post.id === 6)?.body ?? "",
+  },
 ];
 for (const draft of DRAFTS) {
   const panels = layout(composeView(draft, t), 0, {

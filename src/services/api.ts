@@ -2,6 +2,7 @@ import type {
   Coordinates,
   Language,
   LoArticle,
+  LoComment,
   LoDashboard,
   LoMessage,
   LoPerson,
@@ -14,11 +15,13 @@ import type {
 
 const API_BASE = "https://lo.gcc3.com";
 
-// What lo will take as the name of a mark, as the words of a post and as the
-// words of a letter, character for character (see lo/server/index.js:
-// `POST /api/marks`, `POST /api/posts`, `POST /api/messages/:username`).
+// What lo will take as the name of a mark, as the words of a post, as a remark
+// under one and as the words of a letter, character for character (see
+// lo/server/index.js: `POST /api/marks`, `POST /api/posts`,
+// `POST /api/posts/:postId/comments`, `POST /api/messages/:username`).
 const MARK_LABEL_MAX = 48;
 const POST_BODY_MAX = 500;
+const COMMENT_BODY_MAX = 300;
 const MESSAGE_BODY_MAX = 1000;
 
 /**
@@ -38,6 +41,17 @@ export function markLabel(text: string): string {
 /** The same, for the words of a post — where lo's own limit is ten times as long. */
 export function postBody(text: string): string {
   return Array.from(text.trim()).slice(0, POST_BODY_MAX).join("").trim();
+}
+
+/**
+ * And for a remark under somebody's post, which lo gives less room than the post
+ * itself: a comment is read in a column under something else and has no ground of
+ * its own to be about, so lo takes 300 of it against the post's 500 (see the note
+ * over `COMMENT_BODY_MAX` in lo/server/index.js). A minute of talking can pass
+ * that, which is why the screen that shows one before it goes shows the cut.
+ */
+export function commentBody(text: string): string {
+  return Array.from(text.trim()).slice(0, COMMENT_BODY_MAX).join("").trim();
 }
 
 /**
@@ -308,6 +322,51 @@ export class LoApi {
     return this.request<{ posts: LoPost[] }>(
       `/api/posts?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
     );
+  }
+
+  /**
+   * What was said back about one post. Everyone's, like the post it hangs off:
+   * what a passer-by said about something left on the ground is part of what the
+   * next passer-by finds there.
+   *
+   * **And asking is what marks the column read**, exactly as asking for an
+   * exchange is and for lo's same reason: a column somebody has just been shown is
+   * one they have seen, and lo has no button anywhere for saying so. So this is the
+   * second read in this file that is really a write, it goes behind the same
+   * three-second clock the exchange does, and the recounted `unread` comes back
+   * with it — the badge in the corner counts remarks as well as letters, because
+   * the dot means "somebody wrote" and that is as true of a line under your photo
+   * as of one addressed to you (see countUnread in lo/server/db.js).
+   *
+   * Asked for when the reader opens that one post and never while they are
+   * walking the list, which is the same rule the story and the profile above
+   * keep. A post on the street carries the count of these on it, so the glasses
+   * know without asking whether there is a column there at all — and a post with
+   * none is one read this never costs (see feeds.ts).
+   */
+  comments(postId: number) {
+    return this.request<{ comments: LoComment[]; unread: number }>(`/api/posts/${postId}/comments`);
+  }
+
+  /**
+   * A remark under somebody's post, said rather than typed — the third thing a
+   * hold can turn into, and the second of the two that other people read.
+   *
+   * lo's own is a line in the sheet the post opens into, with a keyboard under it;
+   * this is the same endpoint reached from a screen that has neither, so the words
+   * are a dictation and the posting is a tap. Under anybody's post including your
+   * own, which is lo's rule rather than this client's: a writer answering the
+   * people who came past is the ordinary shape of one of these columns.
+   *
+   * Like a letter and unlike a post, it carries no fix: a comment is filed under
+   * the post it is about, and where the reader was standing when they said it is
+   * nobody's business — the post already says where the ground is.
+   */
+  comment(postId: number, body: string) {
+    return this.request<{ comment: LoComment; comments: number }>(`/api/posts/${postId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body: commentBody(body) }),
+    });
   }
 
   /**

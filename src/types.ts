@@ -165,6 +165,25 @@ export interface LoPost {
   comments: number;
 }
 
+/**
+ * One thing said back about a post — lo's own column under a post, in the shape
+ * lo answers it in (see `COMMENT_COLUMNS` in lo/server/db.js).
+ *
+ * There is no `mine` on it, where a line of an exchange has one. lo does not
+ * need to say: a comment is read in a column of names under something everybody
+ * can see, where a message is read in a sheet with two sides to it. Up here the
+ * side matters again — every message this app draws is a name, a colon and the
+ * sentence, and the reader's own side says `You` — so it is worked out from the
+ * name against the signed-in account rather than taken off the answer.
+ */
+export interface LoComment {
+  id: number;
+  body: string;
+  time: string;
+  username: string;
+  avatar?: string | null;
+}
+
 export interface LoPerson {
   username: string;
   latitude: number;
@@ -240,18 +259,64 @@ export interface LoPersonPage {
 /* --------------------------------------------------------------- messages -- */
 
 /**
- * One correspondence, as the inbox lists it: who it is with, the last thing said
- * in it, and how much of it has not been read. `mine` is whose line that last one
- * was, which is the difference between a message waiting for an answer and one
- * that is the answer.
+ * What every row of the inbox carries whichever kind it is: the last thing said
+ * in it, when, and how much of it has not been read. `mine` is whose line that
+ * last one was, which is the difference between something waiting for an answer
+ * and something that is the answer.
  */
-export interface LoThread {
-  username: string;
+interface LoThreadRow {
   body: string;
   time: string;
   mine: boolean;
   unread: number;
+  /**
+   * Who said that last line. On a letter it is the correspondent — the exchange
+   * has two people in it and this is which of them spoke; on a column it is
+   * whoever came past most recently, which is nobody the row is *about*.
+   */
+  username: string;
 }
+
+/**
+ * One correspondence, as the inbox lists it: who it is with, and the row above.
+ */
+export interface LoPersonThread extends LoThreadRow {
+  kind?: "person";
+}
+
+/**
+ * One column of remarks, as the same inbox lists it — the other half of lo's own
+ * answer, and the reason `kind` exists at all.
+ *
+ * A row here is a *post* rather than a person, because that is what the exchange
+ * is filed under: a column has as many voices in it as came past, and the one
+ * thing all of them are talking about is the post. It is in the reader's inbox
+ * because the post is theirs or because they have written under it (see
+ * `INVOLVED_POSTS` in lo/server/db.js).
+ *
+ * `post` is the post's own words and `place` where it was left, which between
+ * them are what there is to call it — a photo with no words is named by its
+ * ground, exactly as it is everywhere else in this app (see postSays).
+ */
+export interface LoPostThread extends LoThreadRow {
+  kind: "post";
+  postId: number;
+  post: string;
+  place?: string | null;
+  image?: string | null;
+}
+
+/**
+ * One row of the inbox, which is two tables and one list: a word addressed to
+ * you and a word left under something you wrote are the same thing to whoever is
+ * reading them — somebody said something, and here is where to answer.
+ *
+ * What tells them apart is `kind`, and what that decides is where a press goes:
+ * a person opens the exchange, a post opens its comment column. It is optional on
+ * the person half and not on the other, so a row that arrives without one at all
+ * is read as the letter this list used to be made entirely of.
+ */
+export type LoThread = LoPersonThread | LoPostThread;
 
 /**
  * One line of one exchange, as `GET /api/messages/:username` answers it — which

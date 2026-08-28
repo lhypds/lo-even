@@ -18,13 +18,17 @@
 // **The days ahead are a line, not a row apiece.** Everything else here answers
 // a question about the minute the reader is standing in; lo's weather tile also
 // lists the two days after this one, and a range is short enough — `Today
-// 19-28°` is a word and six characters — that today and both of them fit on one
-// line in every language with room over. They were dealt the lines nothing else
-// wanted while each of them was a row, and the arithmetic that did the dealing
-// is gone with the rows: seven lines is one screenful, this page's most is
-// seven, and a second screenful is the one thing it may not have — the count of
-// everything else on the app is on the last line of this one, and a count a
+// 19-28°` is a word and six characters — that today, tomorrow and what tomorrow
+// is doing fit on one line in every language. They were dealt the lines nothing
+// else wanted while each of them was a row, and the arithmetic that did the
+// dealing is gone with the rows: seven lines is one screenful, this page's most
+// is seven, and a second screenful is the one thing it may not have — the count
+// of everything else on the app is on the last line of this one, and a count a
 // flick away is a count nobody reads.
+//
+// The third day lo sends is not drawn. The room it wanted went to tomorrow's
+// condition instead, which is the reading a forecast is actually read for (see
+// skyRows).
 //
 // Nothing here is asked of a server except the place, its weather and the
 // warnings: the bearing and the speed are the handset's own instruments, the
@@ -347,9 +351,31 @@ function fitted(kept: string[], optional: string[]): string {
   return line(...kept);
 }
 
+/**
+ * The same cut, for a reading that has a shorter *form* to fall back to rather
+ * than only its own absence. The forms are written longest first and the line
+ * gets the first of them that fits; where none does, the reading goes the way
+ * `fitted` would have taken it.
+ *
+ * The difference is what a full line costs. `fitted` gives up whole readings,
+ * which is right where each of them is a separate fact — a wind speed dropped
+ * off the weather row takes nothing else with it. It is the wrong trade where
+ * one reading is a fact with a detail attached: the forecast's second day is a
+ * range with a sky beside it, and giving up the whole thing to save the words
+ * would lose tomorrow to save what tomorrow is doing.
+ */
+function fittedTo(kept: string[], forms: string[]): string {
+  for (const form of forms) {
+    if (!form) continue;
+    const text = line(...kept, form);
+    if (textWidth(text) <= READING_VALUES.width) return text;
+  }
+  return line(...kept);
+}
+
 /** The two weather lines: what it is out there now, and what the days ahead are doing. */
 function skyRows(context: PageContext): ReadingRow[] {
-  const { weather, locale, t } = context;
+  const { weather, t } = context;
   const current = weather?.current;
   if (!current) return [];
 
@@ -395,50 +421,59 @@ function skyRows(context: PageContext): ReadingRow[] {
     },
   ];
 
-  // And under it the forecast: today and the days after it on one line, each of
-  // them a name and a range.
+  // And under it the forecast: today and tomorrow on one line, a name and a range
+  // apiece, and what the sky is doing written after tomorrow's.
   //
   // One row rather than the two or three this used to be dealt, and that is what
-  // a range costs to write down: `Today 19-28°` is a word and six characters, and
-  // three of them fit the column in every language with room over. Three rows of
-  // the same figures would have been half the screen for a table with one column
-  // in it — and the arithmetic that dealt them the lines nothing else wanted is
-  // gone with them, because a page whose forecast is a single line has a line for
+  // a range costs to write down: `Today 19-28°` is a word and six characters, so
+  // both days and a word fit the column in every language. Rows of the same
+  // figures would have been half the screen for a table with one column in it —
+  // and the arithmetic that dealt them the lines nothing else wanted is gone with
+  // them, because a page whose forecast is a single line has a line for
   // everything else whatever the weather is doing.
   //
-  // What the day is *called* is not on it. `Light rain` is as wide as two more
-  // days, and a row that had it for tomorrow and not for the day after would be a
-  // row a reader has to be told the shape of. What it is doing out there now is
-  // on the line above, in the words this one cannot spare.
-  const ahead = (weather?.upcoming ?? []).map((day, index) => {
-    const top = round(day.tempMax);
-    const bottom = round(day.tempMin);
-    // A day with no range is not a reading, and it is not a gap either: the days
-    // are named as they are written, so a missing tomorrow leaves the row reading
-    // `Today … · Sun …` rather than putting an empty word where a day should be.
-    if (top == null || bottom == null) return "";
-    const named = index === 0 ? t("weather.tomorrow") : dayName(day.date, locale);
-    return named ? `${named} ${bottom}-${top}°` : "";
-  });
+  // **Two days, and the word on the second of them is what the third one paid
+  // for.** A range says how warm tomorrow is and not whether to carry an
+  // umbrella, which is the question a forecast is read for; `Light rain` is as
+  // wide as a whole extra day, and the day it was competing with was the one
+  // furthest from the reader. So the day after tomorrow is not on this row at
+  // all — not dropped when the line fills, gone — because a row that had a third
+  // day on short words and lost it on long ones would change shape with the
+  // weather, and a reader would have to work out which day the last range belongs
+  // to before they could read it.
+  //
+  // Today's own sky is not written either, and that is the line above's to say:
+  // it carries the condition *now*, measured this minute, where today's daily
+  // code is a whole day averaged into one word. Two conditions a line apart, one
+  // of them true of the minute and the other of the day, is a row a reader has to
+  // be told the shape of — and it was the pair of them that put this line past
+  // the end of the column in English.
+  const tomorrow = weather?.upcoming?.[0];
+  const top = round(tomorrow?.tempMax);
+  const bottom = round(tomorrow?.tempMin);
+  // A day with no range is not a reading, and it is not a gap either: a missing
+  // tomorrow leaves the row reading `Today 19-28°` rather than putting a name and
+  // an empty range where a day should be.
+  const ahead = top != null && bottom != null ? `${t("weather.tomorrow")} ${bottom}-${top}°` : "";
+  const said = tomorrow?.weatherCode != null ? t(weatherLabelKey(tomorrow.weatherCode)) : "";
 
   // Today is the one that may not go — a forecast whose first day is tomorrow is
-  // a forecast with a hole where the reader is standing — and the days after it
-  // go from the end as the column runs out (see fitted). Which is where the
-  // widest of them are anyway: a name and a range are the same width every day,
-  // so what decides how many fit is the language and how cold it is, and both are
-  // the same for all three of them.
-  const forecast = fitted([high != null && low != null ? `${t("weather.today")} ${low}-${high}°` : ""], ahead);
+  // a forecast with a hole where the reader is standing. What gives way as the
+  // column runs out is tomorrow's word first and tomorrow itself only after it
+  // (see fittedTo), because a reader who loses the word still has the day, where
+  // a reader who loses the day has nothing.
+  //
+  // It is the word that goes in practice and the day never. Two ranges and a
+  // condition fit this column in Japanese and Chinese whatever the sky is doing,
+  // and in English for all but the seven longest of them — `Severe thunderstorm
+  // with hail`, `Light snow showers` and the like, which are the conditions worth
+  // spending a whole line on and the ones that have no line to spend.
+  const forecast = fittedTo([high != null && low != null ? `${t("weather.today")} ${low}-${high}°` : ""], [
+    said && ahead ? `${ahead} ${said}` : "",
+    ahead,
+  ]);
   if (forecast) rows.push({ label: t("weather.forecast"), value: forecast });
   return rows;
-}
-
-/** The short weekday a forecast day falls on, off a date that has no time in it. */
-function dayName(date: string | undefined, locale: string): string {
-  // Noon rather than midnight, which is lo's own way of naming these days: a
-  // date read as midnight lands on the day before wherever the parse and the
-  // formatter disagree by an hour, and nothing anywhere is twelve hours out.
-  const noon = Date.parse(`${date}T12:00:00`);
-  return Number.isNaN(noon) ? "" : new Intl.DateTimeFormat(locale, { weekday: "short" }).format(noon);
 }
 
 /**
