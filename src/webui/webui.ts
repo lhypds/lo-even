@@ -10,6 +10,12 @@ const SITE_URL = "https://lo.gcc3.com";
 // from whatever else can reach this window.
 const SITE_ORIGIN = new URL(SITE_URL).origin;
 
+// The languages this package has words for, which is the same three lo has. A
+// `setlang` naming anything else is a message from a newer site than this build,
+// and the display has nothing to draw it in — so it is dropped rather than
+// followed into a screen of missing strings.
+const LANGUAGES = new Set<string>(["en", "ja", "zh"]);
+
 export interface WebUIActions {
   onLogin(username: string, password: string): Promise<void>;
   onLogout(): Promise<void>;
@@ -78,26 +84,48 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
     document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
   }
 
-  // The one thing the site has to say back to the frame it is in. The phone view
-  // is lo's own website and the sign-out button in it is lo's own, so a reader
-  // who signs out signs out of the frame alone: the session out here is a second
-  // one, minted at the same sign-in against the same account, and nothing about
-  // the first one ending reaches it — two origins, two tokens, and no cookie
-  // between them. Left to itself this frame would go on feeding the glasses from
-  // a signed-out phone, and would still be holding a written-down token to come
-  // back on at the next launch.
+  // What the site has to say back to the frame it is in. Both notices are the
+  // same shape of problem: the phone view is lo's own website, the reader acts on
+  // it there, and this side would never hear about it. Two origins, two tokens,
+  // and no cookie between them.
   //
-  // So lo posts a line on its way out (see lo/src/components/AuthProvider) and
-  // this is where it lands. Three things have to be true before it signs anybody
-  // out of anything: it came from lo's origin, it came from the frame this file
-  // put there rather than from any other window holding a handle on this one,
-  // and it says the one word this frame listens for. A message port is a door,
-  // and it is worth being this dull about who is allowed through it.
+  // `logout` — the sign-out button in the frame is lo's own, so a reader who
+  // presses it signs out of the frame alone. The session out here is a second
+  // one, minted at the same sign-in against the same account. Left to itself this
+  // frame would go on feeding the glasses from a signed-out phone, and would
+  // still be holding a written-down token to come back on at the next launch.
+  //
+  // `setlang` — the switcher in the corner of the frame is lo's own too, and the
+  // words on the display are drawn from a list on this side (see
+  // glassesui/strings.ts) against feeds asked for in a language this side keeps.
+  // A reader who picks ZH on the phone means the glasses as well; without this
+  // they would get a site in one language and a display in another.
+  //
+  // So lo posts a line for each (see lo/src/utils/host.js) and this is where they
+  // land. Three things have to be true before either is acted on: it came from
+  // lo's origin, it came from the frame this file put there rather than from any
+  // other window holding a handle on this one, and it is one of the two notices
+  // this frame listens for. A message port is a door, and it is worth being this
+  // dull about who is allowed through it.
   window.addEventListener("message", (event) => {
     if (event.origin !== SITE_ORIGIN || event.source !== frame.contentWindow) return;
-    const message = event.data as { source?: unknown; type?: unknown } | null;
-    if (message?.source !== "lo" || message.type !== "logout") return;
-    void actions.onLogout();
+    const message = event.data as { source?: unknown; type?: unknown; language?: unknown } | null;
+    if (message?.source !== "lo") return;
+
+    if (message.type === "logout") {
+      void actions.onLogout();
+      return;
+    }
+
+    if (message.type === "setlang" && typeof message.language === "string" && LANGUAGES.has(message.language)) {
+      const next = message.language as Language;
+      // Both halves of this side, because both were following the old one: the
+      // glasses, which is the whole point of the notice, and the sign-in screen
+      // standing behind this frame, which is what the reader would be looking at
+      // in the stale language the next time they signed out.
+      actions.onLanguage(next);
+      login.setLanguage(next);
+    }
   });
 
   return {

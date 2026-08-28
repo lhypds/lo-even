@@ -45,9 +45,11 @@ day is doing; whatever is in force overhead — and then two lines counting what
 waiting on the other two pages, so a flick is never spent finding out there was
 nothing there.
 
-**2 · Who is here.** The names of everyone else with a tab open nearby, the latest
-posts left on this street, what is on within walking distance, and the last word
-of each exchange waiting in the inbox.
+**2 · Who is here.** The last word of each exchange waiting in the inbox, the
+latest posts left on this street, what is on within walking distance, and the
+names of everyone else with a tab open nearby. The letters come first because
+they are the one thing on the page addressed to the reader by name — the posts
+are everybody's and the names are whoever happens to be about.
 
 **3 · What is being said.** The newswire for this corner of the map, and what the
 country is searching for — the freshest few of each rather than all of one.
@@ -56,8 +58,9 @@ evening a street away is a fact about where you are standing; a newswire is not.
 
 How many lines each group gets is dealt rather than fixed: every group keeps its
 first line whatever happens, and the ones left over go round in the order the page
-lists them, so the newswire takes the spare line on the evening it has one and the
-posts take it on the afternoon everybody is out. See
+lists them, so the letters take the spare line on the morning three people have
+written and the posts take it on the afternoon everybody is out. The order is the
+priority, and it is the same order the wheel walks the list in one level down. See
 [src/glassesui/](src/glassesui/), where a page says what it has to say and
 [layout.ts](src/glassesui/layout.ts) does all the fitting.
 
@@ -72,13 +75,24 @@ and three are on screen at a time, the one you are on written in ink and the two
 beside it muted. Another tap opens it whole, and a long post is read a screenful
 at a time rather than cut off.
 
-The corner of the footer says where you are and how far through it:
+The corner of the footer says where you are and how far through it. Every page
+carries its own name, and the group appears the moment you step in:
 
 ```
-lo/ · 1/3            the three pages
-lo/nearby · 7/22     the seventh of the twenty-two things around you
-lo/nearby/messages   one of them, whole
+lo/ · 1/3              where you are standing
+lo/nearby · 2/3        who and what is around you
+lo/info · 3/3          what is being said about the wider place
+
+lo/nearby/msg · 2/4    the second of the four letters waiting
+lo/nearby/posts · 3/16 the third of the sixteen posts on this street
+lo/nearby/msg · 1/2    that letter, whole, over two screenfuls
 ```
+
+So the path changes under you as the wheel carries you out of the letters and
+into the posts — the one thing the heading, which names the group you are in,
+cannot say twice — and the counter beside it counts whatever the path has just
+named. The four things under `lo/nearby` are `msg`, `posts`, `events` and
+`people`, in that order; the two under `lo/info` are `news` and `trends`.
 
 The wheel means the same thing at all three depths — the next thing along,
 rounding at the end rather than stopping — and a double tap comes back out of

@@ -113,9 +113,11 @@ export interface ReadingRow {
 export interface Item {
   /**
    * Which of the page's groups this came out of — `posts`, `messages`, `news`.
-   * It names the entry in the heading, and it is the last part of the path in
-   * the corner (`lo/nearby/posts`), so it is the key the words are looked up
-   * under as well: every one of them is `<group>.title` in the dictionary.
+   * It is the key the words are looked up under (every one of them is
+   * `<group>.title` in the dictionary, which is what the heading says) and it is
+   * what the last part of the path is made from, though not always letter for
+   * letter: the letters are `msg` in a path and `messages` in a heading, because
+   * the corner is the narrowest line on the screen (see chrome.ts).
    */
   group: string;
   /**
@@ -176,6 +178,12 @@ export interface PageDefinition {
    * a repaint, and the word `feeds.ensure` is told when it comes into view.
    */
   id: string;
+  /**
+   * What this page is called in the path in the corner of the footer — `nearby`,
+   * `info`, and nothing at all for the standing page, which is the root of the
+   * app rather than a place inside it (see chrome.ts).
+   */
+  segment: string;
   /**
    * Whether this page is worth drawing where the reader is standing. All three
    * answer true: with only three of them, a page that took itself off the

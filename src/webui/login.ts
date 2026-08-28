@@ -111,6 +111,14 @@ export interface LoginScreen {
   show(error?: unknown): void;
   hide(): void;
   setBusy(busy: boolean): void;
+  /**
+   * Say this screen again in another language, for a choice made somewhere other
+   * than the switcher in its own corner — the site in the frame has one too, and
+   * a reader who uses that one is choosing for all of it. It does not call back
+   * through `onLanguage`: whoever is telling this screen has already told the
+   * rest of the app (see webui.ts).
+   */
+  setLanguage(language: Language): void;
 }
 
 // lo's own sign-in screen, drawn on this side of the frame — the two steps, the
@@ -292,8 +300,11 @@ export function createLogin(
     paintCopy();
   }
 
-  function setLanguage(next: Language) {
-    if (!COPY[next] || next === language) return;
+  // This screen alone, said again in `next`. Answers whether anything changed,
+  // so that the switcher below tells the rest of the app only when there is
+  // something to tell it.
+  function applyLanguage(next: Language): boolean {
+    if (!COPY[next] || next === language) return false;
     language = next;
     copy = COPY[next];
     // Which language the type is in, not only which words are in it: iOS draws a
@@ -301,7 +312,13 @@ export function createLogin(
     // so is the only way it knows which of the two it is reading.
     document.documentElement.lang = next;
     paintCopy();
-    actions.onLanguage(next);
+    return true;
+  }
+
+  // The switcher in the corner of this screen: the choice was made here, so the
+  // rest of the app hears about it from here.
+  function setLanguage(next: Language) {
+    if (applyLanguage(next)) actions.onLanguage(next);
   }
 
   function setSheetOpen(open: boolean) {
@@ -419,6 +436,9 @@ export function createLogin(
       submit.disabled = nextBusy;
       forgot.disabled = nextBusy;
       back.disabled = nextBusy;
+    },
+    setLanguage(next) {
+      applyLanguage(next);
     },
   };
 }

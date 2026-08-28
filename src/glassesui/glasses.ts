@@ -20,14 +20,19 @@
 // there is the list the page is a summary of, and under each entry of that the
 // whole of what it says (see pages/list.ts).
 //
-//   `lo/`                     three pages, one flick apart
-//   `lo/nearby`               everyone here, everything left here, everyone who wrote
-//   `lo/nearby/messages`      one of them, whole
+//   `lo/` `lo/nearby` `lo/info`     the three pages, one flick apart
+//   `lo/nearby/msg · 2/4`           the second of the four letters waiting
+//   `lo/nearby/msg · 1/2`           that letter, whole, over two screenfuls
 //
-// The wheel means the same thing at all three: the next thing along, rounding at
-// the end rather than stopping. A tap goes in, a double tap comes back out, and
-// at the top a double tap is the way out of the app it always was — which is the
-// grammar the corner of the footer is spelling out in a path.
+// Each page carries its own name, and the group appears the moment the reader
+// steps in — so the path changes under them as the wheel carries them out of the
+// letters and into the posts, which is the one thing the heading cannot say
+// twice. What the counter counts is whatever the path has just named: which page
+// of the three, which letter of the four, which screenful of the letter.
+//
+// The wheel means the same thing at all three levels: the next thing along,
+// rounding at the end rather than stopping. A tap goes in, a double tap comes
+// back out, and at the top a double tap is the way out of the app it always was.
 //
 // **Where the reader is** is kept by name at every level, never as an index. A
 // page appears when the country turns out to feed it, a list grows an entry when
@@ -42,7 +47,7 @@ import { offeredPages } from "./pages";
 import type { Item, ItemRef, PageContext, PageDefinition, PageView } from "./pages/types";
 import { listView, locate as locateItem, readView } from "./pages/list";
 import { formatPlace } from "./format";
-import { clockFace } from "./pages/chrome";
+import { ROOT, clockFace, pathOf } from "./pages/chrome";
 import { layout, screens, type Chrome, type Panel } from "./layout";
 import { createPainter, type Painter } from "./paint";
 import { BODY_LINES, BODY_WIDTH, FRAME, INK, CONTAINER, MUTED, cellsIn, frameCells, noteRect } from "./theme";
@@ -112,17 +117,6 @@ interface Anchor {
  */
 type Depth = 0 | 1 | 2;
 
-// The path in the corner, and the app's own name at the head of it. `lo/` rather
-// than a bare `/`: this glass has two screens on it, the phone's and this, and
-// the one word says which of them the reader is reading — and the root of a
-// dashboard is a place you can stand, so it is written as one.
-const ROOT = "lo/";
-
-function pathOf(pageId?: string, group?: string): string {
-  if (!pageId) return ROOT;
-  return group ? `${ROOT}${pageId}/${group}` : `${ROOT}${pageId}`;
-}
-
 /** One screenful of what is underneath a page, and everything the wheel needs to leave it. */
 interface Inside {
   view: PageView;
@@ -130,6 +124,7 @@ interface Inside {
   chrome: Chrome;
   items: Item[];
   focus: number;
+  /** How many steps of the wheel there are at this depth — entries, or screenfuls. */
   total: number;
 }
 
@@ -235,10 +230,22 @@ export async function createGlassesDisplay(
     at = { group: item.group, key: item.key };
 
     if (depth === 1) {
+      // The counter counts what the path has just named, which is the group
+      // rather than the list: `lo/nearby/posts · 3/16` is the third of sixteen
+      // posts. The wheel still walks the whole list — that is how a reader gets
+      // from the last letter to the first post — so what changes at a boundary
+      // is both ends of this line at once, the name and the denominator.
+      const first = items.findIndex((entry) => entry.group === item.group);
+      const of = items.filter((entry) => entry.group === item.group).length;
       return {
         view: listView(items, focus, context.t),
         screen: focus,
-        chrome: { ...surround(context), path: pathOf(page.id), index: focus + 1, total: items.length },
+        chrome: {
+          ...surround(context),
+          path: pathOf(page, item.group),
+          index: focus - first + 1,
+          total: of,
+        },
         items,
         focus,
         total: items.length,
@@ -257,7 +264,7 @@ export async function createGlassesDisplay(
       screen: reading,
       chrome: {
         ...surround(context),
-        path: pathOf(page.id, item.group),
+        path: pathOf(page, item.group),
         index: reading + 1,
         total,
       },
@@ -306,13 +313,17 @@ export async function createGlassesDisplay(
     // the one the next scroll moves on from.
     anchor = { pageId: step.page.id, screen: step.screen };
 
+    // Each page says its own name, so the corner is `lo/`, `lo/nearby` and
+    // `lo/info` as the wheel goes round — and the counter beside it is which of
+    // the three, which is the one thing a reader on a ring of pages cannot work
+    // out from what is in front of them.
     const chrome: Chrome = {
       ...surround(latest),
-      path: ROOT,
+      path: pathOf(step.page),
       index: index + 1,
       total: steps.length,
     };
-    shownPath = ROOT;
+    shownPath = chrome.path ?? ROOT;
     painter.paint(layout(step.view, step.screen, chrome));
   }
 

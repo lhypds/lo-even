@@ -199,7 +199,7 @@ export const HEAD_META: Rect = {
 
 /**
  * The footer's right-hand end: how deep in the app the reader is standing, and
- * how far through this level of it — `lo/nearby/messages · 3/9`.
+ * how far through this level of it — `lo/nearby/msg · 3/9`.
  *
  * The path is there because the wheel no longer means one thing. It walked three
  * pages round a ring and there was nothing to say about where you were that the
@@ -229,7 +229,7 @@ export function trailRect(path: string): Rect {
 /**
  * What is left of the footer for the place you are standing in — the rest of the
  * line, ending a cell before the trail begins. Cut against the trail rather than
- * run the whole width underneath it: `lo/nearby/messages · 3/9` is a fifth of
+ * run the whole width underneath it: `lo/nearby/msg · 3/9` is a fifth of
  * this line, and a place name measured against the full width would be a place
  * name with a path written over the end of it.
  */

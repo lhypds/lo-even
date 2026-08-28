@@ -29,7 +29,7 @@ import type { PageContext } from "../pages/types";
 import { layout, screens } from "../layout";
 import { translator } from "../strings";
 import { localeFor, formatPlace } from "../format";
-import { clockFace } from "../pages/chrome";
+import { clockFace, pathOf } from "../pages/chrome";
 import { CHAR_WIDTH, LINE_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH } from "../theme";
 import { cells } from "../metrics";
 import { args } from "./host";
@@ -249,10 +249,11 @@ for (const page of PAGES) {
       time: clockFace(ctx),
       status: "",
       unread: ctx.unread,
+      path: pathOf(page),
       index,
       total: steps.length,
     });
-    console.log(`\n╔══ ${page.id}${total > 1 ? ` (screen ${screen + 1}/${total})` : ""} ${"═".repeat(Math.max(0, 40 - page.id.length))}`);
+    console.log(`\n╔══ ${pathOf(page)}${total > 1 ? ` (screen ${screen + 1}/${total})` : ""} ${"═".repeat(Math.max(0, 40 - page.id.length))}`);
     console.log(raster(panels));
   }
 }
@@ -268,16 +269,17 @@ for (const page of PAGES) {
   const groups = [...new Set(items.map((item) => item.group))];
   for (const group of groups) {
     const focus = items.findIndex((item) => item.group === group);
+    const path = pathOf(page, group);
     const list = layout(listView(items, focus, t), focus, {
       place: formatPlace(ctx.place),
       time: clockFace(ctx),
       status: "",
       unread: ctx.unread,
-      path: `lo/${page.id}`,
-      index: focus + 1,
-      total: items.length,
+      path,
+      index: 1,
+      total: items.filter((item) => item.group === group).length,
     });
-    console.log(`\n╔══ lo/${page.id} at ${group} ${"═".repeat(Math.max(0, 32 - page.id.length - group.length))}`);
+    console.log(`\n╔══ ${path} (the list) ${"═".repeat(Math.max(0, 26 - path.length))}`);
     console.log(raster(list));
 
     // The longest entry of the group rather than the one the list is focused on:
@@ -295,12 +297,12 @@ for (const page of PAGES) {
         time: clockFace(ctx),
         status: "",
         unread: ctx.unread,
-        path: `lo/${page.id}/${group}`,
+        path,
         index: screen + 1,
         total,
       });
       console.log(
-        `\n╔══ lo/${page.id}/${group}${total > 1 ? ` (screen ${screen + 1}/${total})` : ""} ${"═".repeat(Math.max(0, 30 - page.id.length - group.length))}`,
+        `\n╔══ ${path} (read${total > 1 ? `, screen ${screen + 1}/${total}` : ""}) ${"═".repeat(Math.max(0, 24 - path.length))}`,
       );
       console.log(raster(panels));
     }

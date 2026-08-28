@@ -105,6 +105,25 @@ function postSays({ body, place, latitude, longitude }: LoPost): string {
 function nearbyItems(context: PageContext): Item[] {
   const { posts, people, events, messages, components, locale, t } = context;
 
+  const messageItems: Item[] = (messages.data ?? []).length
+    ? (messages.data ?? []).map((thread) => ({
+        group: "messages",
+        key: thread.username,
+        // The disc is lo's own dot on the letter in its top bar: something in
+        // this exchange has not been read. It stays in front of the name here
+        // rather than moving to the margin, because the margin is gone — an
+        // entry is one container and one brightness, and the bright one is the
+        // one the reader is on (see layout.ts).
+        head: `${thread.unread > 0 ? "● " : ""}${joined(formatUsername(thread.username), relativeTime(thread.time, locale, t))}`,
+        line: thread.body,
+        // The last thing said, whole. Not the exchange: `GET /api/messages`
+        // answers with one line per correspondent and reading it marks nothing
+        // read, which is exactly why the glasses may show it — opening the
+        // conversation itself is the phone's to do, and answering it is too.
+        body: thread.body,
+      }))
+    : [nothing("messages", feedWord(messages, t, WORDS.messages))];
+
   const near = others(context);
   const peopleItems: Item[] = near.length
     ? near.map(({ person, away }) => {
@@ -140,38 +159,20 @@ function nearbyItems(context: PageContext): Item[] {
       }))
     : [nothing("posts", feedWord(posts, t, WORDS.posts))];
 
-  const messageItems: Item[] = (messages.data ?? []).length
-    ? (messages.data ?? []).map((thread) => ({
-        group: "messages",
-        key: thread.username,
-        // The disc is lo's own dot on the letter in its top bar: something in
-        // this exchange has not been read. It stays in front of the name here
-        // rather than moving to the margin, because the margin is gone — an
-        // entry is one container and one brightness, and the bright one is the
-        // one the reader is on (see layout.ts).
-        head: `${thread.unread > 0 ? "● " : ""}${joined(formatUsername(thread.username), relativeTime(thread.time, locale, t))}`,
-        line: thread.body,
-        // The last thing said, whole. Not the exchange: `GET /api/messages`
-        // answers with one line per correspondent and reading it marks nothing
-        // read, which is exactly why the glasses may show it — opening the
-        // conversation itself is the phone's to do, and answering it is too.
-        body: thread.body,
-      }))
-    : [nothing("messages", feedWord(messages, t, WORDS.messages))];
-
   // What is on around here, where the country has anybody to ask. Left out
   // altogether rather than shown empty where it has not: "nothing on this
   // fortnight" is a claim about the neighbourhood, and lo cannot make it for a
   // country it has no listings service for.
   const eventItems = components.includes("events") ? feedItems("events", events, context, WORDS.events) : [];
 
-  return [...peopleItems, ...postItems, ...eventItems, ...messageItems];
+  return [...messageItems, ...postItems, ...eventItems, ...peopleItems];
 }
 
 export const nearbyPage: PageDefinition = {
   // The inbox is the one read this page pays for, and it pays once a minute
   // rather than once a paint (see feeds.ts).
   id: "nearby",
+  segment: "nearby",
 
   // People, posts and letters stop at no border.
   offered: () => true,
@@ -179,12 +180,22 @@ export const nearbyPage: PageDefinition = {
   render(context): PageView {
     const { posts, people, events, messages, components, t } = context;
 
+    // The order is the priority: the first group named takes the first spare
+    // line (see stack.ts). The letters are named first because they are the one
+    // thing on this page addressed to the reader by name — the posts are
+    // everybody's and the names are whoever happens to be about — and because
+    // they are the group with nothing on any other screen to fall back on.
     const groups: Group[] = [
       {
-        label: t("people.title"),
-        lines: peopleLine(context),
-        note: feedWord(people, t, WORDS.people),
-        max: 1,
+        label: t("messages.title"),
+        lines: (messages.data ?? []).map(
+          // The disc is the dot lo draws on the letter in its top bar: something
+          // in this exchange has not been read. The line under it is the last
+          // thing said, whoever said it.
+          (thread) => `${thread.unread > 0 ? "● " : ""}${formatUsername(thread.username)} ${thread.body}`,
+        ),
+        note: feedWord(messages, t, WORDS.messages),
+        max: 3,
       },
       {
         label: t("posts.title"),
@@ -208,16 +219,15 @@ export const nearbyPage: PageDefinition = {
       });
     }
 
+    // Last, and one line however many there are. Everyone else about is a line
+    // of names rather than a list of them for the reason the sky is one line:
+    // three names is what a street usually has, and a row apiece would spend
+    // half the page on a column of distances.
     groups.push({
-      label: t("messages.title"),
-      lines: (messages.data ?? []).map(
-        // The disc is the dot lo draws on the letter in its top bar: something
-        // in this exchange has not been read. The line under it is the last
-        // thing said, whoever said it.
-        (thread) => `${thread.unread > 0 ? "● " : ""}${formatUsername(thread.username)} ${thread.body}`,
-      ),
-      note: feedWord(messages, t, WORDS.messages),
-      max: 3,
+      label: t("people.title"),
+      lines: peopleLine(context),
+      note: feedWord(people, t, WORDS.people),
+      max: 1,
     });
 
     return {

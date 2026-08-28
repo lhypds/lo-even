@@ -111,7 +111,7 @@ export interface Chrome {
    */
   unread: number;
   /**
-   * Where in the app this screen is — `lo/`, `lo/nearby`, `lo/nearby/messages`.
+   * Where in the app this screen is — `lo/`, `lo/nearby`, `lo/nearby/msg`.
    * Left off by a screen that is nowhere in it, which is the composer: it takes
    * the display over rather than standing anywhere, and it has its own way out.
    */

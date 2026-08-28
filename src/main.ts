@@ -590,10 +590,19 @@ async function main() {
       onLogin: login,
       onLogout: logout,
       onRefresh: () => void refresh(true),
-      // A language chosen on the sign-in screen is the language the glasses are
+      // A language chosen on the sign-in screen — or in the site behind it, which
+      // says so through the frame (see webui.ts) — is the language the glasses are
       // fed in too: every feed is keyed on it, so changing it makes every card a
       // new question and the next paint re-asks whichever one is in view.
+      //
+      // Which is why a choice that changes nothing is dropped here rather than
+      // there. The site announces every pick, including a pick of the language it
+      // is already in, on purpose: the two sides keep this under separate origins
+      // and can start out disagreeing, so re-picking is how a reader puts them
+      // back together. Acted on blind, that would also throw away every feed this
+      // app is holding to ask the same questions over again.
       onLanguage: (language) => {
+        if (language === api.language) return;
         api.setLanguage(language);
         t = translator(language);
         feeds.forget();

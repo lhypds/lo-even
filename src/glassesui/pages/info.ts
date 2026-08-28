@@ -57,6 +57,7 @@ export const infoPage: PageDefinition = {
   // because the name is written on the screen now: it is the middle of the path
   // in the corner of every screen under this one (see glasses.ts).
   id: "info",
+  segment: "info",
 
   // Never off the sequence, however little the country can feed: three pages is
   // few enough that losing one would move the other two under a reader who had

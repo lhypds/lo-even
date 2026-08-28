@@ -266,9 +266,9 @@ function tallyRows(context: PageContext): ReadingRow[] {
   // what is on here.
   const others = (people.data ?? []).filter((person) => person.username !== username);
   const nearby = counted(join, [
-    [t("people.title"), people.data ? others.length : null],
     [t("posts.title"), posts.data?.length ?? null],
     [t("events.title"), components.includes("events") ? (events.data?.length ?? null) : null],
+    [t("people.title"), people.data ? others.length : null],
     // The letters are not counted here, and they are the one group on that page
     // that is not: how much is waiting to be read is in the corner of the
     // heading of every screen in the app, badge and hour together (see
@@ -291,6 +291,12 @@ export const herePage: PageDefinition = {
   // it is the page the app opens on — so that read goes out with the fix rather
   // than waiting to be scrolled to (see feeds.ts).
   id: "here",
+
+  // The root of the app. Where you are standing is where lo opens and where a
+  // double tap eventually returns everybody, and it is the one page with nothing
+  // underneath it — five instruments and a count, none of which is a list of
+  // anything (see chrome.ts).
+  segment: "",
 
   // Standing somewhere is not a thing any country can fail to support.
   offered: () => true,
