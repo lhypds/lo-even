@@ -1,6 +1,8 @@
 import type { LoCard, LoUser } from "./types";
 import "./styles.css";
 
+const SITE_URL = "https://lo.gcc3.com";
+
 export interface WebUIActions {
   onLogin(username: string, password: string): Promise<void>;
   onLogout(): Promise<void>;
@@ -10,70 +12,40 @@ export interface WebUIActions {
 
 export interface WebUI {
   setUser(user: LoUser | null): void;
+  setKey(key: string): void;
   showLogin(error?: string): void;
   hideLogin(): void;
   setLoginBusy(busy: boolean): void;
   render(cards: LoCard[], activeIndex: number, status: string): void;
 }
 
-function escapeHtml(value: unknown): string {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function cardHtml(card: LoCard, index: number, activeIndex: number): string {
-  return `
-    <button class="component ${index === activeIndex ? "component--active" : ""}" data-card-index="${index}" type="button">
-      <span class="component__top">
-        <span class="component__label">${escapeHtml(card.label)}</span>
-        <span class="component__index">${String(index + 1).padStart(2, "0")}</span>
-      </span>
-      <span class="component__title">${escapeHtml(card.title)}</span>
-      ${card.hero ? `<span class="component__hero">${escapeHtml(card.hero)}</span>` : ""}
-      <span class="component__lines">
-        ${card.lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
-      </span>
-      ${card.meta ? `<span class="component__meta">${escapeHtml(card.meta)}</span>` : ""}
-    </button>`;
-}
-
+// The phone view is the website itself. Nothing on this side draws lo any more;
+// the outer frame exists only to hold the Even bridge and feed the glasses, so
+// the two WebUI calls that used to paint the phone are now no-ops.
+//
+// What the outer frame still has to do is get a credential, because a WebView on
+// an Even Hub origin can never be handed lo's cookie. The modal below asks for
+// the password once and trades it for the account's link key, and that one key
+// then serves both sides: `?k=` carries it into the WebView, where lo signs
+// itself in the way any followed link does, and the same key buys the outer
+// frame its own bearer token so the dashboard API can go on feeding the glasses.
 export function createWebUI(actions: WebUIActions): WebUI {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) throw new Error("#app element not found");
 
+  // The frame starts blank on purpose. Pointed at the site before a key exists,
+  // it would draw lo's own login screen behind the modal — two sign-in forms on
+  // one screen, only one of which the glasses can hear about.
   root.innerHTML = `
-    <main class="app-shell">
-      <header class="topbar">
-        <div class="wordmark" aria-label="lo">lo<span class="wordmark__dot"></span></div>
-        <div class="topbar__actions">
-          <button class="bar-button" data-refresh type="button">Refresh</button>
-          <button class="bar-button" data-account type="button">Sign in</button>
-        </div>
-      </header>
+    <iframe
+      class="frame"
+      data-frame
+      title="lo"
+      allow="geolocation; microphone"
+      hidden
+    ></iframe>
 
-      <section class="stage" aria-live="polite">
-        <div class="stage__head">
-          <div>
-            <p class="stage__eyebrow">EVEN G2 / LIVE</p>
-            <h1>Here, now.</h1>
-          </div>
-          <span class="status" data-status>connecting</span>
-        </div>
-        <p class="stage__intro">Scroll on the glasses to move through the same components shown here.</p>
-        <div class="component-stack" data-components></div>
-      </section>
-
-      <footer class="gesture-bar">
-        <span><b>tap</b> save place</span>
-        <span><b>hold</b> speak &amp; post</span>
-      </footer>
-    </main>
-
-    <div class="modal modal--open" data-login-modal role="dialog" aria-modal="true" aria-labelledby="login-title">
+    <div class="modal" data-login-modal role="dialog" aria-modal="true" aria-labelledby="login-title">
       <form class="login" data-login-form>
         <p class="login__brand">lo for Even</p>
         <h2 id="login-title">Sign in on your phone</h2>
@@ -92,24 +64,12 @@ export function createWebUI(actions: WebUIActions): WebUI {
     </div>
   `;
 
-  const components = root.querySelector<HTMLDivElement>("[data-components]")!;
-  const status = root.querySelector<HTMLSpanElement>("[data-status]")!;
-  const account = root.querySelector<HTMLButtonElement>("[data-account]")!;
+  const frame = root.querySelector<HTMLIFrameElement>("[data-frame]")!;
   const modal = root.querySelector<HTMLDivElement>("[data-login-modal]")!;
   const form = root.querySelector<HTMLFormElement>("[data-login-form]")!;
   const loginError = root.querySelector<HTMLParagraphElement>("[data-login-error]")!;
   const loginSubmit = root.querySelector<HTMLButtonElement>("[data-login-submit]")!;
-  let currentUser: LoUser | null = null;
 
-  root.querySelector("[data-refresh]")!.addEventListener("click", actions.onRefresh);
-  account.addEventListener("click", () => {
-    if (currentUser) void actions.onLogout();
-    else modal.classList.add("modal--open");
-  });
-  components.addEventListener("click", (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-card-index]");
-    if (target) actions.onSelect(Number(target.dataset.cardIndex));
-  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = new FormData(form);
@@ -125,9 +85,18 @@ export function createWebUI(actions: WebUIActions): WebUI {
   }
 
   return {
-    setUser(user) {
-      currentUser = user;
-      account.textContent = user ? `@${user.username} · out` : "Sign in";
+    setUser() {},
+    setKey(key) {
+      // Two things this compare is careful about. It reads the attribute we last
+      // set rather than wherever the site has navigated since, because lo strips
+      // `?k=` out of its own address bar the moment it has spent it and writing
+      // the same src back over that would be a sign-out dressed as a refresh.
+      // And it goes to about:blank on the way out rather than dropping the src,
+      // because signing out has to actually navigate the site away — otherwise
+      // the session it is still holding carries on behind a hidden element.
+      const next = key ? `${SITE_URL}/?k=${encodeURIComponent(key)}` : "about:blank";
+      if (frame.getAttribute("src") !== next) frame.setAttribute("src", next);
+      frame.hidden = !key;
     },
     showLogin(error = "") {
       loginError.textContent = error;
@@ -146,14 +115,6 @@ export function createWebUI(actions: WebUIActions): WebUI {
       loginSubmit.disabled = busy;
       loginSubmit.textContent = busy ? "Signing in…" : "Continue";
     },
-    render(cards, activeIndex, message) {
-      status.textContent = message || "ready";
-      status.classList.toggle("status--active", Boolean(message && message !== "ready"));
-      components.innerHTML = cards.length
-        ? cards.map((card, index) => cardHtml(card, index, activeIndex)).join("")
-        : `<div class="empty-state"><span>Waiting for your phone</span><p>Sign in and allow location to build your view.</p></div>`;
-      const selected = components.querySelector<HTMLElement>(".component--active");
-      selected?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    },
+    render() {},
   };
 }

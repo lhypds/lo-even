@@ -8,7 +8,6 @@ import {
 import { LoApi, ApiError } from "./api";
 import { conditionPcm, transcribe } from "./audio";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glasses";
-import { loadToken, saveToken } from "./storage";
 import type { Coordinates, LocalResult, LoCard, LoUser } from "./types";
 import { createWebUI, type WebUI } from "./webui";
 
@@ -17,6 +16,11 @@ const MIN_RECORDING_MS = 250;
 const MAX_RECORDING_MS = 60_000;
 const SINGLE_TAP_DELAY_MS = 650;
 const SCROLL_COOLDOWN_MS = 380;
+// How long the link key is left standing after a sign-in. Long enough for the
+// WebView to have traded it for a session of its own on a slow phone tether,
+// short enough that a password equivalent is not left sitting in that frame's
+// URL for the rest of the session.
+const LINK_KEY_TTL_MS = 60_000;
 
 interface FeedState {
   local: LocalResult | null;
@@ -202,6 +206,7 @@ async function main() {
   let refreshTicket = 0;
   let lastScrollAt = 0;
 
+  let burnTimer = 0;
   let recording = false;
   let recordingStartedAt = 0;
   let recordingTimer = 0;
@@ -283,14 +288,36 @@ async function main() {
     setStatus("ready");
   }
 
+  // The key has done its whole job the moment the WebView has traded it for a
+  // session, so it is withdrawn rather than left standing. Withdrawing it signs
+  // nobody out: the two sessions it opened — the frame's cookie and this frame's
+  // bearer token — outlive the key that opened them.
+  async function burnLinkKey() {
+    window.clearTimeout(burnTimer);
+    burnTimer = 0;
+    try {
+      await api.revokeLinkKey();
+    } catch (error) {
+      // A key left standing is a smaller problem than anything worth
+      // interrupting a working session for, and the next sign-in schedules
+      // another withdrawal of the same key behind it.
+      console.error("could not withdraw the link key", error);
+    }
+  }
+
   async function login(username: string, password: string) {
     ui.setLoginBusy(true);
     try {
       const session = await api.login(username, password);
       user = session.user;
-      await saveToken(bridge, session.token);
+      // The password is spent here and goes no further, and neither does the key
+      // it bought: nothing from this sign-in is written down. The key opens the
+      // WebView, the token feeds the glasses, and both die with this launch.
       ui.setUser(user);
+      ui.setKey(session.key);
       ui.hideLogin();
+      window.clearTimeout(burnTimer);
+      burnTimer = window.setTimeout(() => void burnLinkKey(), LINK_KEY_TTL_MS);
       await refresh();
     } catch (error) {
       const message = error instanceof ApiError ? error.message : "Could not sign in. Try again.";
@@ -303,9 +330,13 @@ async function main() {
 
   async function logout() {
     cancelRecording();
+    // Before the session goes rather than after: withdrawing the key is spent on
+    // the very token /api/logout is about to invalidate. If the minute has
+    // already elapsed there is nothing left to withdraw.
+    if (burnTimer) await burnLinkKey();
     await api.logout().catch(() => {});
     api.setToken("");
-    await saveToken(bridge, "");
+    ui.setKey("");
     user = null;
     coords = null;
     feeds.local = null;
@@ -437,25 +468,13 @@ async function main() {
   ui.setUser(null);
   render();
 
-  const token = await loadToken(bridge);
-  if (token) {
-    api.setToken(token);
-    try {
-      const session = await api.session();
-      user = session.user;
-      ui.setUser(user);
-      ui.hideLogin();
-      await refresh();
-    } catch {
-      api.setToken("");
-      await saveToken(bridge, "");
-      setStatus("sign in on phone");
-      ui.showLogin("Your previous session expired. Please sign in again.");
-    }
-  } else {
-    setStatus("sign in on phone");
-    ui.showLogin();
-  }
+  // Every cold start asks for the password, because nothing from the last one
+  // was written down. It has to work this way now that the key is withdrawn a
+  // minute after each sign-in: no endpoint mints a key from a token, so a stored
+  // token could bring the glasses back but never the WebView, and an app that is
+  // half signed in is worse than one that asks.
+  setStatus("sign in on phone");
+  ui.showLogin();
 
   bridge.onEvenHubEvent((event) => {
     const eventType = event.textEvent?.eventType ?? event.listEvent?.eventType ?? event.sysEvent?.eventType;

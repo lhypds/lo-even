@@ -16,6 +16,10 @@ export class ApiError extends Error {
 
 export interface Session {
   token: string;
+  // The account's link key, which is how the WebView frame is entered: `?k=`.
+  // It is never stored, and it is withdrawn a minute after this sign-in, once
+  // the frame has traded it for a session of its own.
+  key: string;
   user: LoUser;
 }
 
@@ -59,8 +63,11 @@ export class LoApi {
     return session;
   }
 
-  session() {
-    return this.request<{ user: LoUser }>("/api/session");
+  // Withdrawing the link key, once the WebView has finished spending it. It
+  // takes the key out of the account altogether; neither session the key opened
+  // is touched, so this signs nobody out of anything.
+  revokeLinkKey() {
+    return this.request<void>("/api/me/link", { method: "DELETE" });
   }
 
   logout() {
