@@ -1,5 +1,6 @@
 import {
   AppLocationAccuracy,
+  AudioInputSource,
   EventSourceType,
   OsEventTypeList,
   waitForEvenAppBridge,
@@ -21,6 +22,19 @@ import { createWebUI, type WebUI } from "./webui/webui";
 const SAMPLE_RATE = 16_000;
 const MIN_RECORDING_MS = 250;
 const MAX_RECORDING_MS = 60_000;
+// How many times a hold asks for the microphone before it takes no for an answer.
+//
+// The open is a round trip to the phone and on to the glasses over the same link
+// the page is drawn on, and a link that is busy answers `false` rather than
+// waiting. One refusal used to be the whole answer, which is how a reader who had
+// done nothing wrong came to be told the microphone was broken several times an
+// hour. Three tries is the same shape the start-up page already uses against the
+// same link for the same reason (see paint.ts).
+const MIC_OPEN_TRIES = 3;
+// Long enough for whatever was on the link to have landed, short enough that a
+// reader holding the touchpad has not started talking yet. Two of these is the
+// most a hold can spend before the microphone is either open or genuinely shut.
+const MIC_OPEN_BACKOFF_MS = 150;
 const SCROLL_COOLDOWN_MS = 380;
 // How long a tap sits before it is taken as a tap. The host reports the first
 // press of a double tap as a press of its own, so wherever a tap and a double
@@ -627,6 +641,65 @@ async function main() {
   }
 
   /**
+   * One microphone command at a time, in the order they were asked for.
+   *
+   * Every one of these is a round trip to the host and on to the glasses, and what
+   * the host does with two of them in flight at once is not documented anywhere —
+   * so an open sent while a close is still out there is an open with every reason
+   * to come back `false`. Nothing used to hold them apart: the three closes below
+   * are all fire-and-forget, and a
+   * reader who released the touchpad and held it again straight away — which is
+   * how you say a sentence over, and the commonest thing to do with a transcript
+   * you did not like — was racing their own release.
+   *
+   * The catch is the other half of the job. `audioControl` rejects outright where
+   * there is no native handler to call, and `startRecording` is reached from an
+   * event handler with nothing behind it to catch anything: a throw there would
+   * leave `recording` standing with no timer armed and no way back, and every hold
+   * after it would return at the guard without so much as a line on the screen. A
+   * host that will not take the call is the same answer as glasses that said no.
+   */
+  let audioGate: Promise<unknown> = Promise.resolve();
+
+  function audio(open: boolean): Promise<boolean> {
+    const next = audioGate.then(async () => {
+      try {
+        // Named rather than left to the default, which is this anyway. The one
+        // documented cause of a glasses microphone answering `false` is being
+        // asked for before the start-up page exists, and being explicit about
+        // which microphone this is keeps the call and that diagnosis in the same
+        // language (see the SDK's troubleshooting table).
+        return await bridge.audioControl(open, AudioInputSource.Glasses);
+      } catch (error) {
+        console.error("the microphone would not answer", error);
+        return false;
+      }
+    });
+    audioGate = next.catch(() => undefined);
+    return next;
+  }
+
+  /**
+   * The microphone, asked for until it opens or until the reader has gone.
+   *
+   * A hold is a gesture that has already been committed to by the time this runs,
+   * so a single `false` is not worth reporting as a failure — it is worth asking
+   * again. Between tries the recording is re-checked rather than assumed: a hold
+   * released while this was waiting is a reader who has stopped talking, and there
+   * is nobody left to open the microphone for.
+   */
+  async function openMic(): Promise<boolean> {
+    for (let attempt = 0; attempt < MIC_OPEN_TRIES; attempt += 1) {
+      if (attempt) {
+        await new Promise((resolve) => window.setTimeout(resolve, MIC_OPEN_BACKOFF_MS));
+        if (!recording) return false;
+      }
+      if (await audio(true)) return true;
+    }
+    return false;
+  }
+
+  /**
    * The microphone, opened. `answering` is the correspondent this sentence is a
    * reply to, where the hold began on one letter read whole, and empty everywhere
    * else — which is what decides, an entire dictation later, which of the two
@@ -657,10 +730,20 @@ async function main() {
     recordingStartedAt = Date.now();
     audioChunks = [];
     audioBytes = 0;
-    setStatus(`● ${t("glasses.recording")}`);
-    const opened = await bridge.audioControl(true);
+    // The microphone first and the screen second, which is the other way round
+    // from how this used to read. Both are messages to the same host over the same
+    // link, and `setStatus` paints on the way through — so asking for the screen
+    // first put the one call that matters behind a page write, and a reader was
+    // shown "● Recording" and then, half a second later, told by the very same
+    // line that the microphone had not opened. What had failed was an open queued
+    // behind the repaint of the line saying so.
+    //
+    // It also makes the dot mean what it says. It arrives when the microphone is
+    // open rather than when the hold was noticed, which is the moment a reader can
+    // usefully start talking.
+    const opened = await openMic();
     if (!recording) {
-      void bridge.audioControl(false);
+      void audio(false);
       return;
     }
     if (!opened) {
@@ -673,6 +756,13 @@ async function main() {
       setStatus(t("glasses.noMic"), 2200);
       return;
     }
+    // Stamped here rather than up at the top, because what the length of a
+    // recording has to mean below is how long the microphone was actually open —
+    // which is what the byte count it is checked against measures too. The tries
+    // above can take a moment, and counting them as speech would let a hold that
+    // spent most of itself waiting for the microphone pass a test it should not.
+    recordingStartedAt = Date.now();
+    setStatus(`● ${t("glasses.recording")}`);
     recordingTimer = window.setTimeout(() => void finishRecording(), MAX_RECORDING_MS);
   }
 
@@ -682,14 +772,14 @@ async function main() {
     window.clearTimeout(recordingTimer);
     audioChunks = [];
     audioBytes = 0;
-    void bridge.audioControl(false);
+    void audio(false);
   }
 
   async function finishRecording(): Promise<void> {
     if (!recording) return;
     recording = false;
     window.clearTimeout(recordingTimer);
-    void bridge.audioControl(false);
+    void audio(false);
     const elapsed = Date.now() - recordingStartedAt;
     const raw = new Uint8Array(audioBytes);
     let offset = 0;
