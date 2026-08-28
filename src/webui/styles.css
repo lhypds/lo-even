@@ -63,7 +63,7 @@ button {
 /* Pinned to the visual viewport rather than the layout viewport: with the
    keyboard up the site gets exactly the room above it, and the field it is
    focusing needs no help from WebKit to be on screen. `100dvh` is the fallback
-   for anything without visualViewport — see src/viewport.ts. */
+   for anything without visualViewport — see src/utils/viewport.ts. */
 .frame {
   position: fixed;
   left: 0;
@@ -309,7 +309,7 @@ h1 {
 
    Two departures, both about the room this screen has rather than how it looks.
    It is pinned to the visual viewport instead of running the full page, so the
-   keyboard cannot push it about (see src/viewport.ts) — and being a fixed box it
+   keyboard cannot push it about (see src/utils/viewport.ts) — and being a fixed box it
    scrolls inside itself, which is what the card's `margin: auto` is for: a card
    taller than the room left over keeps its top edge instead of losing it. */
 .auth-page {

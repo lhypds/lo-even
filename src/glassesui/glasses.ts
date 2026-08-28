@@ -4,7 +4,7 @@ import {
   TextContainerUpgrade,
   type EvenAppBridge,
 } from "@evenrealities/even_hub_sdk";
-import type { LoCard } from "./types";
+import type { LoCard } from "../types";
 
 const CONTAINER_ID = 1;
 const CONTAINER_NAME = "lo";

@@ -1,9 +1,4 @@
-import { ApiError, type Language } from "./api";
-import type { LoCard, LoUser } from "./types";
-import { trackVisualViewport } from "./viewport";
-import "./styles.css";
-
-const SITE_URL = "https://lo.gcc3.com";
+import { ApiError, type Language } from "../services/api";
 
 // Where the administrator's word can be had, and the whole of what either screen
 // can do about a forgotten password: there is no reset link, because there is no
@@ -107,146 +102,118 @@ function fill(template: string, values: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => values[key] ?? "");
 }
 
-export interface WebUIActions {
-  onLogin(username: string, password: string): Promise<void>;
-  onLogout(): Promise<void>;
-  onRefresh(): void;
-  onSelect(index: number): void;
+export interface LoginActions {
+  onSubmit(username: string, password: string): Promise<void>;
   onLanguage(language: Language): void;
 }
 
-export interface WebUI {
-  setUser(user: LoUser | null): void;
-  setKey(key: string): void;
-  showLogin(error?: unknown): void;
-  hideLogin(): void;
-  setLoginBusy(busy: boolean): void;
-  render(cards: LoCard[], activeIndex: number, status: string): void;
+export interface LoginScreen {
+  show(error?: unknown): void;
+  hide(): void;
+  setBusy(busy: boolean): void;
 }
 
-// The phone view is the website itself. Nothing on this side draws lo any more;
-// the outer frame exists only to hold the Even bridge and feed the glasses, so
-// the two WebUI calls that used to paint the phone are now no-ops.
+// lo's own sign-in screen, drawn on this side of the frame — the two steps, the
+// 90px button, the switcher in the corner, the line of type under the field with
+// the two ways out of the password step in it — because the reader is not meant
+// to know there are two screens here. This one signs in; the frame behind it
+// comes up already signed in; nothing in between announces a change of address.
+// (What it is signing into, and why the frame cannot ask for itself, is in
+// webui.ts, which owns the frame.)
 //
-// What the outer frame still has to do is get a credential, because a WebView on
-// an Even Hub origin can never be handed lo's cookie. The screen below asks for
-// the password once and trades it for the account's link key, and that one key
-// then serves both sides: `?k=` carries it into the WebView, where lo signs
-// itself in the way any followed link does, and the same key buys the outer
-// frame its own bearer token so the dashboard API can go on feeding the glasses.
-//
-// It asks in lo's own screen — the two steps, the 90px button, the switcher in
-// the corner, the line of type under the field with the two ways out of the
-// password step in it — because the reader is not meant to know there are two
-// screens here. This one signs in; the frame behind it comes up already signed
-// in; nothing in between announces a change of address. The one thing it cannot
-// do is open an account, the outer frame having no endpoint for that, so a name
-// nobody is using comes back as an error on the name step rather than as an offer
-// to create it.
-export function createWebUI(actions: WebUIActions, initialLanguage: Language = "en"): WebUI {
-  const root = document.querySelector<HTMLDivElement>("#app");
-  if (!root) throw new Error("#app element not found");
-
-  // Before the frame is written, so its first layout is already the right size.
-  trackVisualViewport();
-
+// The one thing it cannot do is open an account, this side having no endpoint for
+// that, so a name nobody is using comes back from the server as an error on the
+// name step rather than as an offer to create it.
+export function createLogin(
+  root: HTMLElement,
+  actions: LoginActions,
+  initialLanguage: Language = "en",
+): LoginScreen {
   let language: Language = COPY[initialLanguage] ? initialLanguage : "en";
   let copy = COPY[language];
 
-  // The frame starts blank on purpose. Pointed at the site before a key exists,
-  // it would draw lo's own login screen behind this one — the same screen twice,
-  // only one of which the glasses can hear about.
-  root.innerHTML = `
-    <iframe
-      class="frame"
-      data-frame
-      title="lo"
-      allow="geolocation; microphone"
-      hidden
-    ></iframe>
-
-    <main class="auth-page" data-login-page>
-      <span class="auth-lang" data-lang data-open="false">
-        <button type="button" class="lang-trigger" data-lang-trigger></button>
-        <span class="lang-dropdown">
-          ${LANGUAGES.map(
-            ({ code, label }) =>
-              `<button type="button" class="lang-option" data-lang-option="${code}">${label}</button>`,
-          ).join("")}
-        </span>
+  const page = document.createElement("main");
+  page.className = "auth-page";
+  page.innerHTML = `
+    <span class="auth-lang" data-lang data-open="false">
+      <button type="button" class="lang-trigger" data-lang-trigger></button>
+      <span class="lang-dropdown">
+        ${LANGUAGES.map(
+          ({ code, label }) =>
+            `<button type="button" class="lang-option" data-lang-option="${code}">${label}</button>`,
+        ).join("")}
       </span>
+    </span>
 
-      <section class="auth-card" aria-labelledby="login-title">
-        <h1 id="login-title" class="auth-logo">lo</h1>
-        <p class="tagline" data-tagline></p>
+    <section class="auth-card" aria-labelledby="login-title">
+      <h1 id="login-title" class="auth-logo">lo</h1>
+      <p class="tagline" data-tagline></p>
 
-        <form class="login-form" data-login-form autocomplete="off">
-          <label class="sr-only" data-login-label for="lo-handle"></label>
-          <div class="joined-field">
-            <input
-              data-login-input
-              id="lo-handle"
-              name="lo-handle"
-              autocapitalize="none"
-              autocorrect="off"
-              autocomplete="off"
-              enterkeyhint="next"
-              data-1p-ignore
-              data-lpignore="true"
-              data-bwignore
-              data-form-type="other"
-            />
-            <button type="submit" data-login-submit></button>
-          </div>
-        </form>
+      <form class="login-form" data-login-form autocomplete="off">
+        <label class="sr-only" data-login-label for="lo-handle"></label>
+        <div class="joined-field">
+          <input
+            data-login-input
+            id="lo-handle"
+            name="lo-handle"
+            autocapitalize="none"
+            autocorrect="off"
+            autocomplete="off"
+            enterkeyhint="next"
+            data-1p-ignore
+            data-lpignore="true"
+            data-bwignore
+            data-form-type="other"
+          />
+          <button type="submit" data-login-submit></button>
+        </div>
+      </form>
 
-        <p class="form-message">
-          <span data-login-message></span><span data-login-space></span
-          ><button type="button" class="auth-forgot" data-login-forgot hidden></button
-          ><span data-login-gap></span
-          ><button type="button" class="auth-back" data-login-back hidden></button>
-        </p>
-      </section>
-      <div class="sheet-overlay" data-forgot-sheet>
-        <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
-          <div class="sheet__head">
-            <span class="sheet__title" id="forgot-title" data-forgot-title></span>
-            <button type="button" class="sheet__close" data-forgot-close aria-label="Close">✕</button>
-          </div>
-          <div class="sheet__content">
-            <p class="modal-text" data-forgot-body></p>
-            <div class="modal-actions">
-              <button type="button" class="outline-button" data-forgot-cancel></button>
-              <a class="primary-button" data-forgot-send hidden></a>
-            </div>
+      <p class="form-message">
+        <span data-login-message></span><span data-login-space></span
+        ><button type="button" class="auth-forgot" data-login-forgot hidden></button
+        ><span data-login-gap></span
+        ><button type="button" class="auth-back" data-login-back hidden></button>
+      </p>
+    </section>
+
+    <div class="sheet-overlay" data-forgot-sheet>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
+        <div class="sheet__head">
+          <span class="sheet__title" id="forgot-title" data-forgot-title></span>
+          <button type="button" class="sheet__close" data-forgot-close aria-label="Close">✕</button>
+        </div>
+        <div class="sheet__content">
+          <p class="modal-text" data-forgot-body></p>
+          <div class="modal-actions">
+            <button type="button" class="outline-button" data-forgot-cancel></button>
+            <a class="primary-button" data-forgot-send hidden></a>
           </div>
         </div>
       </div>
-    </main>
-
+    </div>
   `;
+  root.append(page);
 
-  const frame = root.querySelector<HTMLIFrameElement>("[data-frame]")!;
-  const page = root.querySelector<HTMLElement>("[data-login-page]")!;
-  const lang = root.querySelector<HTMLSpanElement>("[data-lang]")!;
-  const langTrigger = root.querySelector<HTMLButtonElement>("[data-lang-trigger]")!;
-  const langOptions = Array.from(root.querySelectorAll<HTMLButtonElement>("[data-lang-option]"));
-  const tagline = root.querySelector<HTMLParagraphElement>("[data-tagline]")!;
-  const form = root.querySelector<HTMLFormElement>("[data-login-form]")!;
-  const label = root.querySelector<HTMLLabelElement>("[data-login-label]")!;
-  const input = root.querySelector<HTMLInputElement>("[data-login-input]")!;
-  const submit = root.querySelector<HTMLButtonElement>("[data-login-submit]")!;
-  const message = root.querySelector<HTMLSpanElement>("[data-login-message]")!;
-  const space = root.querySelector<HTMLSpanElement>("[data-login-space]")!;
-  const forgot = root.querySelector<HTMLButtonElement>("[data-login-forgot]")!;
-  const gap = root.querySelector<HTMLSpanElement>("[data-login-gap]")!;
-  const back = root.querySelector<HTMLButtonElement>("[data-login-back]")!;
-  const sheet = root.querySelector<HTMLDivElement>("[data-forgot-sheet]")!;
-  const sheetTitle = root.querySelector<HTMLSpanElement>("[data-forgot-title]")!;
-  const sheetBody = root.querySelector<HTMLParagraphElement>("[data-forgot-body]")!;
-  const sheetCancel = root.querySelector<HTMLButtonElement>("[data-forgot-cancel]")!;
-  const sheetSend = root.querySelector<HTMLAnchorElement>("[data-forgot-send]")!;
-  const sheetClose = root.querySelector<HTMLButtonElement>("[data-forgot-close]")!;
+  const lang = page.querySelector<HTMLSpanElement>("[data-lang]")!;
+  const langTrigger = page.querySelector<HTMLButtonElement>("[data-lang-trigger]")!;
+  const langOptions = Array.from(page.querySelectorAll<HTMLButtonElement>("[data-lang-option]"));
+  const tagline = page.querySelector<HTMLParagraphElement>("[data-tagline]")!;
+  const form = page.querySelector<HTMLFormElement>("[data-login-form]")!;
+  const label = page.querySelector<HTMLLabelElement>("[data-login-label]")!;
+  const input = page.querySelector<HTMLInputElement>("[data-login-input]")!;
+  const submit = page.querySelector<HTMLButtonElement>("[data-login-submit]")!;
+  const message = page.querySelector<HTMLSpanElement>("[data-login-message]")!;
+  const space = page.querySelector<HTMLSpanElement>("[data-login-space]")!;
+  const forgot = page.querySelector<HTMLButtonElement>("[data-login-forgot]")!;
+  const gap = page.querySelector<HTMLSpanElement>("[data-login-gap]")!;
+  const back = page.querySelector<HTMLButtonElement>("[data-login-back]")!;
+  const sheet = page.querySelector<HTMLDivElement>("[data-forgot-sheet]")!;
+  const sheetTitle = page.querySelector<HTMLSpanElement>("[data-forgot-title]")!;
+  const sheetBody = page.querySelector<HTMLParagraphElement>("[data-forgot-body]")!;
+  const sheetCancel = page.querySelector<HTMLButtonElement>("[data-forgot-cancel]")!;
+  const sheetSend = page.querySelector<HTMLAnchorElement>("[data-forgot-send]")!;
+  const sheetClose = page.querySelector<HTMLButtonElement>("[data-forgot-close]")!;
 
   let step: Step = "name";
   let username = "";
@@ -382,7 +349,7 @@ export function createWebUI(actions: WebUIActions, initialLanguage: Language = "
       setMessage(copy.passwordRequired, "passwordRequired");
       return;
     }
-    await actions.onLogin(username, input.value);
+    await actions.onSubmit(username, input.value);
   });
 
   forgot.addEventListener("click", () => {
@@ -402,10 +369,6 @@ export function createWebUI(actions: WebUIActions, initialLanguage: Language = "
     if (event.target === sheet) setSheetOpen(false);
   });
 
-  for (const eventName of ["gesturestart", "gesturechange", "gestureend"]) {
-    document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
-  }
-
   // Whatever the server said, in the reader's own language where the answer is
   // one to act on, and with the key that lets it be said again if the language
   // changes under it. The plain message is the fallback rather than the rule.
@@ -424,20 +387,7 @@ export function createWebUI(actions: WebUIActions, initialLanguage: Language = "
   setStep("name");
 
   return {
-    setUser() {},
-    setKey(key) {
-      // Two things this compare is careful about. It reads the attribute we last
-      // set rather than wherever the site has navigated since, because lo strips
-      // `?k=` out of its own address bar the moment it has spent it and writing
-      // the same src back over that would be a sign-out dressed as a refresh.
-      // And it goes to about:blank on the way out rather than dropping the src,
-      // because signing out has to actually navigate the site away — otherwise
-      // the session it is still holding carries on behind a hidden element.
-      const next = key ? `${SITE_URL}/?k=${encodeURIComponent(key)}` : "about:blank";
-      if (frame.getAttribute("src") !== next) frame.setAttribute("src", next);
-      frame.hidden = !key;
-    },
-    showLogin(error) {
+    show(error) {
       page.classList.add("auth-page--open");
       if (error === undefined) return;
       if (!(error instanceof ApiError)) {
@@ -446,7 +396,7 @@ export function createWebUI(actions: WebUIActions, initialLanguage: Language = "
       }
       // The two answers that are about the name rather than the password. Neither
       // is anything the password field can be used to fix, so the name comes back
-      // up — and for this frame USER_NOT_FOUND is the end of it, since opening the
+      // up — and on this side USER_NOT_FOUND is the end of it, since opening the
       // account is lo's own screen's to offer and not this one's.
       if (error.code === "USER_NOT_FOUND" || error.code === "USER_EXISTS") {
         setStep("name");
@@ -455,14 +405,14 @@ export function createWebUI(actions: WebUIActions, initialLanguage: Language = "
       }
       setMessage(...passwordError(error));
     },
-    hideLogin() {
+    hide() {
       page.classList.remove("auth-page--open");
       setSheetOpen(false);
       lang.dataset.open = "false";
       username = "";
       setStep("name");
     },
-    setLoginBusy(nextBusy) {
+    setBusy(nextBusy) {
       // Disabled, not relabelled: lo's button says the same word throughout, and
       // greys out (see .auth-page button:disabled) while the server is waited on.
       busy = nextBusy;
@@ -470,6 +420,5 @@ export function createWebUI(actions: WebUIActions, initialLanguage: Language = "
       forgot.disabled = nextBusy;
       back.disabled = nextBusy;
     },
-    render() {},
   };
 }

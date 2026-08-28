@@ -1,4 +1,4 @@
-import type { Coordinates, LocalResult, LoUser } from "./types";
+import type { Coordinates, LocalResult, LoUser } from "../types";
 
 const API_BASE = "https://lo.gcc3.com";
 

@@ -5,11 +5,11 @@ import {
   waitForEvenAppBridge,
   type AppLocation,
 } from "@evenrealities/even_hub_sdk";
-import { LoApi } from "./api";
-import { conditionPcm, transcribe } from "./audio";
-import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glasses";
+import { LoApi } from "./services/api";
+import { conditionPcm, transcribe } from "./utils/audio";
+import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glassesui/glasses";
 import type { Coordinates, LocalResult, LoCard, LoUser } from "./types";
-import { createWebUI, type WebUI } from "./webui";
+import { createWebUI, type WebUI } from "./webui/webui";
 
 const SAMPLE_RATE = 16_000;
 const MIN_RECORDING_MS = 250;

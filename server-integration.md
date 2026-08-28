@@ -28,7 +28,7 @@ token by its parent — there is no API surface between the two, and the site is
 a different origin. What crosses that gap is the account's **link key**, the same
 one a shared `?k=` link carries.
 
-[src/webui.ts](src/webui.ts) asks for a username and password. `POST /api/login`
+[src/webui/webui.ts](src/webui/webui.ts) asks for a username and password. `POST /api/login`
 answers with a `token` and a `key`, and the two are spent on the two frames:
 
 - the **key** opens the iframe at `https://lo.gcc3.com/?k=<key>`, where the site's
