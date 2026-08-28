@@ -4,6 +4,7 @@
 // glasses.ts, and the rebuild-or-update decision in paint.ts.
 
 import { createGlassesDisplay } from "../glasses";
+import { PageRefused } from "../paint";
 import { PAGES } from "../pages/index";
 import { composeView } from "../pages/compose";
 import type { PageContext } from "../pages/types";
@@ -645,6 +646,38 @@ check(
   names.length > 0 &&
     names.every((item) => !COORDS.test(`${item.head} ${item.line} ${item.body.split("\n")[0]}`)),
   names.map((item) => item.line).join(" | ") || "(nobody about)",
+);
+
+// --- a screen that never came up --------------------------------------------
+// The start-up page *is* the display, and a host that answers and refuses to make
+// one leaves a package that looks well from the inside: the session comes back,
+// the feeds arrive, the touchpad reports every scroll and tap and hold, and none
+// of it lands on any glass. That used to be a line in the console. The first the
+// reader heard of it was a hold failing to open the microphone — which is this
+// page's absence reported as something else entirely.
+//
+// So it is an error now, and a named one, because main.ts has to tell it from the
+// other thing that ends at the same fallback: an ordinary browser, where there is
+// no native handler and the call rejects before the glasses are asked anything.
+// A separate bridge, so the calls above are not disturbed.
+const refusing = {
+  // Oversize, and it says so every time — which is what makes this the failure
+  // that survives all four tries rather than a cold start still coming up.
+  createStartUpPageContainer: async () => 2,
+  rebuildPageContainer: async () => true,
+  textContainerUpgrade: async () => true,
+  shutDownPageContainer: async () => true,
+} as never;
+let refused: unknown = null;
+try {
+  await createGlassesDisplay(refusing, "Connecting");
+} catch (error) {
+  refused = error;
+}
+check(
+  "a refused start-up page is an error, not a blind display",
+  refused instanceof PageRefused && refused.code === 2,
+  refused instanceof Error ? refused.message : String(refused),
 );
 
 // --- what the protocol will carry -------------------------------------------

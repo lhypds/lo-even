@@ -10,6 +10,7 @@ import { Feeds } from "./services/feeds";
 import { conditionPcm, transcribe } from "./utils/audio";
 import { sensorState, startSensors, subscribeSensors } from "./utils/sensors";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glassesui/glasses";
+import { PageRefused } from "./glassesui/paint";
 import { composeView, type Draft } from "./glassesui/pages/compose";
 import type { PageContext } from "./glassesui/pages/types";
 import { localeFor } from "./glassesui/format";
@@ -98,10 +99,25 @@ async function main() {
   let t = translator(api.language);
 
   let display: GlassesDisplay;
+  // Whether this launch has a touchpad and no screen, which is the one failure
+  // this package cannot report on the screen. Two very different things end at
+  // the same fallback below and only one of them is anybody's problem:
+  //
+  //   • An ordinary browser, where there is no native handler to call and the
+  //     first call rejects before the glasses are ever asked anything. That is
+  //     development — the phone view is lo's own site and draws itself — and the
+  //     browser display exists precisely so this file can be written once.
+  //   • A real Even App that would not make the start-up page. Everything else
+  //     about the launch works: the session comes back, the feeds arrive, the
+  //     touchpad reports every scroll and tap and hold. None of it lands
+  //     anywhere. That is worth interrupting somebody about.
+  let blind = false;
   try {
     display = await createGlassesDisplay(bridge, t("glasses.connecting"));
   } catch (error) {
-    console.info("Even display unavailable; using browser preview", error);
+    blind = error instanceof PageRefused;
+    if (blind) console.error("nothing can reach the glasses", error);
+    else console.info("Even display unavailable; using browser preview", error);
     display = createBrowserDisplay();
   }
 
@@ -778,6 +794,9 @@ async function main() {
         feeds.forget();
         if (coords) void feeds.here(coords, language);
         render();
+        // The one line on the phone this side owns rather than lo, so it follows
+        // the language the same way every line on the display does.
+        if (blind) ui.setNotice(t("glasses.noScreen"));
       },
     },
     // The same language the feeds are asked for, so the sign-in screen and the
@@ -785,6 +804,18 @@ async function main() {
     api.language,
   );
   ui.setUser(null);
+  // Said on the phone, because it is the one thing wrong with this launch that the
+  // glasses cannot be told: they are what is not working. It is a sentence about
+  // the glasses all the same, which is why it comes out of their own dictionary
+  // (see glassesui/strings.ts) rather than the phone screen's.
+  //
+  // A line rather than a stop. Everything the phone half does still works — it is
+  // lo's own site and it never needed the glasses — so what this launch has is one
+  // broken half and a reader who would otherwise put it down to the glasses being
+  // broken. The rest of the app carries on: the feeds are still read, and every
+  // gesture is still handled, so a pair of glasses that comes back mid-session
+  // finds an app that has been keeping up with where its reader is.
+  if (blind) ui.setNotice(t("glasses.noScreen"));
 
   // A cold start asks lo before it asks the reader. Every launch used to ask for
   // the password, because the key is withdrawn a minute after each sign-in and

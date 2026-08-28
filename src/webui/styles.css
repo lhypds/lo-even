@@ -81,6 +81,39 @@ button {
   display: none;
 }
 
+/* The one line this package draws over lo's own site, and the only thing on this
+   screen that is not lo. It is there for a launch whose glasses would not take a
+   page: the display is where this app says everything, and the display is what is
+   missing, so the sentence has to come out here instead (see src/main.ts).
+
+   Dark on lo's white, which is this shell's own chrome rather than lo's palette —
+   it is not lo speaking. Pinned to the visual viewport like the frame under it,
+   for the frame's reason: with the keyboard up, a bar measured against the layout
+   viewport would sit behind it.
+
+   Under the sign-in screen, which is z-index 20. A reader who has not signed in
+   can do nothing about the glasses yet, and a bar across the top of a password
+   field is a bar in the way. */
+.notice {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: var(--vv-top, 0px);
+  z-index: 10;
+  margin: 0;
+  padding: 10px 14px;
+  background: var(--panel);
+  color: #e8e9e5;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.notice[hidden] {
+  display: none;
+}
+
 .app-shell {
   width: min(100%, 720px);
   height: 100vh;

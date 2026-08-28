@@ -275,6 +275,19 @@ under a reader who had learned where they were. So an empty Trends group is
 absent rather than claiming nobody here is searching for anything, and an absent
 Warnings line is not an all clear nobody checked.
 
+The one thing that cannot be said here is that there is no here. The start-up page
+*is* the display, and a launch where the glasses answer and refuse to make one
+leaves a package that looks well from the inside — the session comes back, the
+feeds arrive, the touchpad reports every scroll and tap and hold — and puts
+nothing on any glass. That used to be a line in the console, and the first anybody
+heard of it was a hold failing to open the microphone, which is this page's absence
+reported as something else entirely. So a refusal is an error now, and the sentence
+goes on the phone, over lo's own site: **nothing is reaching the glasses, close lo
+and open it again**. It is a line rather than a stop — the phone half never needed
+the glasses and still works — and it is told apart from an ordinary browser, where
+there is no native handler to refuse anything and the display is meant to be
+absent.
+
 
 Signing in
 ----------

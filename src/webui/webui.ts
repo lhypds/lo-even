@@ -29,6 +29,16 @@ export interface WebUI {
   showLogin(error?: unknown): void;
   hideLogin(): void;
   setLoginBusy(busy: boolean): void;
+  /**
+   * One line of this package's own, over the top of lo's site. Empty takes it
+   * away.
+   *
+   * It exists for the one fault this app cannot report where it happens: a launch
+   * whose glasses would not take a page. Everything else that goes wrong is said
+   * on the display, because the display is the app; when the display is what is
+   * missing there is one screen left, and it is this one (see main.ts).
+   */
+  setNotice(message: string): void;
 }
 
 // The phone view is the website itself. Nothing on this side draws lo any more,
@@ -57,6 +67,9 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
   // The frame starts blank on purpose. Pointed at the site before a key exists,
   // it would draw lo's own login screen behind the one login.ts puts up — the
   // same screen twice, only one of which the glasses can hear about.
+  // The notice is written after the frame and before the sign-in screen, which is
+  // the order the three of them stand in: lo's site at the bottom, this package's
+  // one line over it, and the screen that asks for a password over both.
   root.innerHTML = `
     <iframe
       class="frame"
@@ -65,9 +78,11 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
       allow="geolocation; microphone"
       hidden
     ></iframe>
+    <p class="notice" data-notice role="status" hidden></p>
   `;
 
   const frame = root.querySelector<HTMLIFrameElement>("[data-frame]")!;
+  const notice = root.querySelector<HTMLParagraphElement>("[data-notice]")!;
 
   // After the frame, so it stands over it in the document as well as in the
   // stacking order.
@@ -150,6 +165,10 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
     },
     setLoginBusy(busy) {
       login.setBusy(busy);
+    },
+    setNotice(message) {
+      notice.textContent = message;
+      notice.hidden = !message;
     },
   };
 }

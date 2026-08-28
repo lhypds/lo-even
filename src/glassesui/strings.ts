@@ -219,6 +219,10 @@ const en: Dict = {
   "glasses.transcribeFailed": "Speech service unreachable.",
   "glasses.markFailed": "Could not mark this spot.",
   "glasses.empty": "Nothing to show yet.",
+  // The one line in this dictionary that is never on the glasses, because it is
+  // about the glasses not being there: it is drawn on the phone, over lo's own
+  // site, for a launch that came up with a touchpad and no screen (see main.ts).
+  "glasses.noScreen": "Nothing is reaching the glasses. Close lo and open it again from the Even App.",
 };
 
 const ja: Dict = {
@@ -369,6 +373,7 @@ const ja: Dict = {
   "glasses.transcribeFailed": "音声認識に接続できません。",
   "glasses.markFailed": "この場所を記録できません。",
   "glasses.empty": "表示できるものがありません。",
+  "glasses.noScreen": "メガネに何も表示されていません。lo を閉じて、Even App から開き直してください。",
 };
 
 const zh: Dict = {
@@ -519,6 +524,7 @@ const zh: Dict = {
   "glasses.transcribeFailed": "无法连接语音服务。",
   "glasses.markFailed": "无法记录此处。",
   "glasses.empty": "暂无内容。",
+  "glasses.noScreen": "眼镜上没有任何显示。请关闭 lo，从 Even App 重新打开。",
 };
 
 const DICTS: Record<Language, Dict> = { en, ja, zh };

@@ -41,6 +41,30 @@ export interface Painter {
   shutdown(): Promise<void>;
 }
 
+/**
+ * The host answered, and what it said was no.
+ *
+ * It is worth its own kind of error because of what it is *not*: a package
+ * running in an ordinary browser cannot reach a native handler at all, and the
+ * call rejects before any of this. That is development, and the right answer to
+ * it is to draw nothing and get on with the phone view. This is the other thing —
+ * a real Even App, a real pair of glasses, and a start-up page they would not
+ * make — and the right answer to that is to say so, because every gesture after
+ * it will go on arriving from a touchpad attached to a screen with nothing on it
+ * (see main.ts).
+ *
+ * The codes are the host's own: 1 invalid, 2 oversize, 3 out of memory.
+ */
+export class PageRefused extends Error {
+  readonly code: number;
+
+  constructor(code: number) {
+    super(`the glasses would not take the start-up page (${code})`);
+    this.name = "PageRefused";
+    this.code = code;
+  }
+}
+
 // Past this many changed lines, rebuilding the page beats writing them one at a
 // time. An update is a smaller message than a rebuild but it is still a round
 // trip, and on a BLE link the round trips are what cost — one rebuild carrying
@@ -106,7 +130,14 @@ export async function createPainter(bridge: EvenAppBridge, boot: Panel[]): Promi
     );
     if (created === 0) break;
   }
-  if (created !== 0) console.warn(`createStartUpPageContainer returned ${created}`);
+  // And where it still will not, that is the end of this display rather than a
+  // line in the console. It used to warn and carry on, which built a painter that
+  // wrote every page of the app into a container the glasses had never made: the
+  // launch looked well, the wheel and the taps worked, the feeds came back — and
+  // nothing was ever on the glass. The first the reader heard of it was a hold on
+  // the touchpad failing to open the microphone, which is the same page's absence
+  // reported as something else entirely (see main.ts).
+  if (created !== 0) throw new PageRefused(created);
 
   let shape = signature(boot);
   let shown = new Map(boot.map((panel) => [panel.id, panel.text]));
