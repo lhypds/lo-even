@@ -2,6 +2,25 @@ import type { Coordinates, LocalResult, LoUser } from "./types";
 
 const API_BASE = "https://lo.gcc3.com";
 
+export type Language = "en" | "ja" | "zh";
+
+// The key lo keeps its own choice under (see lo/src/i18n/index.js), and the same
+// order of preference behind it: what was chosen last, else the phone's own
+// language where lo has words for it. It is the one thing this frame writes down.
+// A language is not a credential, and a reader who has said ZH once and is asked
+// again at the next launch has been shown a bug rather than a preference.
+const LANGUAGE_KEY = "lang";
+
+function savedLanguage(): Language | null {
+  try {
+    const saved = localStorage.getItem(LANGUAGE_KEY);
+    return saved === "en" || saved === "ja" || saved === "zh" ? saved : null;
+  } catch {
+    // A WebView with storage denied still has a language; it just cannot keep it.
+    return null;
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -25,11 +44,25 @@ export interface Session {
 
 export class LoApi {
   private token = "";
-  readonly language: "en" | "ja" | "zh";
+  // Which language everything the glasses are fed comes back in, and the one the
+  // sign-in screen is read in. Not readonly: the switcher in that screen's corner
+  // is the same control lo has in its own, and a language chosen there is the
+  // language the dashboard should arrive in.
+  language: Language;
 
   constructor() {
-    const language = navigator.language.toLowerCase();
-    this.language = language.startsWith("ja") ? "ja" : language.startsWith("zh") ? "zh" : "en";
+    const browser = navigator.language.toLowerCase();
+    this.language =
+      savedLanguage() ?? (browser.startsWith("ja") ? "ja" : browser.startsWith("zh") ? "zh" : "en");
+  }
+
+  setLanguage(language: Language) {
+    this.language = language;
+    try {
+      localStorage.setItem(LANGUAGE_KEY, language);
+    } catch {
+      // Kept for this launch either way.
+    }
   }
 
   setToken(token: string) {

@@ -1,11 +1,20 @@
 @import url("https://cdn.jsdelivr.net/npm/firacode@6.2.0/distr/fira_code.css");
 
 :root {
-  color-scheme: dark;
+  /* Light, because everything this shell shows is lo: its sign-in screen and then
+     the site itself, both on white paper. Left dark, iOS would hand this frame a
+     dark keyboard and the frame's own site a light one — the same field answered
+     by two different keyboards, one on each side of a sign-in. */
+  color-scheme: light;
   font-family: "Fira Code VF", "SFMono-Regular", Consolas, monospace;
   color: #e8e9e5;
-  background: #e9e9e6;
+  background: var(--paper);
   font-synthesis: none;
+  /* lo's paper. Nothing in this shell is ever meant to be seen behind the site
+     or behind the screen that signs into it, so what little shows through — the
+     canvas under a rubber-band, the frame before lo has painted — is lo's own
+     white rather than a colour that announces a second app. */
+  --paper: #ffffff;
   --chrome: #e9e9e6;
   --ink: #0f1010;
   --panel: #0f1014;
@@ -31,7 +40,7 @@ body,
 body {
   overflow: hidden;
   overscroll-behavior: none;
-  background: var(--chrome);
+  background: var(--paper);
 }
 
 button,
@@ -63,7 +72,7 @@ button {
   width: 100%;
   height: var(--vv-height, 100dvh);
   border: 0;
-  background: var(--panel);
+  background: var(--paper);
 }
 
 /* `.frame`'s own `display` outranks the UA rule behind the hidden attribute, so
@@ -291,107 +300,373 @@ h1 {
   font-weight: 650;
 }
 
-/* Same visual-viewport box as the frame, for the same reason — this side has a
-   pair of inputs of its own. The card centres on `margin: auto` instead of the
-   grid so that a card taller than the room left over scrolls inside the overlay
-   rather than losing its top edge off screen. */
-.modal {
+/* lo's own sign-in screen, rule for rule out of lo/src/styles.css (.auth-page,
+   .auth-card, .auth-logo, .tagline, .login-form, .joined-field, .form-message,
+   .auth-back, .sr-only). The reader is not meant to notice that signing in and
+   the site behind it are two screens, so the values are copied rather than
+   approximated: 340px of card, a 42px field against a 90px button, the 9px the
+   message line sits under it.
+
+   Two departures, both about the room this screen has rather than how it looks.
+   It is pinned to the visual viewport instead of running the full page, so the
+   keyboard cannot push it about (see src/viewport.ts) — and being a fixed box it
+   scrolls inside itself, which is what the card's `margin: auto` is for: a card
+   taller than the room left over keeps its top edge instead of losing it. */
+.auth-page {
+  /* lo's palette, local to this screen. The dark chrome outside it is lo-even's
+     own and keeps the same token names, so overriding them here rather than at
+     the root is what lets lo's rules be copied over unedited. */
+  --ink: #0b0b0b;
+  --paper: #ffffff;
+  --muted: #707070;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --display: "Fira Code", var(--mono);
+  /* The box lo draws its controls to, in the smaller of its two sizes — which is
+     the size the switcher comes out at on lo's own sign-in screen, that screen
+     never overriding the tokens the way the top bar does. */
+  --action-w: 22px;
+  --action-h: 18px;
+  --action-glyph: 10px;
   position: fixed;
   left: 0;
   top: var(--vv-top, 0px);
   z-index: 20;
   display: none;
-  justify-content: center;
   width: 100%;
   height: var(--vv-height, 100dvh);
-  padding: 20px;
+  padding: 24px 16px;
   overflow-y: auto;
-  background: rgb(15 16 20 / 0.62);
-  backdrop-filter: blur(7px);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
-.modal--open {
+.auth-page--open {
   display: flex;
 }
 
-.login {
-  width: min(100%, 360px);
-  margin: auto;
-  padding: 22px;
-  border-radius: 10px;
-  background: var(--chrome);
-  color: var(--ink);
-  box-shadow: 0 24px 80px rgb(0 0 0 / 0.24);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+/* The switcher in the corner, out of lo/src/components/LanguageSwitcher: the
+   trigger says which language is up and the three under it are the choice, drawn
+   to the action-button box off the same tokens so it reads as one of lo's own
+   controls rather than a select.
+
+   Absolute where lo has it fixed. lo pins it to the window; this screen IS a
+   fixed box that follows the visual viewport, and a fixed child would be
+   positioned against the window instead — it would slide out of the corner the
+   moment the keyboard moved the box. */
+.auth-lang {
+  position: absolute;
+  top: 16px;
+  right: 14px;
+  display: inline-flex;
 }
 
-.login__brand {
-  margin: 0 0 18px;
-  font-family: "Fira Code VF", monospace;
-  font-size: 12px;
+.lang-trigger,
+.lang-option {
+  width: var(--action-w);
+  height: var(--action-h);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--action-glyph);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.lang-trigger {
+  user-select: none;
+}
+
+.lang-dropdown {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 999;
+  flex-direction: column;
+}
+
+.auth-lang[data-open="true"] .lang-dropdown {
+  display: flex;
+}
+
+/* Against the trigger's own line rather than under a second one. */
+.lang-option {
+  border-top: none;
+  text-align: center;
+}
+
+.lang-option--active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 340px;
+  margin: auto;
+  /* lo's 12vh, against the room above the keyboard rather than the whole page:
+     as drawn it is lo's screen exactly, and with the keyboard up it gives way
+     instead of pushing the field off the top of what is left. */
+  padding-bottom: calc(var(--vv-height, 100dvh) * 0.12);
+  text-align: center;
+}
+
+.auth-logo {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 44px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 28px 0 28px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.login-form {
+  margin: 0;
+}
+
+.joined-field {
+  display: flex;
+  width: 100%;
+}
+
+.joined-field input {
+  min-width: 0;
+  flex: 1;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--ink);
+  border-right: 0;
+  border-radius: 0;
+  outline: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+}
+
+.joined-field button {
+  width: 90px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.login h2 {
-  margin: 0;
-  font-size: 23px;
-  letter-spacing: -0.04em;
-}
-
-.login__copy {
-  margin: 8px 0 20px;
-  color: #65696f;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.login label {
-  display: block;
-  margin-top: 12px;
-  font-size: 12px;
-}
-
-.login label span {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.login input {
-  width: 100%;
-  height: 44px;
-  padding: 0 11px;
-  border: 1px solid #c5c6c2;
-  border-radius: 7px;
-  outline: none;
-  background: #fff;
-  color: #111;
-  font-size: 16px;
-}
-
-.login input:focus {
-  border-color: #1c7542;
-  box-shadow: 0 0 0 3px rgb(28 117 66 / 0.12);
-}
-
-.login__error {
+/* One voice, whether the line is saying what the field wants or what was wrong
+   with what it was given: the grey lo sets its hint in, and not an error ink. */
+.form-message {
   min-height: 18px;
-  margin: 10px 0 0;
-  color: #a12d2d;
+  margin: 9px 0 0;
+  color: var(--muted);
   font-size: 12px;
+}
+
+/* The way out of the password step is a word inside that line of type, not a box
+   set beside it: the field and its button are what the screen is for, and a slab
+   under them would read as a second thing to do. */
+.auth-back,
+.auth-forgot {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-page button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The one sheet this screen can open, out of lo's ui/Modal and the .modal-text /
+   .modal-actions / .primary-button / .outline-button rules under it: lo cannot put
+   a password back — it is a name and a password and no address to send anything to
+   — so the answer is a word to the administrator, written from the reader's own
+   mail app with the account already named in it.
+
+   Sized against the visual viewport for the reason everything else here is: a
+   sheet capped at 90vh is capped against a window the keyboard never shrinks. */
+.sheet-overlay {
+  position: fixed;
+  left: 0;
+  top: var(--vv-top, 0px);
+  z-index: 1000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--vv-height, 100dvh);
+  background: rgb(0 0 0 / 0.5);
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
+.sheet-overlay--open {
+  display: flex;
+}
+
+.sheet {
+  width: 90%;
+  min-width: 280px;
+  max-width: 400px;
+  max-height: calc(var(--vv-height, 100dvh) * 0.9);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  touch-action: auto;
+}
+
+.sheet__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 10px 16px;
+}
+
+.sheet__title {
+  font-family: var(--display);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.sheet__close {
+  margin-left: auto;
+  padding: 2px 4px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.sheet__content {
+  flex: 1;
+  padding: 4px 16px 16px;
+  overflow-y: auto;
+}
+
+.modal-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* The pair at the foot of a confirm, pushed to the right and only as wide as
+   their words rather than split across the sheet as two bars: a confirm is a
+   question, and the answer belongs where the eye leaves the sentence. */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.primary-button,
+.outline-button {
+  height: 42px;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .primary-button {
-  width: 100%;
-  height: 44px;
-  border: 0;
-  border-radius: 7px;
   background: var(--ink);
-  color: #fff;
-  font-weight: 650;
+  color: var(--paper);
 }
 
-.primary-button:disabled {
-  opacity: 0.55;
+.outline-button {
+  width: 100%;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* The anchor is the one action at the foot of this sheet that is not a press.
+   Sized with its neighbour, and told to centre its word the way a button does
+   for free. */
+.modal-actions button,
+.modal-actions a {
+  width: auto;
+  min-width: 72px;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.modal-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (hover: hover) {
+  /* The two that are ink already, turning to paper under the pointer. */
+  .joined-field button:hover:not(:disabled),
+  .primary-button:hover {
+    background: var(--paper);
+    color: var(--ink);
+  }
+
+  /* And the three that are paper, turning to ink. */
+  .outline-button:hover,
+  .lang-option:hover,
+  .auth-lang:hover .lang-trigger {
+    background: var(--ink);
+    color: var(--paper);
+  }
+
+  .auth-lang:hover .lang-dropdown {
+    display: flex;
+  }
+
+  /* Grey until the pointer is on it, like every other line of type in lo that
+     turns out to be pressable. */
+  .auth-back:hover:not(:disabled),
+  .auth-forgot:hover:not(:disabled),
+  .sheet__close:hover {
+    color: var(--ink);
+  }
 }
 
 @media (max-height: 640px) {

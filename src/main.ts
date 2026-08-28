@@ -5,7 +5,7 @@ import {
   waitForEvenAppBridge,
   type AppLocation,
 } from "@evenrealities/even_hub_sdk";
-import { LoApi, ApiError } from "./api";
+import { LoApi } from "./api";
 import { conditionPcm, transcribe } from "./audio";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glasses";
 import type { Coordinates, LocalResult, LoCard, LoUser } from "./types";
@@ -320,8 +320,10 @@ async function main() {
       burnTimer = window.setTimeout(() => void burnLinkKey(), LINK_KEY_TTL_MS);
       await refresh();
     } catch (error) {
-      const message = error instanceof ApiError ? error.message : "Could not sign in. Try again.";
-      ui.showLogin(message);
+      // The error itself rather than a sentence about it: the screen asking is
+      // lo's own, and it says what the server said in lo's own words — which
+      // takes the code, not just the message (see webui showLogin).
+      ui.showLogin(error);
       setStatus("sign in failed");
     } finally {
       ui.setLoginBusy(false);
@@ -459,12 +461,23 @@ async function main() {
     }
   }
 
-  ui = createWebUI({
-    onLogin: login,
-    onLogout: logout,
-    onRefresh: () => void refresh(),
-    onSelect: select,
-  });
+  ui = createWebUI(
+    {
+      onLogin: login,
+      onLogout: logout,
+      onRefresh: () => void refresh(),
+      onSelect: select,
+      // A language chosen on the sign-in screen is the language the glasses are
+      // fed in too — the dashboard is asked for it by name, and the clock and the
+      // date are formatted against it. Nothing is loaded yet when this is pressed,
+      // so there is nothing to re-ask for: the first dashboard already goes out in
+      // whichever language was last pressed.
+      onLanguage: (language) => api.setLanguage(language),
+    },
+    // The same language the dashboard is asked for, so the sign-in screen and the
+    // site behind it are reading from one list.
+    api.language,
+  );
   ui.setUser(null);
   render();
 
