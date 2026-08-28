@@ -140,21 +140,36 @@ async function main() {
       unread: feeds.unread,
       heading: sensorState(),
       username: user?.username ?? null,
+      article: (link) => feeds.article(link),
     };
   }
 
-  // The page in front of the reader is the one worth paying for, and there is
-  // exactly one read that works that way now: the inbox, which has nothing to do
-  // with where anybody is standing and so is not worth asking for until the page
-  // that shows it is up. Called after every paint, every scroll and every step in
-  // or out; the feed store decides whether that is actually a new question (see
-  // feeds.ts) and does nothing when it is not.
+  // What is in front of the reader is what is worth paying for. Two reads work
+  // that way, and neither has anything to do with where anybody is standing:
   //
-  // `current` answers with the page rather than the path, which is what this
-  // wants: the letters are on the second page, in the list under it and on the
-  // screen under that, and all three of them are `nearby`.
+  //   • the inbox, which is not worth asking for until the page that shows it is
+  //     up. `current` answers with the page rather than the path, which is what
+  //     this wants — the letters are on the second page, in the list under it
+  //     and on the screen under that, and all three of them are `nearby`.
+  //   • the story behind a headline, which is not worth asking for until the
+  //     reader has opened that one headline. lo reads none of a list until asked
+  //     (see lo/server/articles.js), so this is the request that decides — and
+  //     it is deliberately hung off `reading`, which is null at both the depths
+  //     where the reader is still choosing.
+  //
+  // Called after every paint, every scroll and every step in or out; the feed
+  // store decides whether either is actually a new question (see feeds.ts) and
+  // does nothing when it is not.
   function ensureVisible(): void {
-    if (display.current() === "nearby" && api.signedIn) feeds.inbox();
+    if (!api.signedIn) return;
+    if (display.current() === "nearby") feeds.inbox();
+    const open = display.reading();
+    if (open) {
+      feeds.read(open.link, {
+        title: open.title,
+        kind: open.group === "events" ? "event" : "news",
+      });
+    }
   }
 
   function render(): void {

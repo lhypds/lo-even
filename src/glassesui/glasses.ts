@@ -112,6 +112,12 @@ export interface GlassesDisplay {
   takeover(screen: Takeover | null): void;
   /** Which page the reader is looking at, for anything that needs to know. */
   current(): string | null;
+  /**
+   * The entry being read whole, where it is one whose words have to be fetched.
+   * Null everywhere else — on the dashboard, in a list, and on any entry that
+   * already carries what it says. What acts on it is main.ts, after every paint.
+   */
+  reading(): ReadRef | null;
   /** Where in the app they are, as the corner of the footer says it: `lo/nearby`. */
   path(): string;
   shutdown(): Promise<void>;
@@ -143,6 +149,22 @@ const CHOOSING = 1;
 const LISTING = 2;
 const READING = 3;
 
+/**
+ * An entry whose words live somewhere else, and what to say when asking for
+ * them.
+ *
+ * The title is the feed's own wording, passed on as lo's fallback for a page
+ * that does not state its own. The masthead is deliberately not passed: what
+ * this level has is the entry's first line, which is the source and the hour
+ * together — sent as a source it would file half the stories in the app under
+ * `BBC · 2h ago`. lo reads the publisher's own name off the page anyway.
+ */
+export interface ReadRef {
+  link: string;
+  group: string;
+  title: string;
+}
+
 /** One screenful of what is underneath a page, and everything the wheel needs to leave it. */
 interface Inside {
   view: PageView;
@@ -161,6 +183,13 @@ interface Inside {
   /** The groups of the page, and the entries of the one the reader has chosen. */
   groups: Span[];
   items: Item[];
+  /**
+   * Set only on the screen that is reading one entry whole, and only where that
+   * entry keeps its words elsewhere. It is how the app knows a story is worth
+   * fetching, and it is deliberately not set at the two depths above: a reader
+   * looking at a list of twenty headlines has chosen none of them.
+   */
+  read?: ReadRef;
 }
 
 /**
@@ -240,6 +269,13 @@ export async function createGlassesDisplay(
   // again on demand, because the honest answer to "where is the reader" is the
   // one that is on the glass.
   let shownPath = ROOT;
+  // The entry the reader is actually reading whole, where it is one that keeps
+  // its words somewhere else — which today means a newswire row, whose story is
+  // a read of lo's own. Kept from the paint for the same reason the path above
+  // is: what is worth fetching is what is on the glass, not what some other part
+  // of the app has worked out ought to be. Null at every other depth, and on
+  // every entry that already carries what it says (see main.ts).
+  let shownRead: ReadRef | null = null;
 
   /** The place, the hour, the badge and whatever is being said — the same on every screen. */
   function surround(context: PageContext): Chrome {
@@ -351,6 +387,11 @@ export async function createGlassesDisplay(
       total,
       groups,
       items,
+      // Only here, at the bottom of the app: the reader has opened this one
+      // entry and nothing else, which is the whole of what makes fetching its
+      // story worth a request. An entry that carries its own words — a post, a
+      // letter — has no link and so asks for nothing.
+      read: item.link ? { link: item.link, group: item.group, title: item.line } : undefined,
     };
   }
 
@@ -362,6 +403,7 @@ export async function createGlassesDisplay(
     // — because it is the same screen with a different question on it, and the
     // reader should not have to work out that it is. No path and no counter: it
     // is not anywhere in the app, and it has its own way out (see compose.ts).
+    shownRead = null;
     if (taken) {
       painter.paint(layout(taken.view, 0, surround(latest)));
       return;
@@ -371,6 +413,7 @@ export async function createGlassesDisplay(
       const step = inside(latest);
       if (step) {
         shownPath = step.chrome.path ?? ROOT;
+        shownRead = step.read ?? null;
         painter.paint(layout(step.view, step.screen, step.chrome, step.select));
         return;
       }
@@ -503,6 +546,10 @@ export async function createGlassesDisplay(
       return taken ? "" : shownPath;
     },
 
+    reading() {
+      return taken ? null : shownRead;
+    },
+
     shutdown() {
       return painter.shutdown();
     },
@@ -533,6 +580,9 @@ export function createBrowserDisplay(): GlassesDisplay {
       taken = screen?.id ?? null;
     },
     current: () => taken ?? pageId,
+    // Nothing is ever read whole in a browser: the phone view is lo's own site
+    // in a frame and does its own reading (see webui.ts).
+    reading: () => null,
     path: () => ROOT,
     async shutdown() {},
   };

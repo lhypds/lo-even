@@ -87,6 +87,31 @@ export interface LoFeedResult {
   items: LoFeedItem[];
 }
 
+/**
+ * The words behind one of those headlines, which lo reads off the publisher's
+ * page for us. Until this existed a newswire row was a link and nothing else —
+ * the glasses could say what had happened and not what was said about it, and
+ * the rest was on the phone.
+ *
+ * `paragraphs` is the story broken the way the publisher broke it, and it stays
+ * an array all the way to the screen: everything that measures text in this app
+ * collapses whitespace, so a block of prose with blank lines in it arrives as
+ * one run of words (see metrics.ts, and prosePanels in layout.ts).
+ */
+export interface LoArticle {
+  id: string;
+  /** The publisher's own address, resolved from the feed's opaque one. */
+  url: string;
+  title: string | null;
+  source: string | null;
+  published: string | null;
+  paragraphs: string[];
+  /** The publisher says outright that this is not free to read. */
+  paywalled: boolean;
+  /** Only the opening came back — a paywall, or a page that would not give more. */
+  partial: boolean;
+}
+
 export interface LoTrend {
   name: string;
   count?: number | null;

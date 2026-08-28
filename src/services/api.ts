@@ -1,6 +1,7 @@
 import type {
   Coordinates,
   Language,
+  LoArticle,
   LoDashboard,
   LoPerson,
   LoPost,
@@ -248,6 +249,37 @@ export class LoApi {
   // Japanese, and the words the page can translate it translates itself.
   warnings({ latitude, longitude }: Coordinates) {
     return this.request<LoWarningsResult>(`/api/warnings?lat=${latitude}&lon=${longitude}`);
+  }
+
+  /**
+   * The words behind one headline, asked for by the row's own link — the opaque
+   * `news.google.com` address the feed gave, which lo resolves to the publisher's
+   * before it reads anything.
+   *
+   * The one read in this file nobody's position asks for. Everything above is a
+   * question about where the reader is standing and is asked the moment they
+   * move; this is asked only when they have opened something, because until then
+   * there is no telling which of twenty headlines they meant — and reading all
+   * twenty on the chance would spend sixty requests on somebody else's
+   * newspapers to fill a store mostly with things never read.
+   *
+   * It is slow the first time anyone anywhere opens a given story — lo has to
+   * resolve Google's link and then fetch the page, which is two round trips
+   * before the words — and a file read for everyone after. That first wait is
+   * why the reading screen has something to say while it is on its way.
+   *
+   * The title and the source are the feed's own wording, sent as a fallback for
+   * a page that does not state its own. A 404 is not an error to show: it is a
+   * story lo could not read — a publisher that will not answer a server, or a
+   * paywall — and the honest answer up here is the headline and where to go for
+   * the rest (see pages/feed.ts).
+   */
+  article(link: string, { title, source, kind }: { title?: string; source?: string; kind?: string }) {
+    const query = new URLSearchParams({ link });
+    if (title) query.set("title", title);
+    if (source) query.set("source", source);
+    if (kind) query.set("kind", kind);
+    return this.request<LoArticle>(`/api/articles?${query}`);
   }
 
   /**

@@ -88,6 +88,29 @@ const ctx: PageContext = {
       { username: "kenji", latitude: 35.6620, longitude: 139.7060, time: new Date(Date.now() - 8 * 60_000).toISOString() },
     ],
   },
+  // One of the three headlines has its story behind it and the other two have
+  // not been opened, which is the state the reading screen is actually met in:
+  // lo reads nothing until a row is tapped (see lo/server/articles.js).
+  article: (link: string) =>
+    link === "x"
+      ? {
+          status: "ready" as const,
+          data: {
+            id: "preview",
+            url: "https://www3.nhk.or.jp/news/preview",
+            title: "Shibuya Station east exit redevelopment enters final phase",
+            source: "NHK",
+            published: new Date(Date.now() - 2 * 3600_000).toISOString(),
+            paragraphs: [
+              "The final phase of the redevelopment around the east exit of Shibuya Station began on Monday, closing the pedestrian deck between the station and Hikarie for the first time since it opened.",
+              "Work on the deck is expected to run until the spring, and the operator has laid a temporary crossing at street level for the eighty thousand people who use it each day.",
+              "渋谷駅東口の再開発は最終段階に入り、歩行者デッキは春まで閉鎖される。",
+            ],
+            paywalled: false,
+            partial: false,
+          },
+        }
+      : { status: "idle" as const, data: null },
   news: {
     status: "ready",
     data: [

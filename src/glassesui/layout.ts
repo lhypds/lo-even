@@ -98,6 +98,27 @@ export interface Panel {
  * read is one step per screenful of it, which is how a post longer than the
  * screen is read to the end rather than cut off at it.
  */
+/**
+ * A body broken to the width of the line, with its own paragraph breaks kept.
+ *
+ * `wrap` collapses whitespace, which is right everywhere else in this app — a
+ * heading, a summary line and a list row are each one run of words, and a stray
+ * newline in one of them is a mistake to be swallowed. The reading screen is the
+ * exception: what arrives here is a story somebody wrote in paragraphs, and run
+ * together they are fifteen screenfuls of unbroken text with nothing to hold on
+ * to. So the breaks are honoured here and nowhere else, by wrapping each
+ * paragraph on its own and laying the results end to end.
+ *
+ * No blank line between them. The body is five lines deep and a rule of air
+ * every paragraph would spend a fifth of the screen saying nothing; a paragraph
+ * starting at the margin after a short line is break enough at this size.
+ */
+function proseLines(text: string): string[] {
+  return text
+    .split(/\n+/)
+    .flatMap((paragraph) => wrap(paragraph, BODY_WIDTH));
+}
+
 export function screens(view: PageView): number {
   switch (view.block.kind) {
     case "note":
@@ -105,7 +126,7 @@ export function screens(view: PageView): number {
     case "items":
       return Math.max(1, view.block.items.length);
     case "prose":
-      return Math.max(1, Math.ceil(wrap(view.block.text, BODY_WIDTH).length / BODY_LINES));
+      return Math.max(1, Math.ceil(proseLines(view.block.text).length / BODY_LINES));
     default:
       return Math.max(1, Math.ceil(view.block.rows.length / BODY_LINES));
   }
@@ -367,10 +388,7 @@ function itemPanels(items: Item[], focus: number): Panel[] {
  * one screen in the app that has exactly what the reader asked for.
  */
 function prosePanels(block: Extract<Block, { kind: "prose" }>, screen: number): Panel[] {
-  const lines = wrap(block.text, BODY_WIDTH).slice(
-    screen * BODY_LINES,
-    screen * BODY_LINES + BODY_LINES,
-  );
+  const lines = proseLines(block.text).slice(screen * BODY_LINES, screen * BODY_LINES + BODY_LINES);
   if (lines.length === 0) return [];
   return [panel(CONTAINER.prose, PROSE, lines.join("\n"), INK, 5)];
 }

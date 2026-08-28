@@ -28,6 +28,7 @@
 import type {
   Coordinates,
   Language,
+  LoArticle,
   LoFeedItem,
   LoPerson,
   LoPlace,
@@ -84,6 +85,13 @@ export interface PageContext {
   heading: HeadingReading;
   /** The signed-in account, so the people line can leave you out of who else is here. */
   username: string | null;
+  /**
+   * The words behind a headline, for a row that has been opened. A read and
+   * never a request: a page builds its whole list on every paint and must be
+   * able to ask this of every row without any of them costing anything. What
+   * starts the fetch is the reader arriving on the reading screen (see main.ts).
+   */
+  article(link: string): Feed<LoArticle>;
 }
 
 /**
@@ -140,6 +148,16 @@ export interface Item {
   line: string;
   /** The whole of what it says, which is what the reader stepped in for. */
   body: string;
+  /**
+   * Where the rest of this entry lives, for the one kind that does not carry its
+   * own words: a newswire row is a headline and a link, and the story behind it
+   * is a read of its own that nobody pays for until the row is opened.
+   *
+   * Its presence is what tells the app there is something to fetch — the entry
+   * is readable either way, because `body` always has the headline in it (see
+   * pages/feed.ts), and this is what turns that into the story.
+   */
+  link?: string;
 }
 
 /**

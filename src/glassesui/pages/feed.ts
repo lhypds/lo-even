@@ -12,7 +12,7 @@
 
 import { feedTime, joined } from "../format";
 import type { Translate } from "../strings";
-import type { LoFeedItem } from "../../types";
+import type { LoArticle, LoFeedItem } from "../../types";
 import { nothing } from "./list";
 import type { Feed, Item, PageContext } from "./types";
 
@@ -33,6 +33,40 @@ export function feedWord<T>(feed: Feed<T>, t: Translate, words: FeedWords): stri
 }
 
 /**
+ * What is under a headline once the reader steps into it.
+ *
+ * The headline is always the first line of it, whatever else happened, and that
+ * is deliberate: this screen is reached by opening a row, and a screen that
+ * answered a tap by replacing the words tapped on with `Still coming.` reads as
+ * having lost them. It also keeps the entry enterable in every state, since an
+ * entry with no body is one the app steps back out of (see glasses.ts).
+ *
+ * The three states under it are lo's own three, kept apart for lo's own reason:
+ * still coming, nothing to be had, and the story. The middle one is not an error
+ * — plenty of publishers will not answer a server at all, and a paywall answers
+ * with its first paragraph — so it says where the rest is rather than apologising.
+ */
+function story(item: LoFeedItem, article: Feed<LoArticle>, t: Translate): string {
+  const words = article.data?.paragraphs ?? [];
+  // Nothing to be had — nobody answered, or the answer had no words in it. Both
+  // are the same thing to a reader, and both are "it is on the phone".
+  if (article.status === "failed" || (article.status === "ready" && words.length === 0)) {
+    return `${item.title}\n\n${t("article.elsewhere")}`;
+  }
+  if (article.status !== "ready") return `${item.title}\n\n${t("article.reading")}`;
+  // Paragraphs kept apart rather than run together: they are the only structure
+  // a story arrives with, and on a screen five lines deep they are what stops
+  // fifteen screenfuls reading as one. The reading screen is the one place in
+  // the app that honours a break (see prosePanels in layout.ts).
+  //
+  // A story that stopped early says so at the end of what there is, where the
+  // reader has just run out — not at the top, where it would be a warning about
+  // something they had not read yet.
+  const ending = article.data?.partial ? [t("article.partial")] : [];
+  return [item.title, ...words, ...ending].join("\n\n");
+}
+
+/**
  * One of lo's upstream feeds as a list of entries: where each came from and when
  * over the top of it, and what it says underneath (see pages/list.ts).
  *
@@ -49,7 +83,7 @@ export function feedWord<T>(feed: Feed<T>, t: Translate, words: FeedWords): stri
 export function feedItems(
   group: string,
   feed: Feed<LoFeedItem[]>,
-  { locale, t }: PageContext,
+  { locale, t, article }: PageContext,
   words: FeedWords,
 ): Item[] {
   const rows = feed.data ?? [];
@@ -68,7 +102,10 @@ export function feedItems(
       // twice would be a screen saying it once and then again.
       head: joined(item.source, when) || t(`${group}.title`),
       line: item.title,
-      body: item.title,
+      // The headline on the list, the story underneath it once the reader has
+      // opened the row — which is when lo goes and reads it, and not before.
+      body: story(item, article(item.url), t),
+      link: item.url,
     };
   });
 }

@@ -37,6 +37,7 @@
 import type {
   Coordinates,
   Language,
+  LoArticle,
   LoDashboard,
   LoFeedItem,
   LoPerson,
@@ -92,6 +93,12 @@ const INBOX_MS = 60_000;
 const WARNINGS_MS = 5 * 60_000;
 const DASHBOARD_MS = 10 * 60_000;
 
+// How many stories are kept at once. Not a stretch of time like the rest of
+// this: a published story is the same story tomorrow, so what bounds this is the
+// reader's afternoon rather than the answer going stale. Twenty is the length of
+// lo's own newswire — a whole page's worth read end to end, which nobody does.
+const ARTICLES_KEPT = 20;
+
 /** The stretch of time an answer belongs to, which is the rest of every key. */
 function within(every: number): string {
   return String(Math.floor(Date.now() / every));
@@ -106,6 +113,11 @@ export class Feeds {
   private warningsSlot = slot<LoWarningsResult>();
   private inboxSlot = slot<LoThread[]>();
   private peopleSlot = slot<LoPerson[]>();
+  // One per story the reader has opened, keyed by the link that opened it.
+  // A Map rather than a field because there is no telling in advance which of a
+  // list they will read, and insertion order is what makes the cap above a
+  // sensible one to enforce.
+  private articleSlots = new Map<string, Slot<LoArticle>>();
   private unreadCount = 0;
 
   constructor(api: LoApi, changed: () => void) {
@@ -156,6 +168,48 @@ export class Feeds {
   }
   get messages(): Feed<LoThread[]> {
     return view(this.inboxSlot);
+  }
+
+  /**
+   * The words behind one headline, if they have been asked for. A pure read: it
+   * never starts anything, so the page that builds a list may call it for every
+   * row it draws without any of them turning into a request.
+   *
+   * A slot that does not exist yet and one that is idle are the same answer,
+   * which is what lets the reading screen say "still coming" without having to
+   * know which of the two it is looking at.
+   */
+  article(link: string): Feed<LoArticle> {
+    const found = this.articleSlots.get(link);
+    return found ? view(found) : { status: "idle", data: null };
+  }
+
+  /**
+   * The reader has actually opened one. The only read in this file that is not
+   * about where anybody is standing, and the only one keyed by a thing rather
+   * than by a place and a stretch of time — a story that has been published does
+   * not change, so once it is here it is never asked for again.
+   *
+   * Called from the paint, like the inbox, and for the same reason: the entry in
+   * front of the reader is the one worth paying for. A list of twenty headlines
+   * is nineteen stories nobody will open, and lo reads none of them until asked
+   * (see lo/server/articles.js) — so this is the request that decides.
+   */
+  read(link: string, hints: { title?: string; source?: string; kind?: string }): void {
+    let target = this.articleSlots.get(link);
+    if (!target) {
+      // Bounded, because this is the one store that grows with what the reader
+      // has done rather than with where they are standing: an afternoon spent
+      // walking and reading the wire would otherwise keep every story of the day
+      // alive. The oldest goes, which on a Map is its first key.
+      if (this.articleSlots.size >= ARTICLES_KEPT) {
+        const oldest = this.articleSlots.keys().next();
+        if (!oldest.done) this.articleSlots.delete(oldest.value);
+      }
+      target = slot<LoArticle>();
+      this.articleSlots.set(link, target);
+    }
+    void this.fill(target, link, () => this.api.article(link, hints));
   }
   /** How much is waiting to be read, which rides in on the presence trade. */
   get unread(): number {
@@ -294,6 +348,7 @@ export class Feeds {
     this.warningsSlot = slot();
     this.inboxSlot = slot();
     this.peopleSlot = slot();
+    this.articleSlots.clear();
     this.unreadCount = 0;
     this.changed();
   }

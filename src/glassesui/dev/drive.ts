@@ -70,6 +70,8 @@ function context(over: Partial<PageContext> = {}): PageContext {
       })),
     },
     people: { status: "ready", data: [] },
+    // Nothing is ever opened in here, so no story is ever asked for.
+    article: () => ({ status: "idle", data: null }),
     news: { status: "idle", data: null },
     events: { status: "idle", data: null },
     trends: { status: "idle", data: null },
@@ -392,6 +394,76 @@ check("a takeover has no path, being nowhere in the app", display.path() === "",
 display.takeover(null);
 await settle();
 check("putting it away puts the reader back", display.current() === "nearby", String(display.current()));
+
+// --- what a story costs -----------------------------------------------------
+// A newswire row keeps its words somewhere else, and `reading` is the whole of
+// how the app knows to go and get them (see main.ts). The point of it is where
+// it stays quiet: a reader looking at a page, or at a list of twenty headlines,
+// has chosen none of them, and lo reads nothing until one is opened.
+const wire: PageContext = busy({
+  news: {
+    status: "ready",
+    data: [
+      { kind: "news", title: "A headline", url: "https://news.google.com/rss/articles/AAA", source: "BBC" },
+      { kind: "news", title: "Another headline", url: "https://news.google.com/rss/articles/BBB", source: "NHK" },
+    ],
+  },
+});
+
+display.takeover(null);
+display.render(wire);
+await settle();
+// Round to the page the newswire is on, then in as far as the entry itself.
+while (display.current() !== "info") {
+  display.scroll(1);
+  await settle();
+}
+check("nothing is asked for from a page", display.reading() === null, String(display.reading()));
+
+display.enter();
+await settle();
+while (display.path() !== "lo/info") {
+  display.scroll(1);
+  await settle();
+}
+check("nor while a group is only picked out", display.reading() === null, String(display.reading()));
+
+display.enter();
+await settle();
+check("nor from the list of them", display.reading() === null, `${display.path()} → ${display.reading()}`);
+
+display.enter();
+await settle();
+check(
+  "the story is asked for only once the entry is open",
+  display.reading()?.link === "https://news.google.com/rss/articles/AAA",
+  `${display.path()} → ${display.reading()?.link ?? "null"}`,
+);
+
+// The wheel means the next screenful down here, not the next story — so a long
+// read walks through itself without asking lo for anything more.
+display.scroll(1);
+await settle();
+check(
+  "the wheel walks the story rather than leaving it",
+  display.reading()?.link === "https://news.google.com/rss/articles/AAA",
+  String(display.reading()?.link ?? "null"),
+);
+
+display.back();
+await settle();
+check("stepping back out stops asking", display.reading() === null, `${display.path()} → ${display.reading()}`);
+
+// Changing story is done from the list, which is where the wheel walks entries.
+display.scroll(1);
+await settle();
+display.enter();
+await settle();
+check(
+  "and the next story is asked for when that one is opened",
+  display.reading()?.link === "https://news.google.com/rss/articles/BBB",
+  String(display.reading()?.link ?? "null"),
+);
 
 // --- what the protocol will carry -------------------------------------------
 // Every page above has been through the painter by now, the fullest of them being
