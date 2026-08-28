@@ -2,7 +2,10 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <!-- interactive-widget: where it is honoured the keyboard resizes the layout
+         viewport, so nothing has to be scrolled or shifted to clear it. Where it
+         is not (iOS, mostly), src/viewport.ts does the same job by hand. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0f1014" />
     <meta name="description" content="lo for Even G2 — what is happening where you are." />
     <title>lo</title>

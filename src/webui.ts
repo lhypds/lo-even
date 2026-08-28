@@ -1,4 +1,5 @@
 import type { LoCard, LoUser } from "./types";
+import { trackVisualViewport } from "./viewport";
 import "./styles.css";
 
 const SITE_URL = "https://lo.gcc3.com";
@@ -32,6 +33,9 @@ export interface WebUI {
 export function createWebUI(actions: WebUIActions): WebUI {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) throw new Error("#app element not found");
+
+  // Before the frame is written, so its first layout is already the right size.
+  trackVisualViewport();
 
   // The frame starts blank on purpose. Pointed at the site before a key exists,
   // it would draw lo's own login screen behind the modal — two sign-in forms on

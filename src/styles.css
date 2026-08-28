@@ -24,14 +24,13 @@ html,
 body,
 #app {
   width: 100%;
-  min-height: 100%;
+  height: 100%;
   margin: 0;
 }
 
 body {
-  min-height: 100vh;
-  min-height: 100dvh;
   overflow: hidden;
+  overscroll-behavior: none;
   background: var(--chrome);
 }
 
@@ -52,13 +51,25 @@ button {
   font-size: 13px;
 }
 
+/* Pinned to the visual viewport rather than the layout viewport: with the
+   keyboard up the site gets exactly the room above it, and the field it is
+   focusing needs no help from WebKit to be on screen. `100dvh` is the fallback
+   for anything without visualViewport — see src/viewport.ts. */
 .frame {
+  position: fixed;
+  left: 0;
+  top: var(--vv-top, 0px);
   display: block;
   width: 100%;
-  height: 100vh;
-  height: 100dvh;
+  height: var(--vv-height, 100dvh);
   border: 0;
   background: var(--panel);
+}
+
+/* `.frame`'s own `display` outranks the UA rule behind the hidden attribute, so
+   sign-out would otherwise leave the frame standing. */
+.frame[hidden] {
+  display: none;
 }
 
 .app-shell {
@@ -280,23 +291,32 @@ h1 {
   font-weight: 650;
 }
 
+/* Same visual-viewport box as the frame, for the same reason — this side has a
+   pair of inputs of its own. The card centres on `margin: auto` instead of the
+   grid so that a card taller than the room left over scrolls inside the overlay
+   rather than losing its top edge off screen. */
 .modal {
   position: fixed;
-  inset: 0;
+  left: 0;
+  top: var(--vv-top, 0px);
   z-index: 20;
   display: none;
-  place-items: center;
+  justify-content: center;
+  width: 100%;
+  height: var(--vv-height, 100dvh);
   padding: 20px;
+  overflow-y: auto;
   background: rgb(15 16 20 / 0.62);
   backdrop-filter: blur(7px);
 }
 
 .modal--open {
-  display: grid;
+  display: flex;
 }
 
 .login {
   width: min(100%, 360px);
+  margin: auto;
   padding: 22px;
   border-radius: 10px;
   background: var(--chrome);
