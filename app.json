@@ -9,8 +9,12 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "lo uses your phone location to load nearby information and publish your saved places and spoken posts.",
+      "desc": "lo reaches its own server to sign you in and to load and publish posts, and a transcription service to turn a spoken post into text.",
       "whitelist": ["https://lo.gcc3.com", "https://cli.simple-ai.io", "https://api.openai.com"]
+    },
+    {
+      "name": "location",
+      "desc": "lo uses your phone location to load nearby information and publish your saved places and spoken posts."
     },
     {
       "name": "g2-microphone",
