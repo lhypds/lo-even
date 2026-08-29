@@ -19,8 +19,10 @@ const LANGUAGES = new Set<string>(["en", "ja", "zh"]);
 export interface WebUIActions {
   // The first step of the sign-in, which asks lo about the name rather than
   // signing anybody in (see login.ts).
-  onCheckUsername(username: string): Promise<void>;
+  onCheckUsername(username: string): Promise<{ hasPassword: boolean }>;
   onLogin(username: string, password: string): Promise<void>;
+  // The same press on a name nobody is using, which the reader has said to open.
+  onCreate(username: string, password: string): Promise<void>;
   onLogout(): Promise<void>;
   onRefresh(): void;
   onLanguage(language: Language): void;
@@ -94,6 +96,7 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
     {
       onCheckUsername: (username) => actions.onCheckUsername(username),
       onSubmit: (username, password) => actions.onLogin(username, password),
+      onCreate: (username, password) => actions.onCreate(username, password),
       onLanguage: (next) => actions.onLanguage(next),
     },
     language,

@@ -34,6 +34,12 @@ password screen goes up, exactly as lo's own sign-in screen puts it, so a name
 lo does not have is answered on the field it was typed into rather than after a
 password has been asked for and refused. That request signs nobody in.
 
+A name nobody is using comes back from it as `USER_NOT_FOUND`, and that is the
+offer to open the account: the same sheet lo puts up, and the same password step
+behind it, with `POST /api/users` in place of `POST /api/login` at the end. Both
+answer alike — `{ user, token, key }` — so everything below is true of a reader
+who has just opened an account as much as of one signing back into theirs.
+
 `POST /api/login` is the second of the two, and it answers with a `token` and a
 `key`, which are spent on the two frames:
 
@@ -148,6 +154,7 @@ has just left.
 | --- | --- | --- |
 | Is this a name lo has? | `POST /api/username` | On the first step of that sign-in, before the password is asked for |
 | Sign in | `POST /api/login` | Once, the first time this package is opened |
+| Open an account | `POST /api/users` | Instead of that, where the name step found nothing and the reader said to create it |
 | Take the stored session up again | `POST /api/me/link` | At every launch after that |
 | Withdraw the spent link key | `DELETE /api/me/link` | A minute after either of them |
 | Sign out | `POST /api/logout` | When the frame says it has signed out |

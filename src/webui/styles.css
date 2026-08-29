@@ -546,10 +546,12 @@ h1 {
   border: 0;
 }
 
-/* The one sheet this screen can open, out of lo's ui/Modal and the .modal-text /
-   .modal-actions / .primary-button / .outline-button rules under it: lo cannot put
-   a password back — it is a name and a password and no address to send anything to
-   — so the answer is a word to the administrator, written from the reader's own
+/* The two sheets this screen can open, out of lo's ui/Modal and the .modal-text /
+   .modal-actions / .primary-button / .outline-button rules under it. One asks
+   whether to open an account under a name nobody is using, which is the answer to
+   the name step finding nothing. The other is the whole of what lo can do about a
+   forgotten password: it is a name and a password and no address to send anything
+   to, so the answer is a word to the administrator, written from the reader's own
    mail app with the account already named in it.
 
    Sized against the visual viewport for the reason everything else here is: a

@@ -34,10 +34,15 @@ const COPY: Record<Language, Record<string, string>> = {
     forgot: "Forgotten?",
     usernameNoLetter: "A username needs at least one letter",
     userNotFound: "No account with that name",
+    userExists: "That username is taken",
+    passwordChooseHint: `Something you will remember, ${PASSWORD_MIN}+ characters.`,
     passwordRequired: "Please enter a password",
     passwordWrong: "Wrong password",
     passwordRule: `A password is ${PASSWORD_MIN}–${PASSWORD_MAX} characters`,
     failed: "Could not sign in. Try again.",
+    createTitle: "New account",
+    createConfirm: "No one is using “{{name}}” yet. Create it and choose a password?",
+    create: "Create",
     forgotTitle: "Forgotten password",
     forgotBody:
       "lo cannot send a new one out. Write to the administrator at {{email}}, say which account is yours, and they will set one.",
@@ -57,10 +62,15 @@ const COPY: Record<Language, Record<string, string>> = {
     forgot: "お忘れの方",
     usernameNoLetter: "ユーザー名には文字を 1 つ以上含めてください",
     userNotFound: "そのユーザー名のアカウントはありません",
+    userExists: "そのユーザー名は使われています",
+    passwordChooseHint: `覚えておけるもの。${PASSWORD_MIN} 文字以上。`,
     passwordRequired: "パスワードを入力してください",
     passwordWrong: "パスワードが違います",
     passwordRule: `パスワードは ${PASSWORD_MIN}–${PASSWORD_MAX} 文字です`,
     failed: "サインインできませんでした。もう一度お試しください。",
+    createTitle: "新しいアカウント",
+    createConfirm: "「{{name}}」はまだ誰も使っていません。作成してパスワードを設定しますか？",
+    create: "作成",
     forgotTitle: "パスワードを忘れた",
     forgotBody:
       "lo から新しいパスワードを送ることはできません。管理者 {{email}} にアカウント名を添えてメールを送ると、新しいパスワードを設定してもらえます。",
@@ -80,10 +90,15 @@ const COPY: Record<Language, Record<string, string>> = {
     forgot: "忘记密码？",
     usernameNoLetter: "用户名需包含至少一个字母",
     userNotFound: "没有这个用户名的账号",
+    userExists: "这个用户名已被使用",
+    passwordChooseHint: `记得住的密码，${PASSWORD_MIN} 个字符以上。`,
     passwordRequired: "请输入密码",
     passwordWrong: "密码错误",
     passwordRule: `密码为 ${PASSWORD_MIN}–${PASSWORD_MAX} 个字符`,
     failed: "无法登录，请重试。",
+    createTitle: "新建账号",
+    createConfirm: "还没有人用“{{name}}”。创建账号并设置密码？",
+    create: "创建",
     forgotTitle: "忘记密码",
     forgotBody: "lo 无法发送新密码。写信给管理员 {{email}}，说明是哪个账号，由管理员为你重设。",
     forgotNoAdmin: "尚未设置管理员邮箱，请在 .env 中设置 VITE_ADMIN_EMAIL。",
@@ -107,13 +122,21 @@ function fill(template: string, values: Record<string, string>): string {
 
 export interface LoginActions {
   /**
-   * Whether this name is an account at all — the question the first step is
-   * there to ask, and the whole of what it does. Resolving is the name standing;
-   * throwing is what the line under the field is for (see `POST /api/username`
-   * in services/api.ts).
+   * Whether this name is an account at all, and — where it is — whether it has a
+   * password yet: the question the first step is there to ask, and the whole of
+   * what it does. Throwing `USER_NOT_FOUND` is the offer to open it; anything
+   * else that throws is what the line under the field is for (see
+   * `POST /api/username` in services/api.ts).
    */
-  onCheckUsername(username: string): Promise<void>;
+  onCheckUsername(username: string): Promise<{ hasPassword: boolean }>;
   onSubmit(username: string, password: string): Promise<void>;
+  /**
+   * The same press on an account that does not exist yet: the name and the
+   * password it is being opened with. Separate from `onSubmit` because they are
+   * two endpoints and two different things to have done to somebody's account,
+   * and the screen knows which of them it asked for.
+   */
+  onCreate(username: string, password: string): Promise<void>;
   onLanguage(language: Language): void;
 }
 
@@ -139,9 +162,12 @@ export interface LoginScreen {
 // (What it is signing into, and why the frame cannot ask for itself, is in
 // webui.ts, which owns the frame.)
 //
-// The one thing it cannot do is open an account, this side having no endpoint for
-// that, so a name nobody is using comes back from the server as an error on the
-// name step rather than as an offer to create it.
+// It opens accounts as well, and in lo's own words: a name nobody is using comes
+// back from the name step as an offer to create it — a sheet naming the name, a
+// cancel and a create — and answering yes carries on to the same password step
+// everybody else signs in through, where the password given is the one the
+// account is opened with. A new name is at least as often a mistyped one, which
+// is why it is offered rather than assumed (see lo/src/pages/AuthPage).
 export function createLogin(
   root: HTMLElement,
   actions: LoginActions,
@@ -195,6 +221,22 @@ export function createLogin(
       </p>
     </section>
 
+    <div class="sheet-overlay" data-create-sheet>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="create-title">
+        <div class="sheet__head">
+          <span class="sheet__title" id="create-title" data-create-title></span>
+          <button type="button" class="sheet__close" data-create-close aria-label="Close">✕</button>
+        </div>
+        <div class="sheet__content">
+          <p class="modal-text" data-create-body></p>
+          <div class="modal-actions">
+            <button type="button" class="outline-button" data-create-cancel></button>
+            <button type="button" class="primary-button" data-create-confirm></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="sheet-overlay" data-forgot-sheet>
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
         <div class="sheet__head">
@@ -226,6 +268,12 @@ export function createLogin(
   const forgot = page.querySelector<HTMLButtonElement>("[data-login-forgot]")!;
   const gap = page.querySelector<HTMLSpanElement>("[data-login-gap]")!;
   const back = page.querySelector<HTMLButtonElement>("[data-login-back]")!;
+  const createSheet = page.querySelector<HTMLDivElement>("[data-create-sheet]")!;
+  const createTitle = page.querySelector<HTMLSpanElement>("[data-create-title]")!;
+  const createBody = page.querySelector<HTMLParagraphElement>("[data-create-body]")!;
+  const createCancel = page.querySelector<HTMLButtonElement>("[data-create-cancel]")!;
+  const createConfirm = page.querySelector<HTMLButtonElement>("[data-create-confirm]")!;
+  const createClose = page.querySelector<HTMLButtonElement>("[data-create-close]")!;
   const sheet = page.querySelector<HTMLDivElement>("[data-forgot-sheet]")!;
   const sheetTitle = page.querySelector<HTMLSpanElement>("[data-forgot-title]")!;
   const sheetBody = page.querySelector<HTMLParagraphElement>("[data-forgot-body]")!;
@@ -236,6 +284,17 @@ export function createLogin(
   let step: Step = "name";
   let username = "";
   let busy = false;
+  // Whether the password step is asking for a password or having one chosen, and
+  // whether the account behind it has still to be opened — lo's own two flags, in
+  // lo's own order (see AuthPage.jsx). They are not the same question: an account
+  // opened before there were passwords is one whose password the next sign-in
+  // chooses rather than checks, so it is choosing without being opened.
+  let choosing = false;
+  let opening = false;
+  // The name the sheet is asking about, which is a name nobody is using yet and is
+  // not this screen's `username` until the reader has said to open it. Empty
+  // whenever that sheet is shut.
+  let pending = "";
   // What the line under the field is saying, and — where this screen owns the
   // words rather than the server — which of its own words it said. The key is
   // what lets the line be said again in another language without asking the
@@ -248,12 +307,16 @@ export function createLogin(
     messageText = text;
     messageKey = key;
     message.textContent = text;
-    // lo's rule for the space in front of the ways out of the step: a sentence
-    // brings its own separation — the stop is the space — but a line like
-    // "密码错误" ends in a character that would otherwise run straight into the
-    // word after it, and where there are no words there is nothing to separate.
-    const spaced = Boolean(text) && !/[.。!！?？]$/.test(text);
-    space.textContent = step === "password" && spaced ? SPACE : "";
+    // The space in front of the ways out of the step, wherever there are words for
+    // it to come after. Where there are none there is nothing to separate.
+    //
+    // lo holds this one back after a full stop, on the grounds that a sentence
+    // brings its own separation. A stop is not a space, though, and what it
+    // actually draws is "…4+ characters.Back" — the words of the line running
+    // straight into the underlined word after them. So this screen departs from
+    // lo's by one character, and puts the same en space in front of the pair
+    // however the line before it ended.
+    space.textContent = step === "password" && text ? SPACE : "";
   }
 
   // Everything the current language has a say in, said again. Values are left
@@ -271,6 +334,13 @@ export function createLogin(
     for (const option of langOptions) {
       option.classList.toggle("lang-option--active", option.dataset.langOption === language);
     }
+    createTitle.textContent = copy.createTitle;
+    // Named in the question, because the whole of what is being confirmed is
+    // which name it is: a reader who has been offered this has almost as often
+    // mistyped one as reached for a new one.
+    createBody.textContent = fill(copy.createConfirm, { name: pending });
+    createCancel.textContent = copy.cancel;
+    createConfirm.textContent = copy.create;
     sheetTitle.textContent = copy.forgotTitle;
     sheetBody.textContent = ADMIN_EMAIL ? fill(copy.forgotBody, { email: ADMIN_EMAIL }) : copy.forgotNoAdmin;
     sheetCancel.textContent = copy.cancel;
@@ -301,13 +371,30 @@ export function createLogin(
     input.enterKeyHint = naming ? "next" : "go";
     input.value = naming ? username : "";
     // Neither way out is on the first screen: the name is what back would go back
-    // to, and a password not yet asked for is not one to have forgotten.
-    forgot.hidden = naming;
+    // to, and a password not yet asked for is not one to have forgotten. Nor is
+    // the forgotten one offered while a password is being chosen this minute,
+    // which leaves that line with back on the end of it alone — and the space
+    // that separated the pair goes with it.
+    forgot.hidden = naming || choosing;
     back.hidden = naming;
-    gap.textContent = naming ? "" : SPACE;
-    messageText = "";
-    messageKey = "";
+    gap.textContent = naming || choosing ? "" : SPACE;
+    // What the line says when there is nothing wrong: what a password is being
+    // asked to *be*, where it is being chosen. Nothing where the password asked
+    // for is one the reader already has — the field says "password", the two ways
+    // out of the step are on that line, and a sentence between them saying so
+    // again is a sentence nobody reads.
+    messageText = !naming && choosing ? copy.passwordChooseHint : "";
+    messageKey = !naming && choosing ? "passwordChooseHint" : "";
     paintCopy();
+  }
+
+  // The name step, with whatever the password step was doing put back. Both ways
+  // out of that step come through here — the reader pressing back, and the two
+  // answers from the server that are about the name rather than the password.
+  function toName() {
+    choosing = false;
+    opening = false;
+    setStep("name");
   }
 
   // This screen alone, said again in `next`. Answers whether anything changed,
@@ -331,8 +418,11 @@ export function createLogin(
     if (applyLanguage(next)) actions.onLanguage(next);
   }
 
-  function setSheetOpen(open: boolean) {
-    sheet.classList.toggle("sheet-overlay--open", open);
+  // Either of the two sheets this screen can put up: the offer to open an account
+  // and the word about a forgotten password. Never both — one is reached from the
+  // name step and the other from the password step.
+  function setSheetOpen(which: HTMLElement, open: boolean) {
+    which.classList.toggle("sheet-overlay--open", open);
   }
 
   // Disabled, not relabelled: lo's button says the same word throughout, and
@@ -394,15 +484,31 @@ export function createLogin(
       // screen that took it and then asked for a password is one that answers
       // the wrong question: what comes back is "wrong password" for a password
       // that was never the problem, on a field the reader cannot fix it from.
+      //
+      // It is also what decides which password step this is. An account with no
+      // password yet — one opened before there were passwords — is not being
+      // asked to prove one, it is choosing one, and the line under the field says
+      // so (see `POST /api/login` in lo/server/index.js).
       try {
-        await actions.onCheckUsername(name);
+        const { hasPassword } = await actions.onCheckUsername(name);
+        username = name;
+        choosing = !hasPassword;
+        opening = false;
       } catch (error) {
-        setMessage(...checkError(error));
+        // A name nobody has used is an account waiting to be opened — and just as
+        // often a mistyped one, so it is offered rather than assumed. Nothing is
+        // taken as the name until the reader has answered that sheet.
+        if (error instanceof ApiError && error.code === "USER_NOT_FOUND") {
+          pending = name;
+          paintCopy();
+          setSheetOpen(createSheet, true);
+        } else {
+          setMessage(...checkError(error));
+        }
         return;
       } finally {
         setBusy(false);
       }
-      username = name;
       setStep("password");
       input.focus();
       return;
@@ -412,24 +518,57 @@ export function createLogin(
       setMessage(copy.passwordRequired, "passwordRequired");
       return;
     }
-    await actions.onSubmit(username, input.value);
+    // The same field, the same press, and two endpoints behind it: one opens the
+    // account with the password in it, the other proves the password against the
+    // account that is already there.
+    await (opening ? actions.onCreate(username, input.value) : actions.onSubmit(username, input.value));
+  });
+
+  // Confirming a new name does not open the account: it carries on to the screen
+  // that asks for the password it will be opened with, which is the same screen
+  // everybody else signs in through. The account is opened by that press, so a
+  // reader who gets this far and changes their mind has left nothing behind.
+  createConfirm.addEventListener("click", () => {
+    if (busy) return;
+    username = pending;
+    pending = "";
+    choosing = true;
+    opening = true;
+    setSheetOpen(createSheet, false);
+    setStep("password");
+    // Inside the press, like the step before it: this is the one that puts the
+    // keyboard up for the password (see the name step above).
+    input.focus();
+  });
+
+  // And every way of saying no to it, which leaves the name standing in the field
+  // for a reader who mistyped it and is about to fix a letter of it.
+  function cancelCreate() {
+    pending = "";
+    setSheetOpen(createSheet, false);
+  }
+
+  createClose.addEventListener("click", cancelCreate);
+  createCancel.addEventListener("click", cancelCreate);
+  createSheet.addEventListener("click", (event) => {
+    if (event.target === createSheet) cancelCreate();
   });
 
   forgot.addEventListener("click", () => {
     if (busy) return;
-    setSheetOpen(true);
+    setSheetOpen(sheet, true);
   });
 
   back.addEventListener("click", () => {
     if (busy) return;
-    setStep("name");
+    toName();
   });
 
-  sheetClose.addEventListener("click", () => setSheetOpen(false));
-  sheetCancel.addEventListener("click", () => setSheetOpen(false));
-  sheetSend.addEventListener("click", () => setSheetOpen(false));
+  sheetClose.addEventListener("click", () => setSheetOpen(sheet, false));
+  sheetCancel.addEventListener("click", () => setSheetOpen(sheet, false));
+  sheetSend.addEventListener("click", () => setSheetOpen(sheet, false));
   sheet.addEventListener("click", (event) => {
-    if (event.target === sheet) setSheetOpen(false);
+    if (event.target === sheet) setSheetOpen(sheet, false);
   });
 
   // Whatever the server said, in the reader's own language where the answer is
@@ -437,9 +576,13 @@ export function createLogin(
   // changes under it. The plain message is the fallback rather than the rule.
   function nameError(error: ApiError): [string, string] {
     if (error.code === "USERNAME_NO_LETTER") return [copy.usernameNoLetter, "usernameNoLetter"];
-    // Which on lo's own screen is an offer to open the account and here is the
-    // end of the road, there being no endpoint on this side to open one with.
+    // The two that can only arrive from the password step, where the name has
+    // already been answered for once: the account went, or somebody else took the
+    // name, in the time between the two screens. On the name step itself the first
+    // of them is the offer to open the account rather than a line of type, and the
+    // second cannot happen — nothing is being created there.
     if (error.code === "USER_NOT_FOUND") return [copy.userNotFound, "userNotFound"];
+    if (error.code === "USER_EXISTS") return [copy.userExists, "userExists"];
     return [error.message, ""];
   }
 
@@ -467,12 +610,11 @@ export function createLogin(
         setMessage(copy.failed, "failed");
         return;
       }
-      // The two answers that are about the name rather than the password. Neither
-      // is anything the password field can be used to fix, so the name comes back
-      // up — and on this side USER_NOT_FOUND is the end of it, since opening the
-      // account is lo's own screen's to offer and not this one's.
+      // The two answers that are about the name rather than the password: it was
+      // taken, or it went, between the two screens. Neither is anything the
+      // password field can be used to fix, so the name comes back up.
       if (error.code === "USER_NOT_FOUND" || error.code === "USER_EXISTS") {
-        setStep("name");
+        toName();
         setMessage(...nameError(error));
         return;
       }
@@ -480,10 +622,12 @@ export function createLogin(
     },
     hide() {
       page.classList.remove("auth-page--open");
-      setSheetOpen(false);
+      setSheetOpen(createSheet, false);
+      setSheetOpen(sheet, false);
       lang.dataset.open = "false";
       username = "";
-      setStep("name");
+      pending = "";
+      toName();
     },
     setBusy(nextBusy) {
       setBusy(nextBusy);

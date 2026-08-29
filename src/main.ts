@@ -6,7 +6,7 @@ import {
   waitForEvenAppBridge,
   type AppLocation,
 } from "@evenrealities/even_hub_sdk";
-import { ApiError, LoApi } from "./services/api";
+import { ApiError, LoApi, type Session } from "./services/api";
 import { Feeds } from "./services/feeds";
 import { conditionPcm, transcribe } from "./utils/audio";
 import { sensorState, startSensors, subscribeSensors } from "./utils/sensors";
@@ -446,31 +446,42 @@ async function main() {
   }
 
   /**
-   * The first half of the sign-in: whether lo has this name at all. Nothing is
-   * kept and nobody is signed in — the answer the screen wants is whether this
-   * threw, and everything it does with either outcome it does itself, the line
-   * under the field being the screen's own (see webui/login.ts).
+   * The first half of the sign-in: whether lo has this name at all, and whether
+   * it has a password yet. Nobody is signed in by it — the screen does the rest
+   * itself, offering to open a name nobody is using and saying anything else
+   * under the field (see webui/login.ts).
    */
-  async function checkUsername(username: string): Promise<void> {
-    await api.checkUsername(username);
+  function checkUsername(username: string): Promise<{ hasPassword: boolean }> {
+    return api.checkUsername(username);
   }
 
-  async function login(username: string, password: string): Promise<void> {
+  /**
+   * The password spent on a session — whichever of lo's two requests hands one
+   * out. They differ in the endpoint and in nothing else: opening an account
+   * answers with the same token and the same link key as signing into one, and a
+   * reader who has just opened one is signed in to it.
+   *
+   * The session is passed in already asked for rather than made here, because the
+   * ask has to happen inside the press: iOS hands over the compass from a gesture
+   * or not at all, and an await before `startSensors` would be an await after the
+   * gesture (see below).
+   */
+  async function signIn(session: Promise<Session>): Promise<void> {
     ui.setLoginBusy(true);
     // The one press this package has, and iOS will only hand over the compass
     // from inside one. Not awaited: the sign-in is the thing the reader pressed
     // for, and a permission sheet is not worth holding it up (see sensors.ts).
     void startSensors();
     try {
-      const session = await api.login(username, password);
-      user = session.user;
+      const opened = await session;
+      user = opened.user;
       // The password is spent here and goes no further, and neither does the key
       // it bought: the key opens the WebView and is withdrawn a minute later, so
       // there is nothing of it left to keep. The token is the one thing written
       // down, and it is written down so that this is the last time this reader is
       // asked (see api.ts).
       ui.setUser(user);
-      spendLinkKey(session.key);
+      spendLinkKey(opened.key);
       await refresh();
     } catch (error) {
       // The error itself rather than a sentence about it: the screen asking is
@@ -480,6 +491,17 @@ async function main() {
     } finally {
       ui.setLoginBusy(false);
     }
+  }
+
+  function login(username: string, password: string): Promise<void> {
+    return signIn(api.login(username, password));
+  }
+
+  // And the same press on a name nobody was using, which the reader has said to
+  // open: the password is the one the account is opened with rather than one it
+  // is checked against.
+  function register(username: string, password: string): Promise<void> {
+    return signIn(api.register(username, password));
   }
 
   /**
@@ -981,6 +1003,7 @@ async function main() {
     {
       onCheckUsername: checkUsername,
       onLogin: login,
+      onCreate: register,
       onLogout: logout,
       onRefresh: () => void refresh(true),
       // A language chosen on the sign-in screen — or in the site behind it, which

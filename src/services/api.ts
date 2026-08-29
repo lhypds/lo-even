@@ -225,15 +225,14 @@ export class LoApi {
    * commonest thing wrong with a sign-in and hearing about it from the password
    * step is being told which field was wrong one field too late.
    *
-   * A name nobody is using comes back `USER_NOT_FOUND`, and on this side that is
-   * the end of it: opening an account is lo's own screen's to offer, this one
-   * having no endpoint for it (see webui/login.ts).
+   * A name nobody is using comes back `USER_NOT_FOUND`, which the screen takes as
+   * the offer to open that account rather than as a fault (see webui/login.ts).
    *
-   * `hasPassword` rides along and nothing here reads it. It is false for an
-   * account opened before there were passwords, whose password the next sign-in
-   * chooses rather than checks (see `POST /api/login` in lo/server/index.js) —
-   * which this screen needs no different words for, the password field asking
-   * for one either way.
+   * `hasPassword` is the other half of the answer, and it decides which password
+   * step follows. It is false for an account opened before there were passwords,
+   * whose password the next sign-in *chooses* rather than checks (see
+   * `POST /api/login` in lo/server/index.js) — so that reader is told the line
+   * they are typing is the one they will be asked for from now on.
    */
   checkUsername(username: string) {
     return this.request<{ username: string; hasPassword: boolean }>("/api/username", {
@@ -244,6 +243,27 @@ export class LoApi {
 
   async login(username: string, password: string): Promise<Session> {
     const session = await this.request<Session>("/api/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    this.setToken(session.token);
+    return session;
+  }
+
+  /**
+   * The account opened, which is the other request in lo that hands a session
+   * out — and it hands out exactly what the sign-in above does, token and link
+   * key alike, because a reader who has just opened an account is signed into it.
+   *
+   * It is one press further on from the offer: the name was answered for on the
+   * step before, the reader said to open it, and this is the password they said
+   * to open it with. The name is checked again here, by lo, against everything
+   * `POST /api/username` checked and the reserved list besides — a name free two
+   * screens ago can have been taken since, which comes back as `USER_EXISTS` and
+   * sends the reader back to the field it belongs to.
+   */
+  async register(username: string, password: string): Promise<Session> {
+    const session = await this.request<Session>("/api/users", {
       method: "POST",
       body: JSON.stringify({ username, password }),
     });
