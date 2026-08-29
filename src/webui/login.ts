@@ -33,6 +33,7 @@ const COPY: Record<Language, Record<string, string>> = {
     back: "Back",
     forgot: "Forgotten?",
     usernameNoLetter: "A username needs at least one letter",
+    userNotFound: "No account with that name",
     passwordRequired: "Please enter a password",
     passwordWrong: "Wrong password",
     passwordRule: `A password is ${PASSWORD_MIN}–${PASSWORD_MAX} characters`,
@@ -55,6 +56,7 @@ const COPY: Record<Language, Record<string, string>> = {
     back: "戻る",
     forgot: "お忘れの方",
     usernameNoLetter: "ユーザー名には文字を 1 つ以上含めてください",
+    userNotFound: "そのユーザー名のアカウントはありません",
     passwordRequired: "パスワードを入力してください",
     passwordWrong: "パスワードが違います",
     passwordRule: `パスワードは ${PASSWORD_MIN}–${PASSWORD_MAX} 文字です`,
@@ -77,6 +79,7 @@ const COPY: Record<Language, Record<string, string>> = {
     back: "返回",
     forgot: "忘记密码？",
     usernameNoLetter: "用户名需包含至少一个字母",
+    userNotFound: "没有这个用户名的账号",
     passwordRequired: "请输入密码",
     passwordWrong: "密码错误",
     passwordRule: `密码为 ${PASSWORD_MIN}–${PASSWORD_MAX} 个字符`,
@@ -103,6 +106,13 @@ function fill(template: string, values: Record<string, string>): string {
 }
 
 export interface LoginActions {
+  /**
+   * Whether this name is an account at all — the question the first step is
+   * there to ask, and the whole of what it does. Resolving is the name standing;
+   * throwing is what the line under the field is for (see `POST /api/username`
+   * in services/api.ts).
+   */
+  onCheckUsername(username: string): Promise<void>;
   onSubmit(username: string, password: string): Promise<void>;
   onLanguage(language: Language): void;
 }
@@ -325,6 +335,22 @@ export function createLogin(
     sheet.classList.toggle("sheet-overlay--open", open);
   }
 
+  // Disabled, not relabelled: lo's button says the same word throughout, and
+  // greys out (see .auth-page button:disabled) while the server is waited on.
+  // Both steps wait on one now — the name is asked about before it is accepted —
+  // so this is a function of its own rather than only the screen's own method.
+  //
+  // The field is left alone on purpose. Disabling it would take the focus off it
+  // and the keyboard down with it, for a request that is usually one round trip
+  // long, and the reader would watch the screen shut itself for a moment in the
+  // middle of signing in.
+  function setBusy(next: boolean) {
+    busy = next;
+    submit.disabled = next;
+    forgot.disabled = next;
+    back.disabled = next;
+  }
+
   langTrigger.addEventListener("click", () => {
     lang.dataset.open = lang.dataset.open === "true" ? "false" : "true";
   });
@@ -353,11 +379,31 @@ export function createLogin(
       // being told to type a name into the box that says "username" is a line of
       // type in exchange for a press that plainly did nothing.
       if (!name) return;
+      // Synchronously, inside the press that asked for it, and then held for as
+      // long as the question takes: it is the only way a WebView keeps the
+      // keyboard up across the step, and a keyboard that drops and comes back is
+      // the whole of what the second screen would feel like. The press itself
+      // takes the focus off the field, so this is putting it back before
+      // anything is awaited — after the await there is no press left to focus
+      // inside of, and the field has to have never stopped being the focused one.
+      input.focus();
+      setBusy(true);
+      setMessage("");
+      // Whether this is an account, asked before the password screen goes up.
+      // A mistyped name is the commonest thing wrong with a sign-in, and a
+      // screen that took it and then asked for a password is one that answers
+      // the wrong question: what comes back is "wrong password" for a password
+      // that was never the problem, on a field the reader cannot fix it from.
+      try {
+        await actions.onCheckUsername(name);
+      } catch (error) {
+        setMessage(...checkError(error));
+        return;
+      } finally {
+        setBusy(false);
+      }
       username = name;
       setStep("password");
-      // Synchronously, inside the press that asked for it: it is the only way a
-      // WebView keeps the keyboard up across the step, and a keyboard that drops
-      // and comes back is the whole of what the second screen would feel like.
       input.focus();
       return;
     }
@@ -391,7 +437,17 @@ export function createLogin(
   // changes under it. The plain message is the fallback rather than the rule.
   function nameError(error: ApiError): [string, string] {
     if (error.code === "USERNAME_NO_LETTER") return [copy.usernameNoLetter, "usernameNoLetter"];
+    // Which on lo's own screen is an offer to open the account and here is the
+    // end of the road, there being no endpoint on this side to open one with.
+    if (error.code === "USER_NOT_FOUND") return [copy.userNotFound, "userNotFound"];
     return [error.message, ""];
+  }
+
+  // The same, for the step that asks: a name lo would not have, or a lo that
+  // could not be reached at all — which is not an answer about the name, and is
+  // the one thing the reader can usefully try again.
+  function checkError(error: unknown): [string, string] {
+    return error instanceof ApiError ? nameError(error) : [copy.failed, "failed"];
   }
 
   function passwordError(error: ApiError): [string, string] {
@@ -430,12 +486,7 @@ export function createLogin(
       setStep("name");
     },
     setBusy(nextBusy) {
-      // Disabled, not relabelled: lo's button says the same word throughout, and
-      // greys out (see .auth-page button:disabled) while the server is waited on.
-      busy = nextBusy;
-      submit.disabled = nextBusy;
-      forgot.disabled = nextBusy;
-      back.disabled = nextBusy;
+      setBusy(nextBusy);
     },
     setLanguage(next) {
       applyLanguage(next);

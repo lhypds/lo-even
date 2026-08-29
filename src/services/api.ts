@@ -216,6 +216,30 @@ export class LoApi {
 
   /* ------------------------------------------------------------ the session */
 
+  /**
+   * The first of the two goes a sign-in is asked in, and the one that signs
+   * nobody in: whether this name is an account at all. It is asked before the
+   * password screen goes up rather than after, because a mistyped name is the
+   * commonest thing wrong with a sign-in and hearing about it from the password
+   * step is being told which field was wrong one field too late.
+   *
+   * A name nobody is using comes back `USER_NOT_FOUND`, and on this side that is
+   * the end of it: opening an account is lo's own screen's to offer, this one
+   * having no endpoint for it (see webui/login.ts).
+   *
+   * `hasPassword` rides along and nothing here reads it. It is false for an
+   * account opened before there were passwords, whose password the next sign-in
+   * chooses rather than checks (see `POST /api/login` in lo/server/index.js) —
+   * which this screen needs no different words for, the password field asking
+   * for one either way.
+   */
+  checkUsername(username: string) {
+    return this.request<{ username: string; hasPassword: boolean }>("/api/username", {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    });
+  }
+
   async login(username: string, password: string): Promise<Session> {
     const session = await this.request<Session>("/api/login", {
       method: "POST",

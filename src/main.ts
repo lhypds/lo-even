@@ -445,6 +445,16 @@ async function main() {
     return true;
   }
 
+  /**
+   * The first half of the sign-in: whether lo has this name at all. Nothing is
+   * kept and nobody is signed in — the answer the screen wants is whether this
+   * threw, and everything it does with either outcome it does itself, the line
+   * under the field being the screen's own (see webui/login.ts).
+   */
+  async function checkUsername(username: string): Promise<void> {
+    await api.checkUsername(username);
+  }
+
   async function login(username: string, password: string): Promise<void> {
     ui.setLoginBusy(true);
     // The one press this package has, and iOS will only hand over the compass
@@ -969,6 +979,7 @@ async function main() {
 
   ui = createWebUI(
     {
+      onCheckUsername: checkUsername,
       onLogin: login,
       onLogout: logout,
       onRefresh: () => void refresh(true),

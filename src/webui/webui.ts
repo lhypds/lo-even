@@ -17,6 +17,9 @@ const SITE_ORIGIN = new URL(SITE_URL).origin;
 const LANGUAGES = new Set<string>(["en", "ja", "zh"]);
 
 export interface WebUIActions {
+  // The first step of the sign-in, which asks lo about the name rather than
+  // signing anybody in (see login.ts).
+  onCheckUsername(username: string): Promise<void>;
   onLogin(username: string, password: string): Promise<void>;
   onLogout(): Promise<void>;
   onRefresh(): void;
@@ -89,6 +92,7 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
   const login: LoginScreen = createLogin(
     root,
     {
+      onCheckUsername: (username) => actions.onCheckUsername(username),
       onSubmit: (username, password) => actions.onLogin(username, password),
       onLanguage: (next) => actions.onLanguage(next),
     },

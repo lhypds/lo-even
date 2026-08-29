@@ -28,8 +28,14 @@ token by its parent — there is no API surface between the two, and the site is
 a different origin. What crosses that gap is the account's **link key**, the same
 one a shared `?k=` link carries.
 
-[src/webui/webui.ts](src/webui/webui.ts) asks for a username and password. `POST /api/login`
-answers with a `token` and a `key`, and the two are spent on the two frames:
+[src/webui/webui.ts](src/webui/webui.ts) asks for a username and password, in that
+order and in two goes — the name is put to `POST /api/username` before the
+password screen goes up, exactly as lo's own sign-in screen puts it, so a name
+lo does not have is answered on the field it was typed into rather than after a
+password has been asked for and refused. That request signs nobody in.
+
+`POST /api/login` is the second of the two, and it answers with a `token` and a
+`key`, which are spent on the two frames:
 
 - the **key** opens the iframe at `https://lo.gcc3.com/?k=<key>`, where the site's
   own `AuthProvider` trades it through `POST /api/link` and strips it back out of
@@ -140,6 +146,7 @@ has just left.
 
 | Purpose | Endpoint | When |
 | --- | --- | --- |
+| Is this a name lo has? | `POST /api/username` | On the first step of that sign-in, before the password is asked for |
 | Sign in | `POST /api/login` | Once, the first time this package is opened |
 | Take the stored session up again | `POST /api/me/link` | At every launch after that |
 | Withdraw the spent link key | `DELETE /api/me/link` | A minute after either of them |
