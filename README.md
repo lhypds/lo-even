@@ -271,10 +271,13 @@ they left on the street. The last row is where the two differ: a letter names th
 person it is going to, and a remark names whose post it is going under and that
 everybody who comes past reads it.
 
-The words on those screens are the words the answer you are on would actually
-send: lo takes 48 characters as the name of a mark, 300 as a remark under a post,
-500 as the words of a post and 1000 as the words of a letter, so a long sentence
-visibly loses its tail on the mark line and keeps it on the others. Photos, and
+The words on those screens are the words as they were heard, five lines of them —
+which is the whole body of the screen bar the two lines the answers sit on, and
+enough for anything a held touchpad will take short of a speech. What each answer
+saves of them is lo's own business and is not drawn: lo takes 48 characters as the
+name of a mark, 300 as a remark under a post, 500 as the words of a post and 1000
+as the words of a letter, and the mark is the only one of the four an ordinary
+sentence reaches — so a spoken mark is filed under its first few words. Photos, and
 everything else with a keyboard or a camera behind it, stay on the phone.
 
 The footer of those screens is the entry's own, where every other screen in the app

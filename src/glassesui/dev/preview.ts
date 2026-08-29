@@ -501,11 +501,11 @@ for (const page of PAGES) {
 
 // The composer, which is not one of the pages and is not in the count above: it
 // takes the display over while a dictation is waiting to be sent somewhere. All
-// three answers are drawn, because none of them is the same screenful — the
-// sentence is shown as the answer would save it, so the mark's 48 characters are
-// visibly fewer words than the post's, and the reply has a line more of them
-// again because it has one answer where the others have two (see
-// pages/compose.ts).
+// four answers are drawn, because what is under the words differs on each — two
+// marked answers, or the one name a reply is going to, or the post a remark is
+// going under. The words themselves are the same on all of them now: five lines
+// of what was heard, whichever answer is up, and the cut each one would save at
+// is no longer drawn (see pages/compose.ts).
 const SPOKEN =
   language === "en"
     ? "second-hand bookshop behind the station, open until nine, the one with the cat"

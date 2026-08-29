@@ -52,21 +52,29 @@
 // opens the microphone on every screen in the app, this one included, and a hint
 // that said so would be teaching the reader the one thing they already know.
 //
-// **What the preview is for.** It shows the words as the chosen answer would
-// actually send them, which is not the same string four times: lo takes 48
-// characters as the name of a mark, 300 as a remark under a post, 500 as the words
-// of a post and 1000 as the words of a letter, so a spoken sentence that arrives
-// whole on the post line arrives cut on the mark line. Showing the cut is the
-// point. A reader who can see which of the two keeps the sentence they said is
-// choosing between the two things on offer rather than between two words. A reply
-// is never cut in practice — a minute of talking is the most the microphone will
-// take and it does not reach a thousand characters — so what that screen shows is
-// simply the whole of it. A remark can be: three hundred is about ninety seconds
-// of ordinary speech in English and a good deal less in the other two, and a
-// reader whose last sentence is not going to arrive should be able to see that
-// before they tap rather than afterwards on the phone.
+// **What the preview is for.** It shows what was heard, as much of it as the
+// screen will hold: five of the seven body lines, with the answers on the two
+// underneath them. The reader is checking a transcript — the one thing they
+// cannot do here is retype a word the transcriber got wrong — so the words are
+// what the space goes to, and the answers are pinned to the foot of the body
+// where they are always in the same place.
+//
+// It used to show the sentence as the answer under the wheel would *save* it,
+// cut where lo cuts it: 48 characters for the name of a mark, 300 for a remark,
+// 500 for a post, 1000 for a letter. That put a hard stop in the middle of a
+// word — 48 characters lands wherever it lands — on a screen with three empty
+// lines under it, which reads as a display that has broken rather than as a
+// limit that has been reached. So the cut is no longer drawn here. The one it
+// costs is the mark, whose 48 characters are the only limit an ordinary spoken
+// sentence actually reaches; what a mark keeps is its first few words, and that
+// is a thing to say in the answer's own row if it is ever worth saying at all.
+//
+// Over five lines the words run out before the room does, for every answer but
+// the longest: a minute of talking is the most the microphone will take, and
+// what comes back from it is longer than five lines only when the reader has
+// said a great deal. Then the last line ends in an ellipsis, which is `wrap`
+// saying the screen ran out rather than lo saying the sentence will be cut.
 
-import { commentBody, markLabel, messageBody, postBody } from "../../services/api";
 import { formatUsername } from "../format";
 import { READING_VALUES } from "../theme";
 import { wrap } from "../metrics";
@@ -139,42 +147,34 @@ export type Draft =
     }
   | ({ text: string } & Answering);
 
-// How much of the sentence is shown on the screen with two answers on it. Three
-// of the seven lines: one goes to the air above the answers, two to the answers
-// themselves, and the last is left empty on purpose — the two lines the reader is
-// choosing between are the two this screen exists for, and they should not be
-// read hard against the line of instructions underneath them.
-const SAID_LINES = 3;
+// How much of the sentence is shown on the screen with two answers on it. Five of
+// the body's seven lines, the answers taking the two under them — which is the
+// whole body, and deliberately: the answers read as a different kind of thing from
+// the sentence above them because they are labelled and marked, not because there
+// is air between them, and a blank line held back for that costs a line of the one
+// thing on this screen the reader has to check.
+const SAID_LINES = 5;
 
-// And on the screen with one answer on it, which has that answer's line to spare.
-// A reply is the longest of the three things a dictation can be and the one where
-// every word of it matters, so the line goes to the words rather than to more air.
-const REPLY_LINES = 4;
-
-/** What the answer would actually send, which is the transcript cut where lo cuts it. */
-function kept(draft: Draft): string {
-  if (draft.kind === "reply") return messageBody(draft.text);
-  if (draft.kind === "comment") return commentBody(draft.text);
-  return draft.kind === "mark" ? markLabel(draft.text) : postBody(draft.text);
-}
-
-/** Those words, broken to the column, with the cut shown where there was one. */
-function said(draft: Draft, height: number): string[] {
-  const shown = kept(draft);
-  const whole = draft.text.trim();
-  return wrap(shown === whole ? shown : `${shown}…`, READING_VALUES.width, height);
-}
+// And on the screen with one answer on it, where the last line names who it is
+// going to rather than offering a choice. That one keeps its blank line: a single
+// row hard under five lines of type would read as the sixth of them, where a pair
+// of marked answers never could.
+const REPLY_LINES = 5;
 
 /**
- * The sentence, padded to its full height whether or not it fills it. That is what
- * keeps the answers on the last lines of the screen: they would otherwise move up
- * and down as the wheel turned — the mark's preview is shorter than the post's
- * whenever the sentence was long enough to be cut — and a pair of answers that
- * jumps a line every time the reader chooses between them is a pair of answers
- * that can be chosen by mistake.
+ * What was heard: the transcript itself — not what the answer under the wheel
+ * would save — broken to the column, cut to the lines there are, and padded out
+ * to them whether or not it fills them.
+ *
+ * The padding is what keeps the answers on the last lines of the screen. They
+ * would otherwise ride up under a short sentence, and a pair of answers that sits
+ * somewhere different on every dictation is a pair that can be chosen by mistake.
+ *
+ * An ellipsis on the last line is `wrap` saying the screen ran out (see
+ * metrics.ts), which takes a good deal more than a sentence.
  */
 function heard(draft: Draft, t: Translate, height: number): ReadingRow[] {
-  const lines = said(draft, height);
+  const lines = wrap(draft.text, READING_VALUES.width, height);
   return Array.from({ length: height }, (_, index) => ({
     label: index === 0 ? t("compose.said") : "",
     value: lines[index] ?? "",
@@ -256,10 +256,10 @@ export function composeView(draft: Draft, t: Translate): PageView {
   }
 
   const rows = heard(draft, t, SAID_LINES);
-  // A blank line rather than a rule: the answers have to read as a different kind
-  // of thing from the sentence above them, and this screen has the one line to
-  // spare that every other page here does not.
-  rows.push({ label: "", value: "" });
+  // Straight under the words, on the last two lines of the body. There used to be
+  // a blank line between them, and what it was holding apart is held apart by the
+  // label and the two discs anyway (see `answer`) — where the line it cost came
+  // off the sentence, which is the thing the reader is here to read.
   rows.push(answer(draft, "mark", t), answer(draft, "post", t));
 
   return {

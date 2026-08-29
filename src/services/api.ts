@@ -25,21 +25,23 @@ const COMMENT_BODY_MAX = 300;
 const MESSAGE_BODY_MAX = 1000;
 
 /**
- * A spoken sentence cut to what lo will take as the name of a spot. Exported
- * because the screen that asks which of the two a dictation is has to show what
- * each of them would keep, and a preview that promised words the save then cut
- * would be the screen lying about the only thing it is there to say (see
- * pages/compose.ts).
+ * A spoken sentence cut to what lo will take as the name of a spot.
  *
  * Cut rather than refused: a sentence is easily past 48, and a mark saved with
  * its name cut short is worth more to the reader than a mark that was not saved.
+ *
+ * Not shown to the reader on the way past, which it used to be — the composer
+ * drew the sentence cut to whichever answer the wheel was on, and 48 characters
+ * lands in the middle of a word often enough that the screen read as a broken one
+ * (see pages/compose.ts). So this is the one place the cut happens, and none of
+ * these four are anybody else's business any more.
  */
-export function markLabel(text: string): string {
+function markLabel(text: string): string {
   return Array.from(text.trim()).slice(0, MARK_LABEL_MAX).join("").trim();
 }
 
 /** The same, for the words of a post — where lo's own limit is ten times as long. */
-export function postBody(text: string): string {
+function postBody(text: string): string {
   return Array.from(text.trim()).slice(0, POST_BODY_MAX).join("").trim();
 }
 
@@ -48,20 +50,20 @@ export function postBody(text: string): string {
  * itself: a comment is read in a column under something else and has no ground of
  * its own to be about, so lo takes 300 of it against the post's 500 (see the note
  * over `COMMENT_BODY_MAX` in lo/server/index.js). A minute of talking can pass
- * that, which is why the screen that shows one before it goes shows the cut.
+ * that, which is more than the microphone will take in one hold.
  */
-export function commentBody(text: string): string {
+function commentBody(text: string): string {
   return Array.from(text.trim()).slice(0, COMMENT_BODY_MAX).join("").trim();
 }
 
 /**
  * And for a reply, which lo gives twice as much room again: a message is a letter
  * rather than a remark. A spoken one has to run for well over a minute to reach
- * it, which is longer than the microphone stays open — so the screen that shows a
- * reply before it goes is showing the whole of it, where the mark line is often
- * showing a sentence with its tail cut off (see pages/compose.ts).
+ * it, which is longer than the microphone stays open — so this one never actually
+ * cuts anything, and it is here because the endpoint has a limit and a client that
+ * did not know it would find that out from a 400.
  */
-export function messageBody(text: string): string {
+function messageBody(text: string): string {
   return Array.from(text.trim()).slice(0, MESSAGE_BODY_MAX).join("").trim();
 }
 
