@@ -49,7 +49,7 @@ import {
   localClockTime,
 } from "../format";
 import { textWidth } from "../metrics";
-import { weatherLabelKey } from "../strings";
+import { weatherLabelKey } from "../../i18n";
 import { READING_VALUES } from "../theme";
 import { placeTitle, zoneOf } from "./chrome";
 import type { PageContext, PageDefinition, PageView, ReadingRow } from "./types";
@@ -186,7 +186,7 @@ function whenRow(context: PageContext): ReadingRow {
 
   // And the clock time of that event is the first thing off the line when it will
   // not fit, rather than the span or the zone. Wherever the server named the zone
-  // — which is nearly everywhere — all four readings fit in all three languages
+  // — which is nearly everywhere — all four readings fit in the supported languages
   // with four to eighty-six pixels over. It is the offset standing in for a name
   // that fills the line: `9月30日周三 · UTC+09:00 · ↑05:13 · 日出 13小时20分钟` is
   // sixty-two pixels past the end of the column, and the same line without the
@@ -563,7 +563,7 @@ function tallyRows(context: PageContext): ReadingRow[] {
   //
   // Four counts on this line where there were three, and they fit because the
   // words are short: `Posts 2 · People 3 · Cafe 3 · Food 4` is well inside the
-  // column in all three languages. It is still the fullest line on the page, so
+  // column in the supported languages. It is still the fullest line on the page, so
   // it is the one to measure against before any of these four words is made
   // longer — `npm run glasses:preview -- ja` is where to look.
   const others = (people.data ?? []).filter((person) => person.username !== username);

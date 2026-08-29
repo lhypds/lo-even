@@ -38,8 +38,8 @@ import { listView, readView } from "../pages/list";
 import { spans } from "../pages/stack";
 import type { PageContext } from "../pages/types";
 import { layout, screens } from "../layout";
-import { translator } from "../strings";
-import { localeFor, formatPlace } from "../format";
+import { localeFor, translator, type Language } from "../../i18n";
+import { formatPlace } from "../format";
 import { clockFace, pathOf } from "../pages/chrome";
 import { CHAR_WIDTH, CONTAINER, LINE_HEIGHT, SCREEN_HEIGHT, SCREEN_WIDTH } from "../theme";
 import { cells } from "../metrics";
@@ -48,7 +48,7 @@ import { args } from "./host";
 const COLS = Math.round(SCREEN_WIDTH / CHAR_WIDTH);
 const ROWS = Math.round(SCREEN_HEIGHT / LINE_HEIGHT);
 
-const [language = "en", scale] = args() as ["en" | "ja" | "zh", string?];
+const [language = "en", scale] = args() as [Language, string?];
 const t = translator(language);
 
 const ctx: PageContext = {

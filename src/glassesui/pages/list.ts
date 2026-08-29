@@ -22,7 +22,7 @@
 // this app and one reading screen, and learning either of them is learning all
 // six of the groups that have one.
 
-import type { Translate } from "../strings";
+import type { Translate } from "../../i18n";
 import type { Item, ItemRef, PageView } from "./types";
 
 /**

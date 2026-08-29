@@ -69,7 +69,7 @@ import { feedWord, type FeedWords } from "./feed";
 import { nothing } from "./list";
 import { personBody } from "./person";
 import { stack, type Group } from "./stack";
-import type { Translate } from "../strings";
+import type { Translate } from "../../i18n";
 import type { LoMessage, LoPersonThread, LoPostThread, LoThread, LoVenue } from "../../types";
 import type { Feed, Item, PageContext, PageDefinition, PageView } from "./types";
 

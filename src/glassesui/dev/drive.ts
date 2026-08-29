@@ -8,8 +8,7 @@ import { PageRefused } from "../paint";
 import { PAGES } from "../pages/index";
 import { composeView } from "../pages/compose";
 import type { PageContext } from "../pages/types";
-import { translator } from "../strings";
-import { localeFor } from "../format";
+import { localeFor, translator } from "../../i18n";
 import { fail } from "./host";
 
 const calls: string[] = [];

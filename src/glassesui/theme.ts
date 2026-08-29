@@ -21,6 +21,7 @@
 // that lands half a line short reads as a bug rather than as air.
 
 import { CHAR_WIDTH, textWidth } from "./metrics";
+import { TRANSLATIONS, type Translations } from "../i18n/translations";
 
 /** The G2 canvas. Nothing may be positioned outside it. */
 export const SCREEN_WIDTH = 576;
@@ -178,19 +179,17 @@ const PAGER_SLOT = textWidth("00/00");
  * hundred (see MAIL_MAX in layout.ts).
  *
  * **Widest across the languages, too.** The badge is a word and lo is read in
- * three (`mail.badge` in strings.ts), so the corner is measured against whichever
+ * several (`mail.badge` in i18n/translations.ts), so the corner is measured against whichever
  * of them takes the most room and every language gets that box. The alternative
  * — a corner that resized with the dictionary — would make the heading a
  * different width in Japanese from in English, and everything on that line is
  * measured from this edge: the title is cut against it, and so is the bearing
  * laid over the middle of it. One width is one layout to reason about.
  *
- * They come out within three pixels of each other in any case. `msg` is three of
- * the narrower Latin letters at 37, and 未読 and 未读 are two full-width
- * characters at 40 — the same badge, in the language that has a two-character way
- * of saying it.
+ * The width is derived from every dictionary, so adding a language cannot make
+ * its badge spill out of a slot sized for an older set.
  */
-const MAIL_SLOT = Math.max(textWidth("msg"), textWidth("未読"), textWidth("未读"));
+const MAIL_SLOT = Math.max(...Object.values(TRANSLATIONS).map((dict) => textWidth(dict["mail.badge"])));
 const CORNER_SLOT = MAIL_SLOT + textWidth(" (99+) · 00:00");
 
 export const HEAD_TIME: Rect = {
@@ -291,9 +290,8 @@ export function footLineRect(path: string): Rect {
 }
 
 // The body of every page: a word in the margin, and the line that answers it.
-// Ten cells of margin because that is the widest any of those words gets in the
-// language that needs the most room — メッセージ is five characters and ten cells
-// — and every cell left over goes to the line, which is where the readings are.
+// At least ten cells of margin, widened when one of the supported languages has
+// a longer label. Every cell left over goes to the line beside it.
 //
 // Left-aligned, both of them, and that is not a small decision: a column pushed
 // to the right end with spaces only lands there if a space is exactly as wide as
@@ -317,7 +315,36 @@ export function footLineRect(path: string): Rect {
 // the body is cut in pixels (see metrics.ts), so a line with more to say ends on
 // this edge rather than the fifty-odd pixels inside it that a cell's rounding
 // used to leave. Move it and a reading moves with it.
-const LABEL_CELLS = 10;
+const READING_LABEL_KEYS: Array<keyof Translations> = [
+  "clock.title",
+  "location.fix",
+  "weather.title",
+  "weather.forecast",
+  "warnings.title",
+  "warnings.short",
+  "nearby.title",
+  "world.title",
+  "news.title",
+  "events.title",
+  "trends.title",
+  "messages.title",
+  "posts.title",
+  "people.title",
+  "cafe.title",
+  "food.title",
+  "compose.sendTo",
+  "compose.replyUnder",
+];
+const LABEL_CELLS = Math.max(
+  10,
+  Math.ceil(
+    Math.max(
+      ...Object.values(TRANSLATIONS).flatMap((dict) =>
+        READING_LABEL_KEYS.map((key) => textWidth(dict[key])),
+      ),
+    ) / CHAR_WIDTH,
+  ),
+);
 const READING_GAP = EDGE + LABEL_CELLS * CHAR_WIDTH + CHAR_WIDTH;
 
 export const READING_LABELS: Rect = {

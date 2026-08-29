@@ -176,7 +176,7 @@ export interface Chrome {
 // under the table in metrics.ts), and ▤, which stood here in its place, is a
 // ruled box that reads as a list or a menu rather than as a mailbox. A word says
 // it outright, and a word can be translated where a picture would have had to
-// mean the same thing to everybody (see `mail.badge` in strings.ts).
+// mean the same thing to everybody (see `mail.badge` in i18n/translations.ts).
 //
 // Past MAIL_MAX the exact figure has stopped being worth the pixels: a reader with a
 // hundred unread messages is being told to open their phone, not being told a

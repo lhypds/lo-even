@@ -15,8 +15,8 @@ import { PageRefused } from "./glassesui/paint";
 import { composeView, type Answering, type Draft } from "./glassesui/pages/compose";
 import { threadRef } from "./glassesui/pages/nearby";
 import type { ItemRef, PageContext } from "./glassesui/pages/types";
-import { localeFor, postSays } from "./glassesui/format";
-import { translator } from "./glassesui/strings";
+import { postSays } from "./glassesui/format";
+import { detectLanguage, localeFor, translator } from "./i18n";
 import type { Coordinates, LoUser } from "./types";
 import { createWebUI, type WebUI } from "./webui/webui";
 
@@ -1039,7 +1039,7 @@ async function main() {
   // Said on the phone, because it is the one thing wrong with this launch that the
   // glasses cannot be told: they are what is not working. It is a sentence about
   // the glasses all the same, which is why it comes out of their own dictionary
-  // (see glassesui/strings.ts) rather than the phone screen's.
+  // (see i18n/translations.ts) rather than the phone screen's.
   //
   // A line rather than a stop. Everything the phone half does still works — it is
   // lo's own site and it never needed the glasses — so what this launch has is one
@@ -1252,5 +1252,5 @@ async function main() {
 main().catch((error) => {
   console.error(error);
   const root = document.querySelector<HTMLDivElement>("#app");
-  if (root) root.innerHTML = `<div class="boot">lo could not start. Reopen it from Even App.</div>`;
+  if (root) root.innerHTML = `<div class="boot">${translator(detectLanguage())("app.startFailed")}</div>`;
 });

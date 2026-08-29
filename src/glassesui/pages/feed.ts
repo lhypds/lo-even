@@ -11,7 +11,7 @@
 // nobody could be reached.
 
 import { feedTime, joined } from "../format";
-import type { Translate } from "../strings";
+import type { Translate } from "../../i18n";
 import type { LoArticle, LoFeedItem } from "../../types";
 import { nothing } from "./list";
 import type { Feed, Item, PageContext } from "./types";

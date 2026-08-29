@@ -42,7 +42,7 @@ import type {
   LoWarningsResult,
   LoWeather,
 } from "../../types";
-import type { Translate } from "../strings";
+import type { Translate } from "../../i18n";
 
 /**
  * Where one feed has got to. Four states rather than a nullable, because lo is

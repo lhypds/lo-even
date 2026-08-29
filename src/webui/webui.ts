@@ -1,4 +1,4 @@
-import type { Language } from "../services/api";
+import { isLanguage, type Language } from "../i18n";
 import type { LoUser } from "../types";
 import { trackVisualViewport } from "../utils/viewport";
 import { createLogin, type LoginScreen } from "./login";
@@ -9,12 +9,6 @@ const SITE_URL = "https://lo.gcc3.com";
 // with and the only thing that says a message came from the site rather than
 // from whatever else can reach this window.
 const SITE_ORIGIN = new URL(SITE_URL).origin;
-
-// The languages this package has words for, which is the same three lo has. A
-// `setlang` naming anything else is a message from a newer site than this build,
-// and the display has nothing to draw it in — so it is dropped rather than
-// followed into a screen of missing strings.
-const LANGUAGES = new Set<string>(["en", "ja", "zh"]);
 
 export interface WebUIActions {
   // The first step of the sign-in, which asks lo about the name rather than
@@ -119,7 +113,7 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
   //
   // `setlang` — the switcher in the corner of the frame is lo's own too, and the
   // words on the display are drawn from a list on this side (see
-  // glassesui/strings.ts) against feeds asked for in a language this side keeps.
+  // i18n/translations.ts) against feeds asked for in a language this side keeps.
   // A reader who picks ZH on the phone means the glasses as well; without this
   // they would get a site in one language and a display in another.
   //
@@ -139,8 +133,8 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
       return;
     }
 
-    if (message.type === "setlang" && typeof message.language === "string" && LANGUAGES.has(message.language)) {
-      const next = message.language as Language;
+    if (message.type === "setlang" && isLanguage(message.language)) {
+      const next = message.language;
       // Both halves of this side, because both were following the old one: the
       // glasses, which is the whole point of the notice, and the sign-in screen
       // standing behind this frame, which is what the reader would be looking at

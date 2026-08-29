@@ -82,10 +82,8 @@ const PLATFORMS: Record<string, string> = {
 };
 
 /**
- * The two figures, written as one reading. English is the only one of the three
- * languages with an opinion about one follower; the other two answer with the
- * word they have whatever number is standing in front of it, which is why both
- * keys exist in all three dictionaries and only one of them differs.
+ * The two figures, written as one reading. Both follower keys exist in every
+ * dictionary so languages can distinguish the singular where they need to.
  */
 function figures({ followers, following }: NonNullable<LoPersonPage["follows"]>, t: PageContext["t"]): string {
   return joined(

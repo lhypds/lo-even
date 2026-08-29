@@ -4,8 +4,8 @@
 // compile — see lo/server/index.js and lo/server/geo.js for the other end of
 // each of them.
 
-/** The language lo is read in. One list, shared by the sign-in screen and the glasses. */
-export type Language = "en" | "ja" | "zh";
+/** The language lo is read in. Defined with the dictionaries and re-exported here for compatibility. */
+export type { Language } from "./i18n";
 
 export interface Coordinates {
   latitude: number;

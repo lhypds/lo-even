@@ -4,7 +4,7 @@
 // There are two measures here and the difference between them matters.
 //
 // **Cells**, which is what columns of type are cut to. Cells rather than
-// characters because lo is read in three languages and two of them are not one
+// characters because lo is read in several languages and two of them are not one
 // cell per character: 日本語 is five characters and ten cells wide, and a column
 // measured in characters would run a Japanese post clean off the right of the
 // screen while leaving an English one half empty. The rule is the terminal one —

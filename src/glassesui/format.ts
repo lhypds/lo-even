@@ -5,7 +5,7 @@
 // change there belongs here too.
 
 import type { Coordinates, LoPost } from "../types";
-import type { Translate } from "./strings";
+import type { Translate } from "../i18n";
 
 /**
  * What a post says, which is its words — or, for a photo with no words, where it
@@ -188,9 +188,4 @@ export function formatOffset(seconds: number | undefined): string {
   const hours = String(Math.floor(total / 3600)).padStart(2, "0");
   const minutes = String(Math.floor((total % 3600) / 60)).padStart(2, "0");
   return `${sign}${hours}:${minutes}`;
-}
-
-/** The locale tag for a language lo knows, which Intl wants in full. */
-export function localeFor(language: string): string {
-  return language === "zh" ? "zh-CN" : language === "ja" ? "ja-JP" : "en-US";
 }

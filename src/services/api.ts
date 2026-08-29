@@ -1,6 +1,5 @@
 import type {
   Coordinates,
-  Language,
   LoArticle,
   LoComment,
   LoDashboard,
@@ -13,6 +12,7 @@ import type {
   LoVenuesResult,
   LoWarningsResult,
 } from "../types";
+import { detectLanguage, isLanguage, type Language } from "../i18n";
 
 const API_BASE = "https://lo.gcc3.com";
 
@@ -71,7 +71,7 @@ function messageBody(text: string): string {
 // Re-exported because the sign-in screen and the language switcher in its corner
 // have always imported it from here, and the list itself now lives with the rest
 // of lo's shapes (see types.ts).
-export type { Language } from "../types";
+export type { Language } from "../i18n";
 
 // The two things this frame writes down.
 //
@@ -97,7 +97,7 @@ const TOKEN_KEY = "token";
 function savedLanguage(): Language | null {
   try {
     const saved = localStorage.getItem(LANGUAGE_KEY);
-    return saved === "en" || saved === "ja" || saved === "zh" ? saved : null;
+    return isLanguage(saved) ? saved : null;
   } catch {
     // A WebView with storage denied still has a language; it just cannot keep it.
     return null;
@@ -159,9 +159,7 @@ export class LoApi {
   language: Language;
 
   constructor() {
-    const browser = navigator.language.toLowerCase();
-    this.language =
-      savedLanguage() ?? (browser.startsWith("ja") ? "ja" : browser.startsWith("zh") ? "zh" : "en");
+    this.language = savedLanguage() ?? detectLanguage();
   }
 
   setLanguage(language: Language) {

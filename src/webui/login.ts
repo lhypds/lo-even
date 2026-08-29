@@ -1,4 +1,5 @@
-import { ApiError, type Language } from "../services/api";
+import { LANGUAGES, isLanguage, translator, type Language, type Translate } from "../i18n";
+import { ApiError } from "../services/api";
 
 // Where the administrator's word can be had, and the whole of what either screen
 // can do about a forgotten password: there is no reset link, because there is no
@@ -19,106 +20,6 @@ const USERNAME_MAX = 32;
 const SPACE = "\u2002";
 
 type Step = "name" | "password";
-
-// lo's own words, from lo/src/i18n. Copied rather than fetched: this screen has
-// to be up before anything has been asked of lo, and a tagline that arrives a
-// moment after the wordmark would give away that these are two screens.
-const COPY: Record<Language, Record<string, string>> = {
-  en: {
-    tagline: "Where you are, right now.",
-    username: "Username",
-    password: "Password",
-    next: "Next",
-    login: "Go",
-    back: "Back",
-    forgot: "Forgotten?",
-    usernameNoLetter: "A username needs at least one letter",
-    userNotFound: "No account with that name",
-    userExists: "That username is taken",
-    passwordChooseHint: `Something you will remember, ${PASSWORD_MIN}+ characters.`,
-    passwordRequired: "Please enter a password",
-    passwordWrong: "Wrong password",
-    passwordRule: `A password is ${PASSWORD_MIN}–${PASSWORD_MAX} characters`,
-    failed: "Could not sign in. Try again.",
-    createTitle: "New account",
-    createConfirm: "No one is using “{{name}}” yet. Create it and choose a password?",
-    create: "Create",
-    forgotTitle: "Forgotten password",
-    forgotBody:
-      "lo cannot send a new one out. Write to the administrator at {{email}}, say which account is yours, and they will set one.",
-    forgotNoAdmin: "No administrator address is set. Add VITE_ADMIN_EMAIL to .env.",
-    forgotSend: "Write to them",
-    forgotSubject: "lo — forgotten password for {{name}}",
-    forgotMail: "My lo account is {{name}}. I have forgotten my password — please set a new one for me.",
-    cancel: "Cancel",
-  },
-  ja: {
-    tagline: "いま、あなたのいる場所。",
-    username: "ユーザー名",
-    password: "パスワード",
-    next: "次へ",
-    login: "開始",
-    back: "戻る",
-    forgot: "お忘れの方",
-    usernameNoLetter: "ユーザー名には文字を 1 つ以上含めてください",
-    userNotFound: "そのユーザー名のアカウントはありません",
-    userExists: "そのユーザー名は使われています",
-    passwordChooseHint: `覚えておけるもの。${PASSWORD_MIN} 文字以上。`,
-    passwordRequired: "パスワードを入力してください",
-    passwordWrong: "パスワードが違います",
-    passwordRule: `パスワードは ${PASSWORD_MIN}–${PASSWORD_MAX} 文字です`,
-    failed: "サインインできませんでした。もう一度お試しください。",
-    createTitle: "新しいアカウント",
-    createConfirm: "「{{name}}」はまだ誰も使っていません。作成してパスワードを設定しますか？",
-    create: "作成",
-    forgotTitle: "パスワードを忘れた",
-    forgotBody:
-      "lo から新しいパスワードを送ることはできません。管理者 {{email}} にアカウント名を添えてメールを送ると、新しいパスワードを設定してもらえます。",
-    forgotNoAdmin: "管理者のメールアドレスが未設定です。.env に VITE_ADMIN_EMAIL を設定してください。",
-    forgotSend: "メールを書く",
-    forgotSubject: "lo — {{name}} のパスワード再設定",
-    forgotMail: "lo のアカウントは {{name}} です。パスワードを忘れたので、新しく設定してください。",
-    cancel: "キャンセル",
-  },
-  zh: {
-    tagline: "此刻，你在哪里。",
-    username: "用户名",
-    password: "密码",
-    next: "下一步",
-    login: "进入",
-    back: "返回",
-    forgot: "忘记密码？",
-    usernameNoLetter: "用户名需包含至少一个字母",
-    userNotFound: "没有这个用户名的账号",
-    userExists: "这个用户名已被使用",
-    passwordChooseHint: `记得住的密码，${PASSWORD_MIN} 个字符以上。`,
-    passwordRequired: "请输入密码",
-    passwordWrong: "密码错误",
-    passwordRule: `密码为 ${PASSWORD_MIN}–${PASSWORD_MAX} 个字符`,
-    failed: "无法登录，请重试。",
-    createTitle: "新建账号",
-    createConfirm: "还没有人用“{{name}}”。创建账号并设置密码？",
-    create: "创建",
-    forgotTitle: "忘记密码",
-    forgotBody: "lo 无法发送新密码。写信给管理员 {{email}}，说明是哪个账号，由管理员为你重设。",
-    forgotNoAdmin: "尚未设置管理员邮箱，请在 .env 中设置 VITE_ADMIN_EMAIL。",
-    forgotSend: "写信",
-    forgotSubject: "lo — {{name}} 忘记密码",
-    forgotMail: "我的 lo 账号是 {{name}}，忘记了密码，请帮我重设。",
-    cancel: "取消",
-  },
-};
-
-// lo's own three, in lo's own order, under lo's own two-letter labels.
-const LANGUAGES: Array<{ code: Language; label: string }> = [
-  { code: "en", label: "EN" },
-  { code: "zh", label: "ZH" },
-  { code: "ja", label: "JA" },
-];
-
-function fill(template: string, values: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => values[key] ?? "");
-}
 
 export interface LoginActions {
   /**
@@ -173,8 +74,8 @@ export function createLogin(
   actions: LoginActions,
   initialLanguage: Language = "en",
 ): LoginScreen {
-  let language: Language = COPY[initialLanguage] ? initialLanguage : "en";
-  let copy = COPY[language];
+  let language: Language = isLanguage(initialLanguage) ? initialLanguage : "en";
+  let t: Translate = translator(language);
 
   const page = document.createElement("main");
   page.className = "auth-page";
@@ -225,7 +126,7 @@ export function createLogin(
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="create-title">
         <div class="sheet__head">
           <span class="sheet__title" id="create-title" data-create-title></span>
-          <button type="button" class="sheet__close" data-create-close aria-label="Close">✕</button>
+          <button type="button" class="sheet__close" data-create-close aria-label="${t("common.close")}">✕</button>
         </div>
         <div class="sheet__content">
           <p class="modal-text" data-create-body></p>
@@ -241,7 +142,7 @@ export function createLogin(
       <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="forgot-title">
         <div class="sheet__head">
           <span class="sheet__title" id="forgot-title" data-forgot-title></span>
-          <button type="button" class="sheet__close" data-forgot-close aria-label="Close">✕</button>
+          <button type="button" class="sheet__close" data-forgot-close aria-label="${t("common.close")}">✕</button>
         </div>
         <div class="sheet__content">
           <p class="modal-text" data-forgot-body></p>
@@ -302,6 +203,7 @@ export function createLogin(
   // stands as it came.
   let messageText = "";
   let messageKey = "";
+  const passwordVars = { min: PASSWORD_MIN, max: PASSWORD_MAX };
 
   function setMessage(text: string, key = "") {
     messageText = text;
@@ -324,36 +226,40 @@ export function createLogin(
   // something a press on ZH should cost.
   function paintCopy() {
     const naming = step === "name";
-    tagline.textContent = copy.tagline;
-    label.textContent = naming ? copy.username : copy.password;
-    input.placeholder = naming ? copy.username : copy.password;
-    submit.textContent = naming ? copy.next : copy.login;
-    forgot.textContent = copy.forgot;
-    back.textContent = copy.back;
+    tagline.textContent = t("auth.tagline");
+    label.textContent = naming ? t("auth.username") : t("auth.password");
+    input.placeholder = naming ? t("auth.username") : t("auth.password");
+    submit.textContent = naming ? t("auth.next") : t("auth.login");
+    forgot.textContent = t("auth.forgot");
+    back.textContent = t("auth.back");
     langTrigger.textContent = LANGUAGES.find(({ code }) => code === language)?.label ?? "EN";
     for (const option of langOptions) {
       option.classList.toggle("lang-option--active", option.dataset.langOption === language);
     }
-    createTitle.textContent = copy.createTitle;
+    createTitle.textContent = t("auth.createTitle");
     // Named in the question, because the whole of what is being confirmed is
     // which name it is: a reader who has been offered this has almost as often
     // mistyped one as reached for a new one.
-    createBody.textContent = fill(copy.createConfirm, { name: pending });
-    createCancel.textContent = copy.cancel;
-    createConfirm.textContent = copy.create;
-    sheetTitle.textContent = copy.forgotTitle;
-    sheetBody.textContent = ADMIN_EMAIL ? fill(copy.forgotBody, { email: ADMIN_EMAIL }) : copy.forgotNoAdmin;
-    sheetCancel.textContent = copy.cancel;
-    sheetSend.textContent = copy.forgotSend;
+    createBody.textContent = t("auth.createConfirm", { name: pending });
+    createCancel.textContent = t("auth.cancel");
+    createConfirm.textContent = t("auth.create");
+    createClose.ariaLabel = t("common.close");
+    sheetTitle.textContent = t("auth.forgotTitle");
+    sheetBody.textContent = ADMIN_EMAIL
+      ? t("auth.forgotBody", { email: ADMIN_EMAIL })
+      : t("auth.forgotNoAdmin");
+    sheetCancel.textContent = t("auth.cancel");
+    sheetSend.textContent = t("auth.forgotSend");
+    sheetClose.ariaLabel = t("common.close");
     // The one action at the foot of this sheet that is not a press: an address
     // the reader's own mail app opens, with the account already named in it.
     sheetSend.hidden = !ADMIN_EMAIL;
     sheetSend.href = ADMIN_EMAIL
       ? `mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(
-          fill(copy.forgotSubject, { name: username }),
-        )}&body=${encodeURIComponent(fill(copy.forgotMail, { name: username }))}`
+          t("auth.forgotSubject", { name: username }),
+        )}&body=${encodeURIComponent(t("auth.forgotMail", { name: username }))}`
       : "";
-    setMessage(messageKey ? copy[messageKey] : messageText, messageKey);
+    setMessage(messageKey ? t(messageKey, passwordVars) : messageText, messageKey);
   }
 
   // One field, dressed for whichever step is up. lo swaps two of them because it
@@ -383,8 +289,8 @@ export function createLogin(
     // for is one the reader already has — the field says "password", the two ways
     // out of the step are on that line, and a sentence between them saying so
     // again is a sentence nobody reads.
-    messageText = !naming && choosing ? copy.passwordChooseHint : "";
-    messageKey = !naming && choosing ? "passwordChooseHint" : "";
+    messageText = !naming && choosing ? t("auth.passwordChooseHint", passwordVars) : "";
+    messageKey = !naming && choosing ? "auth.passwordChooseHint" : "";
     paintCopy();
   }
 
@@ -401,9 +307,9 @@ export function createLogin(
   // so that the switcher below tells the rest of the app only when there is
   // something to tell it.
   function applyLanguage(next: Language): boolean {
-    if (!COPY[next] || next === language) return false;
+    if (!isLanguage(next) || next === language) return false;
     language = next;
-    copy = COPY[next];
+    t = translator(next);
     // Which language the type is in, not only which words are in it: iOS draws a
     // shared han character one way for zh and another for ja, and the page saying
     // so is the only way it knows which of the two it is reading.
@@ -515,7 +421,7 @@ export function createLogin(
     }
 
     if (!input.value) {
-      setMessage(copy.passwordRequired, "passwordRequired");
+      setMessage(t("auth.passwordRequired"), "auth.passwordRequired");
       return;
     }
     // The same field, the same press, and two endpoints behind it: one opens the
@@ -575,14 +481,16 @@ export function createLogin(
   // one to act on, and with the key that lets it be said again if the language
   // changes under it. The plain message is the fallback rather than the rule.
   function nameError(error: ApiError): [string, string] {
-    if (error.code === "USERNAME_NO_LETTER") return [copy.usernameNoLetter, "usernameNoLetter"];
+    if (error.code === "USERNAME_NO_LETTER") {
+      return [t("auth.usernameNoLetter"), "auth.usernameNoLetter"];
+    }
     // The two that can only arrive from the password step, where the name has
     // already been answered for once: the account went, or somebody else took the
     // name, in the time between the two screens. On the name step itself the first
     // of them is the offer to open the account rather than a line of type, and the
     // second cannot happen — nothing is being created there.
-    if (error.code === "USER_NOT_FOUND") return [copy.userNotFound, "userNotFound"];
-    if (error.code === "USER_EXISTS") return [copy.userExists, "userExists"];
+    if (error.code === "USER_NOT_FOUND") return [t("auth.userNotFound"), "auth.userNotFound"];
+    if (error.code === "USER_EXISTS") return [t("auth.userExists"), "auth.userExists"];
     return [error.message, ""];
   }
 
@@ -590,12 +498,14 @@ export function createLogin(
   // could not be reached at all — which is not an answer about the name, and is
   // the one thing the reader can usefully try again.
   function checkError(error: unknown): [string, string] {
-    return error instanceof ApiError ? nameError(error) : [copy.failed, "failed"];
+    return error instanceof ApiError ? nameError(error) : [t("auth.failed"), "auth.failed"];
   }
 
   function passwordError(error: ApiError): [string, string] {
-    if (error.code === "PASSWORD_WRONG") return [copy.passwordWrong, "passwordWrong"];
-    if (error.code === "PASSWORD_INVALID") return [copy.passwordRule, "passwordRule"];
+    if (error.code === "PASSWORD_WRONG") return [t("auth.passwordWrong"), "auth.passwordWrong"];
+    if (error.code === "PASSWORD_INVALID") {
+      return [t("auth.passwordRule", passwordVars), "auth.passwordRule"];
+    }
     return [error.message, ""];
   }
 
@@ -607,7 +517,7 @@ export function createLogin(
       page.classList.add("auth-page--open");
       if (error === undefined) return;
       if (!(error instanceof ApiError)) {
-        setMessage(copy.failed, "failed");
+        setMessage(t("auth.failed"), "auth.failed");
         return;
       }
       // The two answers that are about the name rather than the password: it was

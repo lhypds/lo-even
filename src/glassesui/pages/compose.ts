@@ -78,7 +78,7 @@
 import { formatUsername } from "../format";
 import { READING_VALUES } from "../theme";
 import { wrap } from "../metrics";
-import type { Translate } from "../strings";
+import type { Translate } from "../../i18n";
 import type { Coordinates } from "../../types";
 import type { PageView, ReadingRow } from "./types";
 
@@ -233,8 +233,8 @@ export function composeView(draft: Draft, t: Translate): PageView {
             // list of mixed kinds — would read here as `Reply to On “…”`.
             //
             // The marks stay, and they are their own word of the dictionary for the
-            // reason the interpunct is: punctuation is part of a language, and two
-            // of these three languages quote with a different pair of characters
+            // reason the interpunct is: punctuation is part of a language, and
+            // each language can quote with a different pair of characters
             // (see `tally.join`). Without them a post beginning with a verb reads as
             // a sentence this screen is saying rather than one it is quoting.
             //
