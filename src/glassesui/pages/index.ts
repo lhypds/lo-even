@@ -7,8 +7,8 @@
 // lines can be made:
 //
 //   1. where you are standing, and a count of what is on the other two;
-//   2. who is here, what they left, and who has written;
-//   3. what is being reported, searched and put on in the wider place.
+//   2. who is here, what they left, who has written, and where to sit down;
+//   3. what is being reported, what is on, and what is being searched for.
 //
 // The order is the website's own — where you are, then who is around you, then
 // the readings of somewhere larger — so a reader who knows where things are on

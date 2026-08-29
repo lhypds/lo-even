@@ -38,6 +38,7 @@ import type {
   LoPost,
   LoThread,
   LoTrend,
+  LoVenue,
   LoWarningsResult,
   LoWeather,
 } from "../../types";
@@ -81,6 +82,14 @@ export interface PageContext {
   news: Feed<LoFeedItem[]>;
   events: Feed<LoFeedItem[]>;
   trends: Feed<LoTrend[]>;
+  /**
+   * Somewhere for a coffee and somewhere to eat, nearest first with how far off
+   * each is. The two feeds on these pages with no country list in front of them:
+   * they come off OpenStreetMap, which stops at no border, so nothing asks
+   * `components` before drawing them (see types.ts).
+   */
+  cafe: Feed<LoVenue[]>;
+  food: Feed<LoVenue[]>;
   warnings: Feed<LoWarningsResult>;
   messages: Feed<LoThread[]>;
   /** How much is waiting to be read, which rides in on the presence trade. */

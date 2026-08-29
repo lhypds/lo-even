@@ -62,10 +62,27 @@ alternative was a page that spilled onto a second screenful, and the count of
 everything else in the app is on the last line of the first one.
 
 **2 · Who is here.** The last word of each row waiting in the inbox, the latest
-posts left on this street, what is on within walking distance, and the names of
-everyone else with a tab open nearby. The messages come first because they are the
-one thing on the page addressed to the reader — the posts are everybody's and the
-names are whoever happens to be about.
+posts left on this street, the names of everyone else with a tab open nearby, and
+then the nearest coffee and the nearest meal with how far off each is. The
+messages come first because they are the one thing on the page addressed to the
+reader — the posts are everybody's and the names are whoever happens to be about —
+and the two venue lines come last because where the nearest café is is something
+you go looking for rather than something that has to catch you.
+
+The five ceilings on this page add up to the seven lines there are — two letters,
+two posts, and one line each for the people, the cafés and the food — so on a full
+street nothing competes and everything lands in the same place it did yesterday.
+The venue lines are packed by measuring rather than by counting: a name off
+somebody's map is anything from `Doutor` to `Blue Bottle Coffee Shibuya`, so the
+line takes as many as fit and puts a `+7` on the end for the rest. The distance is
+on every one of them because it is what the list is sorted by, and a row of names
+in an order you cannot see is a row in no order at all.
+
+The cafés and the food are the two feeds here that stop at no border. Everything
+else regional is a Google edition or a Japanese institution and has a country list
+behind it; these come off OpenStreetMap, which is thin in places and present
+everywhere — so where it is thin the honest answer is a short list, which is a
+claim about the street rather than about the country.
 
 The inbox is two kinds of row in one list, which is lo's own arrangement: a word
 addressed to you and a word left under something you wrote are the same thing to
@@ -81,10 +98,17 @@ printed for anybody within reach who has a pair of glasses on; no screen in lo
 has ever shown it and neither does this one. What is on the screen says there is
 somebody here without saying which window they are behind.
 
-**3 · What is being said.** The newswire for this corner of the map, and what the
-country is searching for — the freshest few of each rather than all of one.
-Listings are on the second page rather than this one, because something on this
-evening a street away is a fact about where you are standing; a newswire is not.
+**3 · What is being said.** The newswire for this corner of the map, what is on
+over the next fortnight, and what the country is searching for — the freshest few
+of each rather than all of one, in the order they happen: what has happened, what
+is going to, and what everyone is looking up.
+
+Listings belong here rather than on the second page, and the reason is how a
+listing is *read*. A row of them is a source, an hour and something to decide
+about — a thing that has not happened yet and that you weigh exactly as you weigh
+a headline. What belongs beside the people and the posts is the fixture rather
+than the occasion: a café will be there tomorrow, and the only question about it
+is which one is nearest.
 
 How many lines each group gets is dealt rather than fixed: every group keeps its
 first line whatever happens, and the ones left over go round in the order the page
@@ -103,17 +127,23 @@ they say", so there are three taps under each of the two pages that have groups
 on them:
 
 1. **A tap puts a box round one of the groups**, on the page itself. The wheel
-   moves the box: Messages, Posts, Events, People. Nothing else changes — you are
-   choosing where to go, and you have not gone yet.
+   moves the box: Messages, Posts, People, Cafe, Food. Nothing else changes — you
+   are choosing where to go, and you have not gone yet.
 2. **A tap on the boxed group opens it.** Only that group: its entries get two
    lines apiece and three are on screen at a time, the box round the one you are
    on and that one written in ink.
 3. **A tap on an entry reads it whole**, a screenful at a time if it runs long.
 
-The choosing is a step of its own because the page has four things on it. A tap
+The choosing is a step of its own because the page has five things on it. A tap
 that opened *a* list would have to guess which, and the wheel would then have to
 carry you across group boundaries to correct the guess — so the choice is made
-where all four are already in front of you.
+where all five are already in front of you.
+
+Not every entry has a screenful behind it. A café is the short case: the third tap
+gives you what it is and where — the distance, the amenity and the cuisine, then
+the coordinates — because there is no map up here to open and nothing else to be
+done about a café from a pair of glasses. That is also the only position this app
+still writes out in full, and the difference is that a shopfront is not a person.
 
 One entry reads as a list rather than as a thing, and that is the letters: the
 third tap opens the whole exchange with that person, not the one line the inbox
@@ -164,15 +194,15 @@ lo/ · 1/3              where you are standing
 lo/nearby · 2/3        who and what is around you
 lo/info · 3/3          what is being said about the wider place
 
-lo/nearby · 1/4        the same page, choosing the first of its four groups
+lo/nearby · 1/5        the same page, choosing the first of its five groups
 lo/nearby/msg · 2/4    that group opened: the second of four letters waiting
 lo/nearby/msg · 1/2    that letter, whole, over two screenfuls
 ```
 
 Every page carries its own name; the group joins the path only once it is open.
-The counter beside it counts whatever the path has just named. The four groups
-under `lo/nearby` are `msg`, `posts`, `events` and `people`, in that order; the
-two under `lo/info` are `news` and `trends`.
+The counter beside it counts whatever the path has just named. The five groups
+under `lo/nearby` are `msg`, `posts`, `people`, `cafe` and `food`, in that order;
+the three under `lo/info` are `news`, `events` and `trends`.
 
 The wheel means the same thing at all four depths — the next thing along,
 rounding at the end rather than stopping — and a double tap comes back out of

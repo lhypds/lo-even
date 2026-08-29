@@ -147,6 +147,40 @@ const en: Dict = {
   "trends.empty": "No search trends for here right now.",
   "trends.unavailable": "Could not reach Google Trends.",
   "trends.loading": "Reading Google Trends.",
+  // Somewhere for a coffee and somewhere to eat, off lo's own two cards.
+  //
+  // **`Cafe` bare, where lo writes `Cafés`.** The acute is the one character in
+  // any of these words that this face has not been probed for, and a glyph the
+  // face lacks draws as nothing at all — no box, no mark, four pixels of blank
+  // where the letter stood, with `textWidth` still charging full width for it
+  // (see docs/Screen.md). `Caf` with a hole in the end of it is not a word, and
+  // this one is both a label in the margin and one of four counts on the busiest
+  // line of the standing page. One screenshot would settle it; until there is
+  // one, the plain spelling is the honest one. The two languages below have no
+  // such question — カフェ and 咖啡 are CJK, which the probe covers.
+  //
+  // **The empty sentences drop the distance lo names in its own** — "No cafés
+  // within 1.50 km of here". That figure is the ring the server actually
+  // searched and it arrives on the answer rather than in the words; a group with
+  // nothing in it has one line to say so, and how far lo looked is worth less on
+  // that line than saying plainly that it did.
+  "cafe.title": "Cafe",
+  "cafe.empty": "No cafes within a walk of here.",
+  "cafe.unavailable": "Could not reach OpenStreetMap.",
+  "cafe.loading": "Looking for somewhere for coffee.",
+  "food.title": "Food",
+  "food.empty": "Nowhere to eat within a walk of here.",
+  "food.unavailable": "Could not reach OpenStreetMap.",
+  "food.loading": "Looking for somewhere to eat.",
+  // What a place says about itself besides its name, which is at most two words
+  // and follows lo's own rule about which of them earns the room (see venueParts
+  // in lo/src/utils/venues.js). Only the four amenities lo asks OSM about: a tag
+  // there is a word for is one that can be read in the reader's language, and one
+  // there is not is left off rather than printed as the slug it arrived as.
+  "venues.category.restaurant": "Restaurant",
+  "venues.category.fast_food": "Fast food",
+  "venues.category.food_court": "Food court",
+  "venues.category.cafe": "Cafe",
   "article.reading": "Reading the story.",
   "article.elsewhere": "This one has to be read on the phone.",
   "article.partial": "The rest is on the publisher's own page.",
@@ -336,6 +370,18 @@ const ja: Dict = {
   "trends.empty": "この地域の検索トレンドは今ありません。",
   "trends.unavailable": "Google トレンドに接続できません。",
   "trends.loading": "Google トレンドを読み込み中。",
+  "cafe.title": "カフェ",
+  "cafe.empty": "歩いて行ける範囲にカフェはありません。",
+  "cafe.unavailable": "OpenStreetMap に接続できません。",
+  "cafe.loading": "カフェを探しています。",
+  "food.title": "食事",
+  "food.empty": "歩いて行ける範囲に飲食店はありません。",
+  "food.unavailable": "OpenStreetMap に接続できません。",
+  "food.loading": "食事のできる場所を探しています。",
+  "venues.category.restaurant": "レストラン",
+  "venues.category.fast_food": "ファストフード",
+  "venues.category.food_court": "フードコート",
+  "venues.category.cafe": "カフェ",
   "article.reading": "本文を読み込み中。",
   "article.elsewhere": "この記事はスマートフォンでお読みください。",
   "article.partial": "この続きは配信元のページにあります。",
@@ -498,6 +544,18 @@ const zh: Dict = {
   "trends.empty": "此地暂无搜索趋势。",
   "trends.unavailable": "无法连接 Google 趋势。",
   "trends.loading": "正在读取 Google 趋势。",
+  "cafe.title": "咖啡",
+  "cafe.empty": "步行范围内没有咖啡馆。",
+  "cafe.unavailable": "无法连接 OpenStreetMap。",
+  "cafe.loading": "正在查找咖啡馆。",
+  "food.title": "餐饮",
+  "food.empty": "步行范围内没有餐馆。",
+  "food.unavailable": "无法连接 OpenStreetMap。",
+  "food.loading": "正在查找吃饭的地方。",
+  "venues.category.restaurant": "餐馆",
+  "venues.category.fast_food": "快餐",
+  "venues.category.food_court": "美食广场",
+  "venues.category.cafe": "咖啡馆",
   "article.reading": "正在读取全文。",
   "article.elsewhere": "这篇请在手机上阅读。",
   "article.partial": "余下内容在原站页面。",

@@ -85,6 +85,11 @@ function context(over: Partial<PageContext> = {}): PageContext {
     news: { status: "idle", data: null },
     events: { status: "idle", data: null },
     trends: { status: "idle", data: null },
+    // The two that stop at no border, so unlike the three above them they are
+    // never absent because of where the reader is standing — only because the
+    // answer has not landed, which is what idle is (see pages/nearby.ts).
+    cafe: { status: "idle", data: null },
+    food: { status: "idle", data: null },
     warnings: { status: "idle", data: null },
     messages: { status: "idle", data: null },
     unread: 0,
@@ -185,9 +190,12 @@ check(
 );
 
 // --- what the ground changing does to the reader ----------------------------
-// Leaving Japan takes the newswire, the trends, the listings and the warnings
-// with it. All three pages stay in the sequence — that is the point of there
-// being three — so the reader is left looking at exactly what they were.
+// Leaving Japan takes the newswire, the listings, the trends and the warnings
+// with it — the whole of the third page, in fact, and the two lines counting it
+// on the first. It does not take the cafés or the food: those come off
+// OpenStreetMap, which stops at no border. All three pages stay in the sequence —
+// that is the point of there being three — so the reader is left looking at
+// exactly what they were.
 const wasOn = display.current();
 display.render(context({ components: [] }));
 await settle();
@@ -234,6 +242,33 @@ function busy(over: Partial<PageContext> = {}): PageContext {
         url: `e${i}`,
         source: "Peatix",
         time: new Date(Date.now() + (i + 1) * 86_400_000).toISOString(),
+      })),
+    },
+    // The two venue groups, which are the last two on the nearby page and the
+    // two the wheel has to walk to get to the end of it. Three apiece is more
+    // than either line draws, which is the point: the summary packs what fits and
+    // counts the rest, and the list behind it is where the rest actually is.
+    cafe: {
+      status: "ready",
+      data: Array.from({ length: 3 }, (_, i) => ({
+        id: `node/${i}`,
+        name: `a place for coffee ${i}`,
+        category: "cafe",
+        latitude: 35.658 + i / 2000,
+        longitude: 139.7,
+        distance: 120 + i * 180,
+      })),
+    },
+    food: {
+      status: "ready",
+      data: Array.from({ length: 3 }, (_, i) => ({
+        id: `way/${i}`,
+        name: `somewhere to eat ${i}`,
+        category: "restaurant",
+        cuisine: i === 0 ? "ramen" : "",
+        latitude: 35.658,
+        longitude: 139.7 + i / 2000,
+        distance: 90 + i * 220,
       })),
     },
     // Both halves of lo's inbox, because they are one list: two letters and one
@@ -378,8 +413,9 @@ display.enter();
 await settle();
 check("a tap picks out a group without leaving the page", display.path() === "lo/nearby", display.path());
 
-// Four groups on this page, walked in the page's own order. Which one is boxed is
-// read off the path it opens onto rather than off the box.
+// Five groups on this page, walked in the page's own order — outwards from what
+// is addressed to the reader by name to what is simply standing here. Which one
+// is boxed is read off the path it opens onto rather than off the box.
 async function opens(): Promise<string> {
   display.enter();
   await settle();
@@ -390,13 +426,14 @@ async function opens(): Promise<string> {
 }
 
 const groups: string[] = [];
-for (let step = 0; step < 4; step += 1) {
+for (let step = 0; step < 5; step += 1) {
   groups.push(await opens());
   await roll(1);
 }
 check(
   "the wheel walks the groups in the page's own order",
-  groups.join(" ") === "lo/nearby/msg lo/nearby/posts lo/nearby/events lo/nearby/people",
+  groups.join(" ") ===
+    "lo/nearby/msg lo/nearby/posts lo/nearby/people lo/nearby/cafe lo/nearby/food",
   groups.join(" "),
 );
 
@@ -524,6 +561,22 @@ check("nothing is asked for from a page", display.reading() === null, String(dis
 
 display.enter();
 await settle();
+
+// Three groups on this page rather than two: the newswire, the listings that came
+// back to it off the second page, and the trends — in the order a reader takes
+// them, which is also the order in time. What is on is read the way a headline is
+// read, and this is where the things that are read rather than walked into live.
+const wider: string[] = [];
+for (let step = 0; step < 3; step += 1) {
+  wider.push(await opens());
+  await roll(1);
+}
+check(
+  "the third page walks the newswire, the listings and the trends in that order",
+  wider.join(" ") === "lo/info/news lo/info/events lo/info/trends",
+  wider.join(" "),
+);
+
 while (display.path() !== "lo/info") {
   display.scroll(1);
   await settle();

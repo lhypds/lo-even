@@ -1,33 +1,43 @@
-// Who is here, what they left on the ground, what is on, and who has written.
+// Who is here, what they left on the ground, where to sit down, and who has
+// written.
 //
-// lo's people tile, its posts tile, its listings and its letter, on one page
-// because they are the same look around: the names are worth a line, the posts
-// are worth most of the rest, what is on this evening is worth two, and the inbox
-// is worth knowing about before the reader gets back to their phone. Presence is
-// one line rather than a list for the reason the sky is one line — three names is
-// what a street usually has, and giving each of them a row of its own would spend
-// half the screen on a column of distances.
+// lo's letter, its posts tile, its people dots and its two venue cards, on one
+// page because they are the same look around: the inbox is worth knowing about
+// before the reader gets back to their phone, the posts are worth most of the
+// rest, the names are worth a line, and where the nearest coffee and the nearest
+// meal are is worth one apiece. Presence is one line rather than a list for the
+// reason the sky is one line — three names is what a street usually has, and
+// giving each of them a row of its own would spend half the screen on a column
+// of distances. The two venue lines are packed the same way, and measured rather
+// than counted, because a name off somebody's map is anything from six characters
+// to twenty-six (see venueLine).
 //
-// The listings came off the third page, and the move is about what a listing is
-// rather than about where there was room. What is on tonight within walking
-// distance is a fact about this street on this evening; the newswire and the
-// trends are facts about the country, and a reader looking up from the pavement
-// wants the first kind. The letters lead because they are the one thing on the
-// page addressed to the reader by name, and the rest follow it outwards: what
-// has been left on this street, what is on within walking distance, and who is
-// about.
+// **What is on has gone back to the third page and the food has taken its
+// place**, and both halves of that are about what a fact is rather than about
+// where there was room. A listing is a thing happening on a particular evening
+// and is read the way a headline is read — a source, an hour, and something to
+// decide about — which is the third page's whole subject. A café is not an event
+// at all: it is a fixture of this street, it will be there tomorrow, and the only
+// question about it is which one is nearest. That question belongs where the
+// reader is standing.
 //
-// The people, the posts and the listings arrive without being asked: they come
-// back with the fix on the one read this app makes of it, and the presence trade
-// keeps the names current every minute after that (see feeds.ts). The inbox is
-// the one thing on this page that is asked for, and only while this page is the
-// one being looked at.
+// So the order runs from what is addressed to the reader outwards to what is
+// simply here: the letters, what has been left on this ground, who is about, and
+// then the two things they can walk into.
+//
+// The people, the posts and the two venue lists arrive without being asked. The
+// first two come back with the fix on the one read this app makes of it, and the
+// presence trade keeps the names current every minute after that; the cafés and
+// the food are two reads of their own on the same fix, because lo built that one
+// read before either of those cards existed (see feeds.ts). The inbox is the one
+// thing on this page asked for on a beat of its own, and only while this page is
+// the one being looked at.
 //
 // The posts are everybody's, which is the whole difference between a post and a
 // mark: a mark is yours and stays on your own map, a post is left on the ground
 // for whoever comes past it.
 //
-// This page is a summary of four lists, and the four are behind it: a tap puts a
+// This page is a summary of five lists, and the five are behind it: a tap puts a
 // box round one of the groups, another opens it — the same rows with two lines
 // apiece and no summary to fit around — and a third opens whichever entry the
 // reader is on. The website's row opens the post *and its replies*, and so does
@@ -45,21 +55,23 @@
 
 import {
   distanceMeters,
+  formatCoords,
   formatDistance,
   formatUsername,
   joined,
   postSays,
   relativeTime,
 } from "../format";
-import { BODY_LINES } from "../theme";
+import { textWidth } from "../metrics";
+import { BODY_LINES, READING_VALUES } from "../theme";
 import { placeTitle } from "./chrome";
-import { feedItems, feedWord, type FeedWords } from "./feed";
+import { feedWord, type FeedWords } from "./feed";
 import { nothing } from "./list";
 import { personBody } from "./person";
 import { stack, type Group } from "./stack";
 import type { Translate } from "../strings";
-import type { LoMessage, LoPersonThread, LoPostThread, LoThread } from "../../types";
-import type { Item, PageContext, PageDefinition, PageView } from "./types";
+import type { LoMessage, LoPersonThread, LoPostThread, LoThread, LoVenue } from "../../types";
+import type { Feed, Item, PageContext, PageDefinition, PageView } from "./types";
 
 // How many names the line carries before it starts counting instead. Four is
 // what fits; the rest are a figure, which is the honest thing to show when the
@@ -70,12 +82,25 @@ const NAMES = 4;
 // twice: the summary and the list are the same groups, and a group that said
 // "loading" on one screen and "nobody here" on the other would be two answers to
 // one question.
-const WORDS: Record<"people" | "posts" | "events" | "messages", FeedWords> = {
+const WORDS: Record<"people" | "posts" | "cafe" | "food" | "messages", FeedWords> = {
   people: { loading: "common.loading", empty: "people.alone", failed: "glasses.offline" },
   posts: { loading: "common.loading", empty: "posts.empty", failed: "glasses.offline" },
-  events: { loading: "events.loading", empty: "events.empty", failed: "events.unavailable" },
+  cafe: { loading: "cafe.loading", empty: "cafe.empty", failed: "cafe.unavailable" },
+  food: { loading: "food.loading", empty: "food.empty", failed: "food.unavailable" },
   messages: { loading: "common.loading", empty: "messages.empty", failed: "glasses.offline" },
 };
+
+// The four amenities lo asks OpenStreetMap about, which are the four this
+// dictionary has words for. A tag there is a word for is one a reader can have in
+// their own language; one there is not is left off rather than printed as the
+// slug it arrived as (see venueParts in lo/src/utils/venues.js).
+const AMENITIES = new Set(["restaurant", "fast_food", "food_court", "cafe"]);
+
+// And the two of those that say nothing once there is a cuisine to say instead.
+// Down a list where nearly every line is a restaurant, "Restaurant" is the part
+// carrying no information; a counter you eat at standing up is a different
+// evening, and says so.
+const PLAIN = new Set(["restaurant", "cafe"]);
 
 /** Everyone else who has a tab open around here, nearest first. */
 function others({ people, coords, username }: PageContext) {
@@ -95,6 +120,114 @@ function peopleLine(context: PageContext): string[] {
   const named = near.slice(0, NAMES).map(({ person }) => formatUsername(person.username));
   const rest = near.length - named.length;
   return [named.join(" ") + (rest > 0 ? ` +${rest}` : "")];
+}
+
+/**
+ * What a place says about itself besides its name, which is at most two words and
+ * is lo's own rule about which of them earns the room (see `venueParts` in
+ * lo/src/utils/venues.js).
+ *
+ * The cuisine decides. It is the thing that tells one line from the next, so the
+ * amenity is set in front of it only where it carries something of its own — a
+ * fast food counter against a table you sit down at — and otherwise stands in for
+ * a cuisine nobody has filled in. The cuisine itself stays in the words the
+ * mappers wrote it in, less the underscores, which are the file format showing
+ * through: there is no closed list of them to translate against, and a guessed
+ * translation of somebody's kitchen is worse than their own plain word for it.
+ *
+ * The rule is kept here rather than at each of the two places it is read, because
+ * a rule like that kept in two places is one that gets changed in one of them.
+ */
+function venueSays(item: LoVenue, t: Translate): string {
+  const cuisine = (item.cuisine ?? "").replace(/_/g, " ");
+  const amenity = item.category ?? "";
+  const named = AMENITIES.has(amenity) && (!cuisine || !PLAIN.has(amenity));
+  return joined(named ? t(`venues.category.${amenity}`) : "", cuisine);
+}
+
+/**
+ * A group of places on the one line it gets: the nearest few, each with how far
+ * off it is, and a figure for the rest.
+ *
+ * The same shape as the people line above and for the same reason — three or four
+ * is what a street usually has to offer, and a row apiece would spend half the
+ * page on a column of distances — but packed by measuring rather than by a fixed
+ * count. A name is a name off somebody's map: `Doutor` is six characters and
+ * `Blue Bottle Coffee Shibuya` is twenty-six, so a line cut to four of them would
+ * be four on a good street and one and a half on the next.
+ *
+ * The distance is on every one of them because it is what the list is sorted by,
+ * and a row of names in an order the reader cannot see is a row in no order at
+ * all. The figure on the end is how many more there are, which is the answer a
+ * reader who wants the street rather than the corner takes into the list behind
+ * this line.
+ *
+ * The nearest is always drawn, even where it alone runs past the end of the
+ * column: the paint cuts it (see layout.ts), and half of the name of the nearest
+ * café is worth more than a line that gave up and said `+7`.
+ */
+function venueLine(items: LoVenue[]): string[] {
+  if (items.length === 0) return [];
+  const shown: string[] = [];
+  for (const item of items) {
+    const next = `${item.name} ${formatDistance(item.distance)}`;
+    if (shown.length > 0 && textWidth(withRest([...shown, next], items.length)) > READING_VALUES.width) {
+      break;
+    }
+    shown.push(next);
+  }
+  return [withRest(shown, items.length)];
+}
+
+/** Those, joined lo's own way, with however many did not fit counted after them. */
+function withRest(shown: string[], total: number): string {
+  const rest = total - shown.length;
+  return joined(...shown) + (rest > 0 ? ` +${rest}` : "");
+}
+
+/**
+ * The same places one at a time, which is what the line above is a summary of.
+ *
+ * A venue is the one kind of entry down here with nothing to read and nowhere to
+ * go: a post has words, a letter has an exchange, a name has a profile — and a
+ * café has an address on somebody else's map. So the screen behind one is the
+ * short answer to "which one is that": what it is, and where, in the coordinates
+ * this app writes every position in. There is no verb on it, because there is
+ * nothing up here to do to a café.
+ */
+function venueItems(group: "cafe" | "food", feed: Feed<LoVenue[]>, { t }: PageContext): Item[] {
+  const rows = feed.data ?? [];
+  // A group with nothing in it is still one entry saying which of the three kinds
+  // of nothing it is, so the wheel can still walk to it (see feed.ts and list.ts).
+  if (rows.length === 0) return [nothing(group, feedWord(feed, t, WORDS[group]))];
+  return rows.map((item) => {
+    // How far off, and what it is — the sort key of the list and the one thing
+    // about a place its name never says. The name is the whole of the first line
+    // and this is the second, so nothing is said twice when the entry becomes a
+    // heading and a body: the same shape a person's entry takes, and for the same
+    // reason (see `personBody`).
+    //
+    // Nothing in the corner of the heading, where a post puts where it was left.
+    // That corner is a box laid over the middle of the heading's own line, and it
+    // works there because a post is headed by `@kenji · 3m`; a café is headed by
+    // its name, and `Blue Bottle Coffee Shibuya` is most of the line the distance
+    // would have to be written over.
+    const says = joined(formatDistance(item.distance), venueSays(item, t));
+    return {
+      group,
+      key: item.id,
+      head: item.name,
+      line: says,
+      // And underneath, the one thing on this screen a reader can act on: there
+      // is no map up here to open and no line to draw on one, so where it is is a
+      // pair of coordinates or it is nothing. It is the only position this app
+      // still writes out in full, and that is the difference between a shopfront
+      // and a person — what came off the people screens came off because four
+      // decimal places is eleven metres of where somebody is standing (see
+      // pages/person.ts).
+      body: [says, formatCoords(item.latitude, item.longitude)].join("\n\n"),
+    };
+  });
 }
 
 /**
@@ -325,16 +458,20 @@ function postFoot(postId: number, empty: boolean, { comments, t }: PageContext):
 }
 
 /**
- * The four groups again, one entry at a time — the same rows the summary above
+ * The five groups again, one entry at a time — the same rows the summary above
  * cuts to a line each, with two lines and a screen of their own instead.
  *
  * A person is on the list as well as a post, and there is a page behind a name
  * now rather than the two lines the summary could not carry: the profile lo has
  * always had on the phone, fetched when the reader opens that one name (see
  * pages/person.ts).
+ *
+ * The two at the end are the whole of what the summary's last two lines could
+ * only name three or four of. A line that says `Doutor 240 m +11` is the reason
+ * to step in here, and this is the eleven.
  */
 function nearbyItems(context: PageContext): Item[] {
-  const { posts, people, events, messages, components, locale, profile, t } = context;
+  const { posts, people, cafe, food, messages, locale, profile, t } = context;
 
   const messageItems: Item[] = (messages.data ?? []).length
     ? (messages.data ?? []).map((thread) => {
@@ -455,13 +592,18 @@ function nearbyItems(context: PageContext): Item[] {
       }))
     : [nothing("posts", feedWord(posts, t, WORDS.posts))];
 
-  // What is on around here, where the country has anybody to ask. Left out
-  // altogether rather than shown empty where it has not: "nothing on this
-  // fortnight" is a claim about the neighbourhood, and lo cannot make it for a
-  // country it has no listings service for.
-  const eventItems = components.includes("events") ? feedItems("events", events, context, WORDS.events) : [];
-
-  return [...messageItems, ...postItems, ...eventItems, ...peopleItems];
+  // And the two the reader can walk to, which are never left off: they come off
+  // OpenStreetMap, which stops at no border, so there is no country here that
+  // cannot be asked (see types.ts). Where OSM is thin the honest answer is a
+  // short list or an empty one, which is a claim about the street rather than
+  // about the country.
+  return [
+    ...messageItems,
+    ...postItems,
+    ...peopleItems,
+    ...venueItems("cafe", cafe, context),
+    ...venueItems("food", food, context),
+  ];
 }
 
 export const nearbyPage: PageDefinition = {
@@ -474,13 +616,22 @@ export const nearbyPage: PageDefinition = {
   offered: () => true,
 
   render(context): PageView {
-    const { posts, people, events, messages, components, t } = context;
+    const { posts, people, cafe, food, messages, t } = context;
 
     // The order is the priority: the first group named takes the first spare
     // line (see stack.ts). The letters are named first because they are the one
     // thing on this page addressed to the reader by name — the posts are
     // everybody's and the names are whoever happens to be about — and because
     // they are the group with nothing on any other screen to fall back on.
+    //
+    // The five ceilings below come to seven, which is the whole of the body: two
+    // letters, two posts, and a line each for who is about, where the coffee is
+    // and where the food is. So this page is dealt nothing — every group gets
+    // exactly what it asked for on a full street — and that is the point of
+    // choosing them to add up rather than to compete. A reader learns where the
+    // cafés are on this screen once, and they are in the same place on the next
+    // walk whatever the inbox is doing. What the dealing still does is hand the
+    // spare line down the list on a quiet street, in the order below.
     const groups: Group[] = [
       {
         id: "messages",
@@ -510,7 +661,11 @@ export const nearbyPage: PageDefinition = {
           return dot + (thread.mine ? joined(who, said(thread, who, t)) : said(thread, who, t));
         }),
         note: feedWord(messages, t, WORDS.messages),
-        max: 3,
+        // Two, where this used to take three. The letters keep the top of the
+        // page and the newest pair of them, which is what a glance at an inbox
+        // is for; the third row went to the two groups at the foot of the page,
+        // and the rest of the correspondence is one tap under this line.
+        max: 2,
       },
       {
         id: "posts",
@@ -521,32 +676,48 @@ export const nearbyPage: PageDefinition = {
           (post) => `${formatUsername(post.username)} ${postSays(post)}`,
         ),
         note: feedWord(posts, t, WORDS.posts),
-        max: 4,
+        // Two as well, and the same trade: what has been left on this street is
+        // the longest group here and the one whose whole list is a tap away.
+        max: 2,
+      },
+      // One line however many there are. Everyone else about is a line of names
+      // rather than a list of them for the reason the sky is one line: three
+      // names is what a street usually has, and a row apiece would spend half
+      // the page on a column of distances.
+      {
+        id: "people",
+        label: t("people.title"),
+        lines: peopleLine(context),
+        note: feedWord(people, t, WORDS.people),
+        max: 1,
+      },
+      // And where to sit down, which is the pair of readings this page gained
+      // when the listings left it. They are the last two lines for the reason the
+      // letters are the first: what is addressed to the reader by name is worth
+      // the top of a page, and where the nearest coffee is is a thing they will
+      // look for when they want it rather than something that has to catch them.
+      //
+      // Coffee before food, which is not an order of importance so much as of
+      // length: a café is a name and a distance and a food row often carries a
+      // cuisine as well, so the shorter of the two reads better above the longer.
+      // Neither is gated on the country — OpenStreetMap stops at no border, so
+      // unlike the listings that used to stand here there is nowhere lo has to
+      // leave these off (see types.ts).
+      {
+        id: "cafe",
+        label: t("cafe.title"),
+        lines: venueLine(cafe.data ?? []),
+        note: feedWord(cafe, t, WORDS.cafe),
+        max: 1,
+      },
+      {
+        id: "food",
+        label: t("food.title"),
+        lines: venueLine(food.data ?? []),
+        note: feedWord(food, t, WORDS.food),
+        max: 1,
       },
     ];
-
-    // What is on within walking distance, and only where lo has somewhere to ask.
-    if (components.includes("events")) {
-      groups.push({
-        id: "events",
-        label: t("events.title"),
-        lines: (events.data ?? []).map((item) => item.title),
-        note: feedWord(events, t, WORDS.events),
-        max: 2,
-      });
-    }
-
-    // Last, and one line however many there are. Everyone else about is a line
-    // of names rather than a list of them for the reason the sky is one line:
-    // three names is what a street usually has, and a row apiece would spend
-    // half the page on a column of distances.
-    groups.push({
-      id: "people",
-      label: t("people.title"),
-      lines: peopleLine(context),
-      note: feedWord(people, t, WORDS.people),
-      max: 1,
-    });
 
     return {
       title: placeTitle(context),

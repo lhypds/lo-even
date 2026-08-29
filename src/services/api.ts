@@ -10,6 +10,7 @@ import type {
   LoPost,
   LoThread,
   LoUser,
+  LoVenuesResult,
   LoWarningsResult,
 } from "../types";
 
@@ -367,6 +368,36 @@ export class LoApi {
   posts({ latitude, longitude }: Coordinates) {
     return this.request<{ posts: LoPost[] }>(
       `/api/posts?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
+    );
+  }
+
+  /**
+   * Somewhere to eat, and somewhere for a coffee — nearest first, each row with
+   * how far off it is from the fix that asked. Two addresses rather than one with
+   * a kind hung off it, because lo answers them as two cards and the glasses draw
+   * them as two lines: "where can I eat" and "where can I sit down with a coffee"
+   * are asked at different hours and answered by different streets.
+   *
+   * The one pair of reads in this file that is about the ground and is not in the
+   * dashboard's answer. `POST /api/dashboard` was built before these two cards
+   * existed and still does not carry them, and they are cheap enough to ask for
+   * on their own: lo keeps an hour's answer per ~1 km square of ground, because a
+   * restaurant is not news and tomorrow's list is today's. What makes either of
+   * them a new question is the reader having walked somewhere (see feeds.ts).
+   *
+   * Both stop at no border. OpenStreetMap is the one upstream behind these pages
+   * with no country list in front of it, so unlike the newswire and the trends
+   * there is nothing to ask `components` about before asking this.
+   */
+  food({ latitude, longitude }: Coordinates) {
+    return this.request<LoVenuesResult>(
+      `/api/food?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
+    );
+  }
+
+  cafes({ latitude, longitude }: Coordinates) {
+    return this.request<LoVenuesResult>(
+      `/api/cafe?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
     );
   }
 

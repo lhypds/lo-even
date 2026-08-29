@@ -127,6 +127,50 @@ export interface LoTrendsResult {
   items: LoTrend[];
 }
 
+/* ----------------------------------------------------------------- venues -- */
+
+/**
+ * Somewhere to eat, or somewhere for a coffee: one row of `GET /api/food` or
+ * `GET /api/cafe`, which are the same answer asked about two sets of amenities
+ * (see lookupVenues in lo/server/geo.js).
+ *
+ * They are the two feeds on these pages that stop at no border. Everything else
+ * regional is a Google edition or a Japanese institution and has a country list
+ * behind it; these come off OpenStreetMap, which is thin in places and present
+ * everywhere — so unlike the newswire and the trends there is nothing to ask
+ * `components` about before drawing them.
+ *
+ * `distance` is the one field here that is not OSM's own. lo caches the list
+ * around the middle of a ~1 km square and then measures every row from the fix
+ * that actually asked, because distance is the thing the rounding would visibly
+ * get wrong: a café forty metres away shown as six hundred is not a rounding
+ * error to somebody standing outside it.
+ */
+export interface LoVenue {
+  /** `node/123`, `way/456` — OSM numbers its three kinds from one apiece. */
+  id: string;
+  name: string;
+  /** The amenity itself: restaurant, fast_food, food_court, cafe. */
+  category?: string | null;
+  /** The mappers' own word for the kitchen, which nothing translates. */
+  cuisine?: string | null;
+  latitude: number;
+  longitude: number;
+  /** Metres from the fix that asked, nearest first. */
+  distance: number;
+}
+
+/**
+ * What either of those two addresses answers with. `radius` is how far lo
+ * actually looked — it widens the ring where a walk turns up nothing — and it is
+ * the server's to say rather than the client's to assume.
+ */
+export interface LoVenuesResult {
+  place?: { name?: string } | null;
+  radius: number;
+  items: LoVenue[];
+}
+
 /* --------------------------------------------------------------- warnings -- */
 
 export interface LoWarningItem {

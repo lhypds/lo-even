@@ -203,6 +203,8 @@ async function main() {
       news: feeds.news,
       events: feeds.events,
       trends: feeds.trends,
+      cafe: feeds.cafe,
+      food: feeds.food,
       warnings: feeds.warnings,
       messages: feeds.messages,
       unread: feeds.unread,

@@ -18,6 +18,13 @@
 //   • `GET /api/warnings` on every new fix as well, because it is not in that
 //     answer and it is a line of the opening page. A warning nobody scrolled far
 //     enough to see is a warning that was not issued.
+//   • `GET /api/cafe` and `GET /api/food` on a new fix too, and for the same
+//     reason: lo added the dashboard read before either of those cards existed,
+//     so the two of them are the other thing about the ground that has to be
+//     asked for on its own. They are started rather than waited on — Overpass
+//     queues its callers and has twenty seconds to answer — and keyed the
+//     coarsest of anything here, because tomorrow's list of restaurants is
+//     today's and what changes it is the reader walking (see `readVenues`).
 //   • `GET /api/messages` while the reader is actually on the page that shows
 //     them, and at most once a minute — see the key below.
 //   • `GET /api/messages/:username` once the reader has been sitting on one
@@ -65,6 +72,7 @@ import type {
   LoPost,
   LoThread,
   LoTrend,
+  LoVenue,
   LoWarningsResult,
 } from "../types";
 import type { Feed } from "../glassesui/pages/types";
@@ -113,6 +121,14 @@ const POSTS_MS = 60_000;
 const INBOX_MS = 60_000;
 const WARNINGS_MS = 5 * 60_000;
 const DASHBOARD_MS = 10 * 60_000;
+
+// And the longest of them, for the two that hardly go stale at all: a restaurant
+// is not news, and tomorrow's list of them is today's. lo keeps its own answer
+// for an hour per ~1 km square (see lookupVenues in lo/server/geo.js), so what
+// makes either of these a new question is the reader having walked somewhere
+// rather than time passing — which is why the key below is rounded two decimals,
+// onto that same square, where everything else about the street is rounded three.
+const VENUES_MS = 30 * 60_000;
 
 // How many stories are kept at once. Not a stretch of time like the rest of
 // this: a published story is the same story tomorrow, so what bounds this is the
@@ -184,6 +200,12 @@ export class Feeds {
   private warningsSlot = slot<LoWarningsResult>();
   private inboxSlot = slot<LoThread[]>();
   private peopleSlot = slot<LoPerson[]>();
+  // Somewhere to eat and somewhere for a coffee, which are two slots rather than
+  // one for the reason lo answers them at two addresses: they are two questions,
+  // asked at different hours, and a reader looking for one of them is not looking
+  // for the other.
+  private cafeSlot = slot<LoVenue[]>();
+  private foodSlot = slot<LoVenue[]>();
   // One per exchange the reader has opened, keyed by the correspondent — the same
   // shape as the stories above and for the same reason: there is no telling in
   // advance which of a list they will open, and each of them is worth keeping once
@@ -238,6 +260,19 @@ export class Feeds {
   }
   get trends(): Feed<LoTrend[]> {
     return part(this.dashSlot, "trends");
+  }
+
+  /**
+   * The two that are not part of the dashboard's answer and are about the ground
+   * all the same: `POST /api/dashboard` was built before these two cards existed
+   * and does not carry them, so they are reads of their own on the coarsest key
+   * in this file (see `readVenues`).
+   */
+  get cafe(): Feed<LoVenue[]> {
+    return view(this.cafeSlot);
+  }
+  get food(): Feed<LoVenue[]> {
+    return view(this.foodSlot);
   }
 
   /**
@@ -301,7 +336,14 @@ export class Feeds {
    * makes the next read re-ask.
    */
   forget(): void {
-    for (const each of [this.dashSlot, this.postsSlot, this.warningsSlot, this.inboxSlot]) {
+    for (const each of [
+      this.dashSlot,
+      this.postsSlot,
+      this.warningsSlot,
+      this.inboxSlot,
+      this.cafeSlot,
+      this.foodSlot,
+    ]) {
       each.key = "";
     }
   }
@@ -334,10 +376,20 @@ export class Feeds {
   }
 
   /**
-   * The two reads a new fix is worth. Called on every one; the keys decide
-   * whether either of them is actually a new question.
+   * The two reads a new fix is worth, and the two it starts without waiting for.
+   * Called on every one; the keys decide whether any of them is actually a new
+   * question.
    */
   async here(coords: Coordinates, language: Language): Promise<void> {
+    // Somewhere to eat and somewhere for a coffee, started here and deliberately
+    // not waited on. Overpass is a public instance that queues its callers and is
+    // given twenty seconds to answer (see lo/server/geo.js), and what waits on the
+    // promise below is the fix's own errand — telling the page in view to re-ask
+    // (see `refresh` in main.ts). A cold square would hold that up for the better
+    // part of half a minute in exchange for two lines at the foot of one page.
+    // Both answer through `changed` like everything else here, so the lines
+    // appear underneath a page the reader is already reading.
+    this.readVenues(coords, language);
     await Promise.all([
       this.fill(
         this.dashSlot,
@@ -388,6 +440,25 @@ export class Feeds {
   wrote(coords: Coordinates, language: Language): Promise<void> {
     this.postsSlot.key = "";
     return this.readPosts(coords, language);
+  }
+
+  /**
+   * Where to eat and where to sit down with a coffee. One key for both, because
+   * they are one question about the ground asked about two sets of amenities —
+   * and the coarsest key in this file, in place and in time alike: a ~1 km square
+   * and half an hour, which is lo's own square and rather less than lo's own hour
+   * (see VENUES_MS).
+   *
+   * Quietly, for the reason the posts and the people are: this is re-asked when
+   * the reader has walked a square's width, and a slot flipping back to "looking
+   * for somewhere for coffee" would replace a readable list with a word about
+   * itself under somebody who is reading it. The first read of all still says so
+   * — an idle slot has nothing to replace.
+   */
+  private readVenues(coords: Coordinates, language: Language): void {
+    const key = `${round(coords, 2)}:${language}:${within(VENUES_MS)}`;
+    void this.fill(this.cafeSlot, key, () => this.api.cafes(coords).then((answer) => answer.items), true);
+    void this.fill(this.foodSlot, key, () => this.api.food(coords).then((answer) => answer.items), true);
   }
 
   /** What is on the ground here, asked for as coarsely as the answer keeps. */
@@ -617,6 +688,8 @@ export class Feeds {
     this.warningsSlot = slot();
     this.inboxSlot = slot();
     this.peopleSlot = slot();
+    this.cafeSlot = slot();
+    this.foodSlot = slot();
     this.threadSlots.clear();
     this.profileSlots.clear();
     this.commentSlots.clear();

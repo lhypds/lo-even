@@ -160,6 +160,8 @@ has just left.
 | Sign out | `POST /api/logout` | When the frame says it has signed out |
 | The place, its weather, its components, the newswire, what is on, the trends, the posts within reach and who else is about | `POST /api/dashboard?lang=` | Every new fix |
 | Warnings in force | `GET /api/warnings?lat&lon` | Every new fix |
+| Somewhere for a coffee, nearest first with distances | `GET /api/cafe?lat&lon&lang=` | Every new fix, keyed to a ~1 km square and half an hour — started rather than waited on |
+| Somewhere to eat, the same | `GET /api/food?lat&lon&lang=` | The same |
 | Publish our fix, get everyone else's and the unread count | `PUT /api/position` | Every minute |
 | The inbox — letters and comment columns in one list | `GET /api/messages` | While the second page or anything under it is up, at most once a minute |
 | One exchange, which marks it read | `GET /api/messages/:username` | Three seconds after the reader has opened one letter and stayed on it |
@@ -186,7 +188,7 @@ yet. Seven round trips on a phone tether to fill one screen is what
 the same trade `PUT /api/position` makes, so it replaces the position call on a
 new fix rather than being made beside it.
 
-Two reads are left outside it, each for a reason. The warnings are not in that
+Four reads are left outside it, each for a reason. The warnings are not in that
 answer and are a line of the opening page — a warning nobody scrolled far enough
 to see is a warning that was not issued — and Yahoo answers them per municipality,
 so they are keyed two decimal places where the dashboard is keyed three. The inbox
@@ -194,6 +196,21 @@ has nothing to do with where anybody is standing, so it is asked for only while 
 page that shows it is up, and at most once a minute. Reading `GET /api/messages`
 marks nothing read; only opening one row does that, which is why the glasses can
 list what is waiting without answering for the reader.
+
+**And the two venue reads**, which are outside it for a plainer reason: the
+dashboard was built before those two cards existed and does not carry them. They
+would be worth folding in — a client that cannot afford round trips is exactly
+what that endpoint is for — and until they are, they are two reads of their own on
+every new fix. Three things keep that cheap. They are keyed the coarsest of
+anything here, a ~1 km square and half an hour, because a restaurant is not news:
+tomorrow's list is today's, and what makes it a new question is the reader having
+walked somewhere. lo keeps its own hour-long answer per square behind that, so a
+street somebody has already asked about costs a file read. And they are *started*
+rather than waited on — Overpass is a public instance that queues its callers and
+is given twenty seconds to answer, and what waits on the fix's own promise is the
+errand that tells the page in view to re-ask. A cold square would hold that up for
+the better part of half a minute in exchange for two lines at the foot of one
+page, so the lines arrive underneath a page the reader is already reading.
 
 The cost is one round trip for feeds a given session might never read. The saving
 is a launch that reaches a full first screen after two reads instead of seven, and

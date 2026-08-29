@@ -143,6 +143,34 @@ const ctx: PageContext = {
       { name: "秋分の日", count: 2000, url: "c" },
     ],
   },
+  // Somewhere for a coffee and somewhere to eat, off OpenStreetMap — the two
+  // groups at the foot of the nearby page, each of which is one line however many
+  // there are. Names of both kinds on purpose: the long Latin one and the short
+  // CJK one are what decide how many of them that line actually carries, and a
+  // fixture of `Cafe 1`, `Cafe 2` would prove the packing against a street that
+  // does not exist (see venueLine in pages/nearby.ts).
+  //
+  // The rows carry the amenity and, on two of them, the cuisine, which is the
+  // pair the entry's second line is made of — and the pair lo's own rule chooses
+  // between: `Restaurant` says nothing beside `ramen` and is dropped, where
+  // `Fast food` says something beside `gyudon` and stays.
+  cafe: {
+    status: "ready",
+    data: [
+      { id: "node/1", name: "喫茶ロマン", category: "cafe", latitude: 35.6584, longitude: 139.7011, distance: 84 },
+      { id: "way/2", name: "Blue Bottle Coffee Shibuya", category: "cafe", cuisine: "coffee_shop", latitude: 35.6591, longitude: 139.7031, distance: 260 },
+      { id: "node/3", name: "ドトール 道玄坂店", category: "cafe", latitude: 35.6575, longitude: 139.6982, distance: 410 },
+      { id: "node/4", name: "Fuglen Tokyo", category: "cafe", latitude: 35.6669, longitude: 139.6944, distance: 1240 },
+    ],
+  },
+  food: {
+    status: "ready",
+    data: [
+      { id: "node/5", name: "一蘭 渋谷店", category: "restaurant", cuisine: "ramen", latitude: 35.6598, longitude: 139.7005, distance: 150 },
+      { id: "way/6", name: "The Great Burger Stand", category: "fast_food", cuisine: "burger", latitude: 35.6612, longitude: 139.7042, distance: 520 },
+      { id: "node/7", name: "吉野家", category: "fast_food", cuisine: "gyudon", latitude: 35.6563, longitude: 139.6996, distance: 640 },
+    ],
+  },
   warnings: {
     status: "ready",
     data: {

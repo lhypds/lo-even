@@ -545,34 +545,52 @@ function counted(join: string, pairs: Array<[string, number | null]>): string {
  * this is the only screen that can say so before the reader has spent the flick
  * finding out.
  *
- * A feed the country does not have is left out of the count rather than counted
- * as none: nought trends in a place Google does not answer for is not a fact
- * about the place.
+ * Each line lists its own page's groups in that page's own order, so the two of
+ * them together are a table of contents somebody can read down: `Nearby` counts
+ * what is around the reader and `Info` counts what is being reported about the
+ * wider place. When a group moves between those two pages it moves between these
+ * two lines with it — the count is only worth anything while it says where to go.
  */
 function tallyRows(context: PageContext): ReadingRow[] {
-  const { posts, people, news, events, trends, components, username, t } = context;
+  const { posts, people, cafe, food, news, events, trends, components, username, t } = context;
   const rows: ReadingRow[] = [];
 
   const join = t("tally.join");
 
-  // In the order the page they count is in, so the line reads as a table of
-  // contents rather than as three figures: who is here, what they left here,
-  // what is on here.
+  // In the order the page they count is in, so each line reads as a table of
+  // contents rather than as a row of figures: what has been left here, who is
+  // here, and the two things there are to walk into.
+  //
+  // Four counts on this line where there were three, and they fit because the
+  // words are short: `Posts 2 · People 3 · Cafe 3 · Food 4` is well inside the
+  // column in all three languages. It is still the fullest line on the page, so
+  // it is the one to measure against before any of these four words is made
+  // longer — `npm run glasses:preview -- ja` is where to look.
   const others = (people.data ?? []).filter((person) => person.username !== username);
   const nearby = counted(join, [
     [t("posts.title"), posts.data?.length ?? null],
-    [t("events.title"), components.includes("events") ? (events.data?.length ?? null) : null],
     [t("people.title"), people.data ? others.length : null],
+    // Neither of these is asked about the country, because neither has a country
+    // list behind it: OpenStreetMap answers anywhere, so a nought here is a
+    // street with nothing on it rather than a border lo cannot see past (see
+    // types.ts).
+    [t("cafe.title"), cafe.data?.length ?? null],
+    [t("food.title"), food.data?.length ?? null],
     // The letters are not counted here, and they are the one group on that page
     // that is not: how much is waiting to be read is in the corner of the
     // heading of every screen in the app, badge and hour together (see
-    // theme.ts), so a fourth count here would be the same figure twice on one
+    // theme.ts), so a fifth count here would be the same figure twice on one
     // screen — and it is the figure that pushed this line past the end of it.
   ]);
   if (nearby) rows.push({ label: t("nearby.title"), value: nearby });
 
+  // And the third page's three, in its own order: what has happened, what is
+  // going to, and what the country is looking up. Each left out of the count
+  // rather than counted as none where the country has no answer for it — nought
+  // trends in a place Google does not answer for is not a fact about the place.
   const wider = counted(join, [
     [t("news.title"), components.includes("nearby") ? (news.data?.length ?? null) : null],
+    [t("events.title"), components.includes("events") ? (events.data?.length ?? null) : null],
     [t("trends.title"), components.includes("trends") ? (trends.data?.length ?? null) : null],
   ]);
   if (wider) rows.push({ label: t("world.title"), value: wider });
