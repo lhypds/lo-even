@@ -29,6 +29,19 @@ fi
 echo "==> Packing into $OUTPUT"
 evenhub pack "$APP_JSON" "$DIST_DIR" -o "$OUTPUT"
 
+shopt -s nullglob
+for OLD in "${PACKAGE_ID}"-*.ehpk; do
+  [ "$OLD" = "$OUTPUT" ] && continue
+  OLD_VERSION="${OLD#"${PACKAGE_ID}"-}"
+  OLD_VERSION="${OLD_VERSION%.ehpk}"
+  # only drop packages strictly older than the one just built
+  if [ "$(printf '%s\n%s\n' "$OLD_VERSION" "$VERSION" | sort -V | head -n1)" = "$OLD_VERSION" ]; then
+    rm -f "$OLD"
+    echo "    Removed old package $OLD"
+  fi
+done
+shopt -u nullglob
+
 echo
 echo "Done: $OUTPUT"
 echo "Next: upload it at https://hub.evenrealities.com/hub/${PACKAGE_ID}"
