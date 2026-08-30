@@ -1,16 +1,18 @@
 // Who is here, what they left on the ground, where to sit down, and who has
 // written.
 //
-// lo's letter, its posts tile, its people dots and its two venue cards, on one
-// page because they are the same look around: the inbox is worth knowing about
-// before the reader gets back to their phone, the posts are worth most of the
-// rest, the names are worth a line, and where the nearest coffee and the nearest
-// meal are is worth one apiece. Presence is one line rather than a list for the
-// reason the sky is one line — three names is what a street usually has, and
-// giving each of them a row of its own would spend half the screen on a column
-// of distances. The two venue lines are packed the same way, and measured rather
-// than counted, because a name off somebody's map is anything from six characters
-// to twenty-six (see venueLine).
+// lo's letter, its posts tile, its people dots, its two venue cards and its
+// nearby-articles card, on one page because they are the same look around: the
+// inbox is worth knowing about before the reader gets back to their phone, the
+// posts are worth most of the rest, the names are worth a line, where the
+// nearest coffee and the nearest meal are is worth one apiece, and so is what is
+// worth reading nearby. Presence is one line rather than a list for the reason
+// the sky is one line — three names is what a street usually has, and giving
+// each of them a row of its own would spend half the screen on a column of
+// distances. The venue lines and the Wikipedia line beside them are packed the
+// same way, and measured rather than counted, because a name off somebody's map
+// or a title off Wikipedia is anything from six characters to twenty-six (see
+// venueLine and wikiLine).
 //
 // **What is on has gone back to the third page and the food has taken its
 // place**, and both halves of that are about what a fact is rather than about
@@ -22,22 +24,23 @@
 // reader is standing.
 //
 // So the order runs from what is addressed to the reader outwards to what is
-// simply here: the letters, what has been left on this ground, who is about, and
-// then the two things they can walk into.
+// simply here: the letters, what has been left on this ground, who is about,
+// then the two things they can walk into, and last what there is to read about
+// none of it in particular.
 //
-// The people, the posts and the two venue lists arrive without being asked. The
-// first two come back with the fix on the one read this app makes of it, and the
-// presence trade keeps the names current every minute after that; the cafés and
-// the food are two reads of their own on the same fix, because lo built that one
-// read before either of those cards existed (see feeds.ts). The inbox is the one
-// thing on this page asked for on a beat of its own, and only while this page is
-// the one being looked at.
+// The people, the posts and the three ground reads arrive without being asked.
+// The first two come back with the fix on the one read this app makes of it, and
+// the presence trade keeps the names current every minute after that; the
+// cafés, the food and the nearby articles are three reads of their own on the
+// same fix, because lo built that one read before any of those three cards
+// existed (see feeds.ts). The inbox is the one thing on this page asked for on
+// a beat of its own, and only while this page is the one being looked at.
 //
 // The posts are everybody's, which is the whole difference between a post and a
 // mark: a mark is yours and stays on your own map, a post is left on the ground
 // for whoever comes past it.
 //
-// This page is a summary of five lists, and the five are behind it: a tap puts a
+// This page is a summary of six lists, and the six are behind it: a tap puts a
 // box round one of the groups, another opens it — the same rows with two lines
 // apiece and no summary to fit around — and a third opens whichever entry the
 // reader is on. The website's row opens the post *and its replies*, and so does
@@ -70,7 +73,7 @@ import { nothing } from "./list";
 import { personBody } from "./person";
 import { stack, type Group } from "./stack";
 import type { Translate } from "../../i18n";
-import type { LoMessage, LoPersonThread, LoPostThread, LoThread, LoVenue } from "../../types";
+import type { LoMessage, LoPersonThread, LoPostThread, LoThread, LoVenue, LoWikiPlace } from "../../types";
 import type { Feed, Item, PageContext, PageDefinition, PageView } from "./types";
 
 // How many names the line carries before it starts counting instead. Four is
@@ -82,11 +85,12 @@ const NAMES = 4;
 // twice: the summary and the list are the same groups, and a group that said
 // "loading" on one screen and "nobody here" on the other would be two answers to
 // one question.
-const WORDS: Record<"people" | "posts" | "cafe" | "food" | "messages", FeedWords> = {
+const WORDS: Record<"people" | "posts" | "cafe" | "food" | "wikipedia" | "messages", FeedWords> = {
   people: { loading: "common.loading", empty: "people.alone", failed: "glasses.offline" },
   posts: { loading: "common.loading", empty: "posts.empty", failed: "glasses.offline" },
   cafe: { loading: "cafe.loading", empty: "cafe.empty", failed: "cafe.unavailable" },
   food: { loading: "food.loading", empty: "food.empty", failed: "food.unavailable" },
+  wikipedia: { loading: "wikipedia.loading", empty: "wikipedia.empty", failed: "wikipedia.unavailable" },
   messages: { loading: "common.loading", empty: "messages.empty", failed: "glasses.offline" },
 };
 
@@ -186,6 +190,25 @@ function withRest(shown: string[], total: number): string {
 }
 
 /**
+ * The same packed line as `venueLine`, for the third of these three groups —
+ * the nearest article titles rather than the nearest shopfronts, and the same
+ * reason for packing by width rather than by count: a title off Wikipedia runs
+ * anywhere from a word to a sentence.
+ */
+function wikiLine(items: LoWikiPlace[]): string[] {
+  if (items.length === 0) return [];
+  const shown: string[] = [];
+  for (const item of items) {
+    const next = `${item.title} ${formatDistance(item.distance)}`;
+    if (shown.length > 0 && textWidth(withRest([...shown, next], items.length)) > READING_VALUES.width) {
+      break;
+    }
+    shown.push(next);
+  }
+  return [withRest(shown, items.length)];
+}
+
+/**
  * The same places one at a time, which is what the line above is a summary of.
  *
  * A venue is the one kind of entry down here with nothing to read and nowhere to
@@ -226,6 +249,40 @@ function venueItems(group: "cafe" | "food", feed: Feed<LoVenue[]>, { t }: PageCo
       // decimal places is eleven metres of where somebody is standing (see
       // pages/person.ts).
       body: [says, formatCoords(item.latitude, item.longitude)].join("\n\n"),
+    };
+  });
+}
+
+/**
+ * The same places one at a time, off Wikipedia rather than off OpenStreetMap —
+ * the third of the two-line entries this page is made of, and the closest
+ * this screen comes to what the phone's own nearby card opens into an iframe
+ * over the article itself (see WikipediaCard in lo/src/components): there is
+ * no frame up here and no picture either, only the words this display can
+ * paint, so the whole of what a hold on this row can do is read the lead
+ * paragraph lo already fetched. The phone is still where the rest of the
+ * article lives — `distance` and the coordinates are the same two facts a
+ * café's entry carries, and the description in between is the one field a
+ * café's entry has none of.
+ */
+function wikiItems(feed: Feed<LoWikiPlace[]>, { t }: PageContext): Item[] {
+  const rows = feed.data ?? [];
+  if (rows.length === 0) return [nothing("wikipedia", feedWord(feed, t, WORDS.wikipedia))];
+  return rows.map((item) => {
+    const away = formatDistance(item.distance);
+    return {
+      group: "wikipedia",
+      key: item.id,
+      head: item.title,
+      line: away,
+      // The distance repeated, then the lead paragraph — what the reader
+      // stepped in to find out — and where it is underneath, the way a
+      // café's own entry carries its coordinates last (see `venueItems`).
+      // Three paragraphs rather than `joined`'s " · ": that separator is for
+      // a line of facts, and a lead paragraph is a sentence, not a fact.
+      body: [away, item.description, formatCoords(item.latitude, item.longitude)]
+        .filter((part): part is string => Boolean(part))
+        .join("\n\n"),
     };
   });
 }
@@ -466,12 +523,12 @@ function postFoot(postId: number, empty: boolean, { comments, t }: PageContext):
  * always had on the phone, fetched when the reader opens that one name (see
  * pages/person.ts).
  *
- * The two at the end are the whole of what the summary's last two lines could
- * only name three or four of. A line that says `Doutor 240 m +11` is the reason
- * to step in here, and this is the eleven.
+ * The three at the end are the whole of what the summary's last three lines
+ * could only name three or four of. A line that says `Doutor 240 m +11` is the
+ * reason to step in here, and this is the eleven.
  */
 function nearbyItems(context: PageContext): Item[] {
-  const { posts, people, cafe, food, messages, locale, profile, t } = context;
+  const { posts, people, cafe, food, wikipedia, messages, locale, profile, t } = context;
 
   const messageItems: Item[] = (messages.data ?? []).length
     ? (messages.data ?? []).map((thread) => {
@@ -603,6 +660,7 @@ function nearbyItems(context: PageContext): Item[] {
     ...peopleItems,
     ...venueItems("cafe", cafe, context),
     ...venueItems("food", food, context),
+    ...wikiItems(wikipedia, context),
   ];
 }
 
@@ -616,7 +674,7 @@ export const nearbyPage: PageDefinition = {
   offered: () => true,
 
   render(context): PageView {
-    const { posts, people, cafe, food, messages, t } = context;
+    const { posts, people, cafe, food, wikipedia, messages, t } = context;
 
     // The order is the priority: the first group named takes the first spare
     // line (see stack.ts). The letters are named first because they are the one
@@ -624,14 +682,16 @@ export const nearbyPage: PageDefinition = {
     // everybody's and the names are whoever happens to be about — and because
     // they are the group with nothing on any other screen to fall back on.
     //
-    // The five ceilings below come to seven, which is the whole of the body: two
-    // letters, two posts, and a line each for who is about, where the coffee is
-    // and where the food is. So this page is dealt nothing — every group gets
-    // exactly what it asked for on a full street — and that is the point of
-    // choosing them to add up rather than to compete. A reader learns where the
-    // cafés are on this screen once, and they are in the same place on the next
-    // walk whatever the inbox is doing. What the dealing still does is hand the
-    // spare line down the list on a quiet street, in the order below.
+    // The six ceilings below come to eight against a body of seven lines, one
+    // more than the room allows: two letters, two posts, and a line each for who
+    // is about, where the coffee is, where the food is and what is worth
+    // reading. A full street can therefore no longer answer every group at its
+    // own ceiling — the one spare line past the six guaranteed ones goes to
+    // whichever of the letters and the posts still has more to show, in that
+    // order, so the other of the two stands at one line rather than two. What
+    // does not move is where each group sits: a reader learns where the cafés
+    // are on this screen once, and they are in the same place on the next walk
+    // whatever the inbox is doing.
     const groups: Group[] = [
       {
         id: "messages",
@@ -715,6 +775,18 @@ export const nearbyPage: PageDefinition = {
         label: t("food.title"),
         lines: venueLine(food.data ?? []),
         note: feedWord(food, t, WORDS.food),
+        max: 1,
+      },
+      // Last, because it is the one line here about neither company nor a place
+      // to walk into: an article is worth knowing is nearby and is not waiting to
+      // catch the reader the way a letter or a post is. Packed the same way the
+      // two lines above it are (see `wikiLine`) — a Wikipedia title is anywhere
+      // from a word to a sentence, the same unevenness a shopfront's name has.
+      {
+        id: "wikipedia",
+        label: t("wikipedia.title"),
+        lines: wikiLine(wikipedia.data ?? []),
+        note: feedWord(wikipedia, t, WORDS.wikipedia),
         max: 1,
       },
     ];

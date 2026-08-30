@@ -162,6 +162,7 @@ has just left.
 | Warnings in force | `GET /api/warnings?lat&lon` | Every new fix |
 | Somewhere for a coffee, nearest first with distances | `GET /api/cafe?lat&lon&lang=` | Every new fix, keyed to a ~1 km square and half an hour — started rather than waited on |
 | Somewhere to eat, the same | `GET /api/food?lat&lon&lang=` | The same |
+| Wikipedia articles carrying a coordinate near here, with a lead paragraph and a picture where there is one | `GET /api/wikipedia?lat&lon&lang=` | The same |
 | Publish our fix, get everyone else's and the unread count | `PUT /api/position` | Every minute |
 | The inbox — letters and comment columns in one list | `GET /api/messages` | While the second page or anything under it is up, at most once a minute |
 | One exchange, which marks it read | `GET /api/messages/:username` | Three seconds after the reader has opened one letter and stayed on it |

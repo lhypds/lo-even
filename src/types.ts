@@ -171,6 +171,40 @@ export interface LoVenuesResult {
   items: LoVenue[];
 }
 
+/* --------------------------------------------------------------- wikipedia -- */
+
+/**
+ * One Wikipedia article carrying a coordinate near here — a row of `GET
+ * /api/wikipedia` (see `lookupWikipedia` in lo/server/geo.js), which is the same
+ * two-ring shape `lookupVenues` answers in and a different question of the same
+ * upstream the newswire falls back to (see `LoFeedItem`, whose `kind: "place"`
+ * rows are a bare title and a link to leave lo on — this is the lead paragraph
+ * and a picture, to be read without leaving it).
+ *
+ * `description` is the article's own opening, trimmed to a couple of sentences
+ * on the server. `thumbnail` is the picture Wikipedia keeps for the page, where
+ * it has one — the glasses have no way to draw it and read past it, but the
+ * phone's own nearby card shows it in the pin it stands under.
+ */
+export interface LoWikiPlace {
+  /** `wikipedia/12345` — the page id, namespaced against a venue's `type/id`. */
+  id: string;
+  title: string;
+  description?: string | null;
+  thumbnail?: string | null;
+  latitude: number;
+  longitude: number;
+  url: string;
+  /** Metres from the fix that asked, nearest first. */
+  distance: number;
+}
+
+export interface LoWikiPlacesResult {
+  place?: { name?: string } | null;
+  radius: number;
+  items: LoWikiPlace[];
+}
+
 /* --------------------------------------------------------------- warnings -- */
 
 export interface LoWarningItem {

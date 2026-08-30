@@ -89,6 +89,7 @@ function context(over: Partial<PageContext> = {}): PageContext {
     // answer has not landed, which is what idle is (see pages/nearby.ts).
     cafe: { status: "idle", data: null },
     food: { status: "idle", data: null },
+    wikipedia: { status: "idle", data: null },
     warnings: { status: "idle", data: null },
     messages: { status: "idle", data: null },
     unread: 0,
@@ -412,7 +413,7 @@ display.enter();
 await settle();
 check("a tap picks out a group without leaving the page", display.path() === "lo/nearby", display.path());
 
-// Five groups on this page, walked in the page's own order — outwards from what
+// Six groups on this page, walked in the page's own order — outwards from what
 // is addressed to the reader by name to what is simply standing here. Which one
 // is boxed is read off the path it opens onto rather than off the box.
 async function opens(): Promise<string> {
@@ -425,14 +426,14 @@ async function opens(): Promise<string> {
 }
 
 const groups: string[] = [];
-for (let step = 0; step < 5; step += 1) {
+for (let step = 0; step < 6; step += 1) {
   groups.push(await opens());
   await roll(1);
 }
 check(
   "the wheel walks the groups in the page's own order",
   groups.join(" ") ===
-    "lo/nearby/msg lo/nearby/posts lo/nearby/people lo/nearby/cafe lo/nearby/food",
+    "lo/nearby/msg lo/nearby/posts lo/nearby/people lo/nearby/cafe lo/nearby/food lo/nearby/wikipedia",
   groups.join(" "),
 );
 
