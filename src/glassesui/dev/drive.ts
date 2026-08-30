@@ -347,6 +347,12 @@ function busy(over: Partial<PageContext> = {}): PageContext {
             data: {
               user: {
                 username: "near0",
+                // A trade off lo's own list, which is the half of that field this
+                // app has anything to do: it arrives as the slug lo files it
+                // under and is read off the screen as a word (see WORK in
+                // pages/person.ts). The other half — a trade its owner typed — is
+                // printed as it came and needs nothing exercised.
+                work: "photographer",
                 bio: "walks a lot, reads on trains, mostly on the west side of the city",
                 email: "near0@example.com",
                 website: "https://example.com/near0",
@@ -774,6 +780,12 @@ while (display.back()) await settle();
 const nearest = nearbyPage?.items?.(busy()).find((item) => item.group === "people" && item.key === "near0");
 const drawn = (nearest?.body.match(/something left on the ground/g) ?? []).length;
 check("a profile carries five of their posts at most", drawn === 5, `${drawn} of 8 drawn`);
+
+// And what they do at the top of it, in the language the page is being read in.
+// lo stores the answer as a slug so that every account that answered the same way
+// is one string; a slug on a screen is this app failing to look the word up.
+const trade = (nearest?.body ?? "").split("\n")[1] ?? "";
+check("a listed trade is read as a word and not as its slug", trade === "Photographer", trade);
 
 // --- and the post in front of the reader ------------------------------------
 // The third group down here that can be answered, and the third time the same

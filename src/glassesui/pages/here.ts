@@ -185,14 +185,18 @@ function whenRow(context: PageContext): ReadingRow {
   const [sun, span] = sunReading(context);
 
   // And the clock time of that event is the first thing off the line when it will
-  // not fit, rather than the span or the zone. Wherever the server named the zone
-  // — which is nearly everywhere — all four readings fit in the supported languages
-  // with four to eighty-six pixels over. It is the offset standing in for a name
-  // that fills the line: `9月30日周三 · UTC+09:00 · ↑05:13 · 日出 13小时20分钟` is
-  // sixty-two pixels past the end of the column, and the same line without the
-  // hour is nineteen inside it. What the span says is how long the reader has;
-  // the hour it lands on is the same fact told a second way, and the second way
-  // is the one that can go.
+  // not fit, rather than the span or the zone. Two things fill this line: the
+  // offset standing in where the server named no zone, and a long countdown in a
+  // language that spells the verb out — `9月30日周三 · UTC+09:00 · ↑05:13 ·
+  // 日出13h20m` is twenty-seven pixels past the end of the column, where the same
+  // line without the hour is fifty-four inside it. What the span says is how long
+  // the reader has; the hour it lands on is the same fact told a second way, and
+  // the second way is the one that can go.
+  //
+  // Both margins are wider than they were: the units used to stand off their
+  // figures, and in Chinese they used to be words (see formatSpan, and the note
+  // over `span.hours` in the dictionary). The line still runs out in the cases
+  // above, which is why this is measured rather than assumed.
   const whole = line(date, named, sun, span);
   return {
     label: t("clock.title"),
@@ -215,9 +219,9 @@ function fixRow(context: PageContext): ReadingRow | null {
   // silent about which storey you are on — but saying so cost a word on the
   // fullest line of the page, and the word was what was getting cut.
   const height = Number.isFinite(coords.altitude)
-    ? `${Math.round(coords.altitude as number)} m`
+    ? `${Math.round(coords.altitude as number)}m`
     : Number.isFinite(weather?.elevation)
-      ? `${Math.round(weather?.elevation as number)} m`
+      ? `${Math.round(weather?.elevation as number)}m`
       : "";
 
   // How old the fix is, and only once it is old enough to matter: a reading taken
@@ -225,8 +229,10 @@ function fixRow(context: PageContext): ReadingRow | null {
   // line of every page is a word that stops being read.
   //
   // Spelled with the word that says it is an age, which no other line in the app
-  // needs: this one already has two lengths in metres on it, and "39 m · 39m" is
-  // a height and three quarters of an hour told apart by a space (see formatAge).
+  // needs: this one already has two lengths in metres on it, and "39m · 39m" is a
+  // height and three quarters of an hour written the same way to the character.
+  // The word is the whole of what tells them apart — there is no longer a space
+  // in front of the unit to do it (see formatAge, and formatDistance).
   const age = fixAt && Date.now() - fixAt > STALE_MS ? formatAge(new Date(fixAt).toISOString(), locale, t) : "";
 
   // How fast over the ground, and only while that is a fact rather than a jitter
@@ -238,18 +244,18 @@ function fixRow(context: PageContext): ReadingRow | null {
   //
   // Never beside the age, and that is about honesty rather than about the width
   // it buys back: a speed is a reading off the fix like any other, so a fix three
-  // quarters of an hour old that says 1.4 m/s is saying the reader is walking
+  // quarters of an hour old that says 1.4m/s is saying the reader is walking
   // *now* on the strength of where they were walking then. The line either says
   // how fast this is or how old it is, and once it is old enough to have to say
   // so, that is the only one of the two that is still true.
   //
   // Left off far more often than it is drawn in any case: most fixes carry no
   // speed at all, and the Even bridge's often carries none even while the phone
-  // is moving. A row that said "0.0 m/s" for all of that would be a claim about
+  // is moving. A row that said "0.0m/s" for all of that would be a claim about
   // the reader made out of a field nobody filled in.
   const speed =
     !age && Number.isFinite(coords.speed) && (coords.speed as number) >= MOVING_MS
-      ? `${(coords.speed as number).toFixed(1)} m/s`
+      ? `${(coords.speed as number).toFixed(1)}m/s`
       : "";
 
   // Where, how sure, how high, and then whichever of the last two is true. The
@@ -257,9 +263,10 @@ function fixRow(context: PageContext): ReadingRow | null {
   // reason than the speed's: this line is four readings and a limit, and at
   // three quarters of an hour old the answer to "how well does this screen know
   // where I am standing" is the age rather than the metres. `35.6580°N
-  // 139.7016°E · ±12 m · 39 m · 39分钟前` is four pixels past the end of the
-  // column in Chinese — it would arrive with its last character clipped — and
-  // the reading that has to go is the one the age has already answered over.
+  // 139.7016°E · ±12m · 39m · 39分钟前` is sixteen pixels past the end of the
+  // column in Chinese even with every unit sitting hard against its figure — it
+  // would arrive with its last character clipped — and the reading that has to go
+  // is the one the age has already answered over.
   return {
     label: t("location.fix"),
     value: line(
@@ -415,7 +422,7 @@ function skyRows(context: PageContext): ReadingRow[] {
         ],
         [
           humidity != null ? `${humidity}%` : "",
-          wind != null ? `${wind} ${weather?.units?.wind ?? "km/h"}` : "",
+          wind != null ? `${wind}${weather?.units?.wind ?? "km/h"}` : "",
         ],
       ),
     },

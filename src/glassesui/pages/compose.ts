@@ -283,7 +283,7 @@ export function composeView(draft: Draft, t: Translate): PageView {
     return {
       // The question, in full, because it is the whole of what this screen is for:
       // the reader asked to be shown a dictation before it went to somebody.
-      title: t(draft.kind === "reply" ? "compose.replyTitle" : "compose.commentTitle"),
+      title: t(draft.kind === "reply" ? "compose.messageTitle" : "compose.commentTitle"),
       block: { kind: "readings", rows },
       // The same two gestures on both, because they are the same two gestures:
       // there is nothing to choose between and the only question left is whether

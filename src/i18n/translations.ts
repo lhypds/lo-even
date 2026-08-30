@@ -127,6 +127,28 @@ export const en = {
   // somebody left in the street.
   "posts.reading": "Reading the replies.",
   "posts.reply": "Hold to reply.",
+  // What somebody does, for the trades lo asks about with a menu rather than a
+  // box (see lo/src/utils/work.js). They are words of the dictionary and not a
+  // table beside the platforms, because a platform is called the same thing in
+  // every language and a trade is a common noun. Whatever a reader wrote for
+  // themselves instead is not in here and is not lo's to translate: it comes up
+  // on the page as it was typed.
+  "work.architect": "Architect",
+  "work.artist": "Artist",
+  "work.chef": "Chef",
+  "work.designer": "Designer",
+  "work.developer": "Developer",
+  "work.doctor": "Doctor",
+  "work.engineer": "Engineer",
+  "work.filmmaker": "Filmmaker",
+  "work.founder": "Founder",
+  "work.journalist": "Journalist",
+  "work.musician": "Musician",
+  "work.photographer": "Photographer",
+  "work.researcher": "Researcher",
+  "work.student": "Student",
+  "work.teacher": "Teacher",
+  "work.writer": "Writer",
   // The two follow figures, and lo's own words for them. The singular remains a
   // key of its own for languages that distinguish it.
   "user.followers": "{{n}} followers",
@@ -228,11 +250,17 @@ export const en = {
   "compose.postWho": "everyone here",
   "compose.hint": "Roll to choose · tap to keep · twice to drop.",
   "compose.dropped": "Dropped.",
-  // The other composer: a dictation said while one letter was open, which is an
-  // answer to it rather than anything about the ground. The heading is the whole
-  // question, because showing the words back before they go to a named person is
-  // the whole of what that screen is for.
-  "compose.replyTitle": "send this reply?",
+  // The other composer: a dictation said to somebody rather than about the
+  // ground. The heading is the whole question, because showing the words back
+  // before they go to a named person is the whole of what that screen is for.
+  //
+  // A message and not a reply, in the question and in the word that closes it
+  // below. This screen is reached from a person's page as well as from an open
+  // letter, and those are one act down here (see `addressee` in main.ts) — so
+  // what it is called has to be true of the first thing ever said to somebody as
+  // well as of the fifth, and calling that a reply would be lo answering a letter
+  // nobody wrote.
+  "compose.messageTitle": "send this message?",
   "compose.sendTo": "Send to",
   "compose.replyHint": "Tap to send · twice to drop.",
   // And the third composer: a dictation said while one post was open, which is a
@@ -247,7 +275,13 @@ export const en = {
   // punctuation is part of a language, and each dictionary can use its own
   // quotation marks (see `tally.join`).
   "compose.quoted": "“{{post}}”",
+  // Both composers send, and both can fail to, so those two words are one apiece.
+  // What they leave behind is not one thing: a letter has gone, and a remark under
+  // a post has answered it — the post is what the column is filed under and what
+  // every line in it is about, so that one is an answer whether or not anybody
+  // else has spoken yet, where a letter need not be one at all.
   "reply.sending": "Sending.",
+  "message.sent": "Sent.",
   "reply.sent": "Replied.",
   "reply.failed": "Could not send this.",
   "warnings.kind.rain": "Heavy rain",
@@ -313,6 +347,21 @@ export const en = {
   "time.minutes": "{{n}}m",
   "time.hours": "{{n}}h",
   "time.days": "{{n}}d",
+  // The same two units again, for a stretch of time rather than an age — the
+  // light left in the day, and how long until the sun is back (see formatSpan).
+  //
+  // They are their own keys because the two readings are not written the same way
+  // in every language. An age stands beside a name on a list — `@mari · 39分钟` —
+  // where a span is the last of four readings on the fullest line of the standing
+  // page, and it is two figures rather than one: 小时 and 分钟 are two
+  // double-width characters apiece, and a whole morning of daylight put that line
+  // past the end of its column in Chinese. `8月28日周五 · JST · ↓18:20 ·
+  // 日照 11小时20分钟` measures 421 against a column of 408 — the hour would be
+  // dropped to save it — where `日照11h20m` brings the same line in at 362 (see
+  // whenRow in pages/here.ts). English and Japanese write a span in the words they
+  // write an age in, and theirs are simply `time.*` again.
+  "span.hours": "{{n}}h",
+  "span.minutes": "{{n}}m",
   "glasses.connecting": "Connecting to your phone.",
   // While the session the last launch left behind is being taken up again, which
   // is a sentence the reader sees only where it is about to be replaced by the
@@ -399,6 +448,22 @@ const ja: Translations = {
   "people.message": "長押しでメッセージ。",
   "posts.reading": "返信を読み込み中。",
   "posts.reply": "長押しで返信。",
+  "work.architect": "建築家",
+  "work.artist": "アーティスト",
+  "work.chef": "料理人",
+  "work.designer": "デザイナー",
+  "work.developer": "プログラマー",
+  "work.doctor": "医師",
+  "work.engineer": "エンジニア",
+  "work.filmmaker": "映像作家",
+  "work.founder": "起業家",
+  "work.journalist": "記者",
+  "work.musician": "ミュージシャン",
+  "work.photographer": "写真家",
+  "work.researcher": "研究者",
+  "work.student": "学生",
+  "work.teacher": "教師",
+  "work.writer": "ライター",
   "user.followers": "フォロワー {{n}}",
   "user.follower": "フォロワー {{n}}",
   "user.following": "フォロー中 {{n}}",
@@ -463,13 +528,14 @@ const ja: Translations = {
   "compose.postWho": "ここにいる人",
   "compose.hint": "回して選択 · タップで保存 · 2回で破棄。",
   "compose.dropped": "破棄しました。",
-  "compose.replyTitle": "この返信を送る？",
+  "compose.messageTitle": "このメッセージを送る？",
   "compose.sendTo": "宛先",
   "compose.replyHint": "タップで送信 · 2回で破棄。",
   "compose.commentTitle": "このコメントを送る？",
   "compose.replyUnder": "返信先",
   "compose.quoted": "「{{post}}」",
   "reply.sending": "送信中。",
+  "message.sent": "送信しました。",
   "reply.sent": "返信しました。",
   "reply.failed": "送信できません。",
   "warnings.kind.rain": "大雨",
@@ -535,6 +601,8 @@ const ja: Translations = {
   "time.minutes": "{{n}}分",
   "time.hours": "{{n}}時間",
   "time.days": "{{n}}日",
+  "span.hours": "{{n}}時間",
+  "span.minutes": "{{n}}分",
   "glasses.connecting": "スマートフォンに接続中。",
   "glasses.resuming": "サインインし直しています。",
   "glasses.signIn": "スマートフォンでサインイン。",
@@ -586,8 +654,13 @@ const zh: Translations = {
   "weather.today": "今天",
   "weather.tomorrow": "明天",
   "weather.feels": "体感",
-  "weather.daylight": "日照 {{span}}",
-  "weather.sunrise": "日出 {{span}}",
+  // Hard against the figure, where every other language keeps the space its own
+  // typography asks for: 日照 and 日出 are two double-width characters apiece on
+  // the fullest line of the standing page, and the space after them is a third
+  // half-character of a line that is already the first in the app to run out of
+  // room (see whenRow in pages/here.ts).
+  "weather.daylight": "日照{{span}}",
+  "weather.sunrise": "日出{{span}}",
   "weather.title": "天气",
   "location.title": "此处",
   "posts.title": "posts",
@@ -604,6 +677,22 @@ const zh: Translations = {
   "people.message": "长按发消息。",
   "posts.reading": "正在读取回复。",
   "posts.reply": "长按回复。",
+  "work.architect": "建筑师",
+  "work.artist": "艺术家",
+  "work.chef": "厨师",
+  "work.designer": "设计师",
+  "work.developer": "程序员",
+  "work.doctor": "医生",
+  "work.engineer": "工程师",
+  "work.filmmaker": "影像创作者",
+  "work.founder": "创业者",
+  "work.journalist": "记者",
+  "work.musician": "音乐人",
+  "work.photographer": "摄影师",
+  "work.researcher": "研究者",
+  "work.student": "学生",
+  "work.teacher": "教师",
+  "work.writer": "作家",
   "user.followers": "关注者 {{n}}",
   "user.follower": "关注者 {{n}}",
   "user.following": "关注中 {{n}}",
@@ -668,13 +757,14 @@ const zh: Translations = {
   "compose.postWho": "这里的所有人",
   "compose.hint": "滚动选择 · 轻触保存 · 连按两次丢弃。",
   "compose.dropped": "已丢弃。",
-  "compose.replyTitle": "发送这条回复？",
+  "compose.messageTitle": "发送这条消息？",
   "compose.sendTo": "发送给",
   "compose.replyHint": "轻触发送 · 连按两次丢弃。",
   "compose.commentTitle": "发布这条回复？",
   "compose.replyUnder": "回复",
   "compose.quoted": "“{{post}}”",
   "reply.sending": "发送中。",
+  "message.sent": "已发送。",
   "reply.sent": "已回复。",
   "reply.failed": "无法发送。",
   "warnings.kind.rain": "暴雨",
@@ -740,6 +830,8 @@ const zh: Translations = {
   "time.minutes": "{{n}}分钟",
   "time.hours": "{{n}}小时",
   "time.days": "{{n}}天",
+  "span.hours": "{{n}}h",
+  "span.minutes": "{{n}}m",
   "glasses.connecting": "正在连接手机。",
   "glasses.resuming": "正在恢复登录。",
   "glasses.signIn": "请在手机上登录。",
@@ -810,6 +902,22 @@ const fr: Translations = {
   "people.message": "Maintenir pour envoyer un message.",
   "posts.reading": "Lecture des réponses.",
   "posts.reply": "Maintenir pour répondre.",
+  "work.architect": "Architecte",
+  "work.artist": "Artiste",
+  "work.chef": "Cuisinier/ère",
+  "work.designer": "Designer",
+  "work.developer": "Développeur/se",
+  "work.doctor": "Médecin",
+  "work.engineer": "Ingénieur/e",
+  "work.filmmaker": "Cinéaste",
+  "work.founder": "Fondateur/rice",
+  "work.journalist": "Journaliste",
+  "work.musician": "Musicien/ne",
+  "work.photographer": "Photographe",
+  "work.researcher": "Chercheur/se",
+  "work.student": "Étudiant/e",
+  "work.teacher": "Enseignant/e",
+  "work.writer": "Écrivain/e",
   "user.followers": "{{n}} abonnés",
   "user.follower": "{{n}} abonné",
   "user.following": "{{n}} abonnements",
@@ -874,13 +982,14 @@ const fr: Translations = {
   "compose.postWho": "tout le monde ici",
   "compose.hint": "Tourner pour choisir · toucher pour garder · deux fois pour supprimer.",
   "compose.dropped": "Supprimé.",
-  "compose.replyTitle": "envoyer cette réponse ?",
+  "compose.messageTitle": "envoyer ce message ?",
   "compose.sendTo": "Envoyer à",
   "compose.replyHint": "Toucher pour envoyer · deux fois pour supprimer.",
   "compose.commentTitle": "publier cette réponse ?",
   "compose.replyUnder": "Répondre à",
   "compose.quoted": "« {{post}} »",
   "reply.sending": "Envoi.",
+  "message.sent": "Envoyé.",
   "reply.sent": "Réponse envoyée.",
   "reply.failed": "Impossible d’envoyer ceci.",
   "warnings.kind.rain": "Fortes pluies",
@@ -946,6 +1055,8 @@ const fr: Translations = {
   "time.minutes": "{{n}}min",
   "time.hours": "{{n}}h",
   "time.days": "{{n}}j",
+  "span.hours": "{{n}}h",
+  "span.minutes": "{{n}}min",
   "glasses.connecting": "Connexion au téléphone.",
   "glasses.resuming": "Reconnexion en cours.",
   "glasses.signIn": "Connectez-vous sur le téléphone.",
@@ -1016,6 +1127,22 @@ const es: Translations = {
   "people.message": "Mantén pulsado para enviar un mensaje.",
   "posts.reading": "Leyendo las respuestas.",
   "posts.reply": "Mantén pulsado para responder.",
+  "work.architect": "Arquitecto/a",
+  "work.artist": "Artista",
+  "work.chef": "Chef",
+  "work.designer": "Diseñador/a",
+  "work.developer": "Desarrollador/a",
+  "work.doctor": "Médico/a",
+  "work.engineer": "Ingeniero/a",
+  "work.filmmaker": "Cineasta",
+  "work.founder": "Fundador/a",
+  "work.journalist": "Periodista",
+  "work.musician": "Músico/a",
+  "work.photographer": "Fotógrafo/a",
+  "work.researcher": "Investigador/a",
+  "work.student": "Estudiante",
+  "work.teacher": "Docente",
+  "work.writer": "Escritor/a",
   "user.followers": "{{n}} seguidores",
   "user.follower": "{{n}} seguidor",
   "user.following": "{{n}} seguidos",
@@ -1080,13 +1207,14 @@ const es: Translations = {
   "compose.postWho": "todos los que están aquí",
   "compose.hint": "Gira para elegir · toca para guardar · dos veces para descartar.",
   "compose.dropped": "Descartado.",
-  "compose.replyTitle": "¿enviar esta respuesta?",
+  "compose.messageTitle": "¿enviar este mensaje?",
   "compose.sendTo": "Enviar a",
   "compose.replyHint": "Toca para enviar · dos veces para descartar.",
   "compose.commentTitle": "¿publicar esta respuesta?",
   "compose.replyUnder": "Responder a",
   "compose.quoted": "«{{post}}»",
   "reply.sending": "Enviando.",
+  "message.sent": "Enviado.",
   "reply.sent": "Respondido.",
   "reply.failed": "No se pudo enviar.",
   "warnings.kind.rain": "Lluvia intensa",
@@ -1152,6 +1280,8 @@ const es: Translations = {
   "time.minutes": "{{n}}min",
   "time.hours": "{{n}}h",
   "time.days": "{{n}}d",
+  "span.hours": "{{n}}h",
+  "span.minutes": "{{n}}min",
   "glasses.connecting": "Conectando con el teléfono.",
   "glasses.resuming": "Restaurando la sesión.",
   "glasses.signIn": "Inicia sesión en el teléfono.",
@@ -1222,6 +1352,22 @@ const de: Translations = {
   "people.message": "Für eine Nachricht gedrückt halten.",
   "posts.reading": "Antworten werden geladen.",
   "posts.reply": "Zum Antworten gedrückt halten.",
+  "work.architect": "Architekt/in",
+  "work.artist": "Künstler/in",
+  "work.chef": "Koch/Köchin",
+  "work.designer": "Designer/in",
+  "work.developer": "Entwickler/in",
+  "work.doctor": "Arzt/Ärztin",
+  "work.engineer": "Ingenieur/in",
+  "work.filmmaker": "Filmemacher/in",
+  "work.founder": "Gründer/in",
+  "work.journalist": "Journalist/in",
+  "work.musician": "Musiker/in",
+  "work.photographer": "Fotograf/in",
+  "work.researcher": "Forscher/in",
+  "work.student": "Student/in",
+  "work.teacher": "Lehrer/in",
+  "work.writer": "Autor/in",
   "user.followers": "{{n}} Follower",
   "user.follower": "{{n}} Follower",
   "user.following": "Folgt {{n}}",
@@ -1286,13 +1432,14 @@ const de: Translations = {
   "compose.postWho": "alle hier",
   "compose.hint": "Drehen zum Wählen · tippen zum Speichern · zweimal zum Verwerfen.",
   "compose.dropped": "Verworfen.",
-  "compose.replyTitle": "diese Antwort senden?",
+  "compose.messageTitle": "diese Nachricht senden?",
   "compose.sendTo": "Senden an",
   "compose.replyHint": "Tippen zum Senden · zweimal zum Verwerfen.",
   "compose.commentTitle": "diese Antwort veröffentlichen?",
   "compose.replyUnder": "Antwort auf",
   "compose.quoted": "„{{post}}“",
   "reply.sending": "Wird gesendet.",
+  "message.sent": "Gesendet.",
   "reply.sent": "Beantwortet.",
   "reply.failed": "Konnte nicht gesendet werden.",
   "warnings.kind.rain": "Starkregen",
@@ -1358,6 +1505,8 @@ const de: Translations = {
   "time.minutes": "{{n}}min",
   "time.hours": "{{n}}h",
   "time.days": "{{n}}T",
+  "span.hours": "{{n}}h",
+  "span.minutes": "{{n}}min",
   "glasses.connecting": "Verbindung zum Telefon wird hergestellt.",
   "glasses.resuming": "Anmeldung wird wiederhergestellt.",
   "glasses.signIn": "Melde dich auf dem Telefon an.",

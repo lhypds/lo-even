@@ -680,7 +680,14 @@ async function main() {
       setStatus(t("reply.sending"));
       try {
         await api.reply(current.to, current.text);
-        setStatus(t("reply.sent"), 2500);
+        // Sent, and not answered. This composer is reached from a person's page
+        // as well as from a letter — saying something to somebody who has not
+        // written yet and answering somebody who has are one act down here (see
+        // `addressee`) — so the word that closes it has to be true of the first
+        // thing ever said to somebody as well as of the fifth. A remark under a
+        // post keeps the other word, being always an answer to the post it is
+        // filed under.
+        setStatus(t("message.sent"), 2500);
         // The exchange the reader is about to be put back on now ends with what
         // they just said, and the inbox's row for it does too. Both are re-asked
         // rather than left to the next beat: a reader who answered a letter and

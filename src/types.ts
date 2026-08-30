@@ -301,6 +301,16 @@ export interface LoProfile {
   /** The address of the picture, not the name it is filed under. Nothing draws it up here. */
   avatar?: string | null;
   bio?: string | null;
+  /**
+   * What they do. One of the trades lo's sheet offers, kept as the slug that
+   * sheet files it under — so every account that answered the same way is one
+   * string and each language can have its own word for it (see the `work`
+   * column in lo/server/db.js, and WORK in pages/person.ts) — or, where nobody's
+   * list had the answer on it, whatever its owner typed, kept exactly as typed.
+   * Nothing here can tell the two apart and nothing needs to until the word is
+   * being read off the screen.
+   */
+  work?: string | null;
   email?: string | null;
   website?: string | null;
   /** The LINE ID, which lo's column calls `line_id` and its answer calls this. */

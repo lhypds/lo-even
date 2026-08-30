@@ -14,10 +14,10 @@
 //
 // What is worth reading behind a name is who they are, which is the one question
 // a position cannot answer, and lo has answered it on a page of its own for as
-// long as it has had profiles. So the same four things come up here, in the same
-// order that page puts them in (see lo/src/components/UserProfile): the two
-// follow figures, the line they wrote about themselves, the ways to reach them
-// off lo, and the last of what they have left on the ground.
+// long as it has had profiles. So the same five things come up here, in the same
+// order that page puts them in (see lo/src/components/UserProfile): what they do,
+// the two follow figures, the line they wrote about themselves, the ways to reach
+// them off lo, and the last of what they have left on the ground.
 //
 // **Five posts, where lo draws twenty.** A profile on a phone is scrolled; this
 // one is walked a screenful at a time with a wheel, and the twenty would be four
@@ -39,6 +39,37 @@ import type { Feed, PageContext } from "./types";
 // How many of somebody's own posts are worth carrying up here — see the note on
 // the twenty above.
 const POSTS = 5;
+
+// The trades lo's own profile sheet offers a word for (see lo/src/utils/work.js).
+// A set of slugs rather than a table of names, which is where this parts company
+// with the platforms below: a platform is called the same thing in every language
+// and a trade is a common noun — a photographer is 摄影师 to a reader in Chinese
+// and 写真家 to one in Japanese — so the words live with all the other words,
+// under `work.<kind>`, and what is kept here is only which of them there are.
+//
+// In slug order, which is nobody's order. lo sorts this list because lo draws it
+// as a menu somebody picks their own trade out of, and a menu has a top whether
+// anybody means it to or not; up here it is never drawn as a list at all — the
+// glasses have no sheet to fill in — and is only ever asked about one key at a
+// time.
+const WORK = new Set([
+  "architect",
+  "artist",
+  "chef",
+  "designer",
+  "developer",
+  "doctor",
+  "engineer",
+  "filmmaker",
+  "founder",
+  "journalist",
+  "musician",
+  "photographer",
+  "researcher",
+  "student",
+  "teacher",
+  "writer",
+]);
 
 // The ways off lo that have a field of their own, in the order lo's profile lists
 // them (see lo/src/utils/contacts.js). Four of them are the same list lo asks
@@ -82,6 +113,17 @@ const PLATFORMS: Record<string, string> = {
 };
 
 /**
+ * What to call somebody's trade. A slug off the list above is read in the
+ * language this screen is being read in; anything else is what its owner wrote,
+ * which is already in a language and is not lo's to translate — the same answer
+ * the links row gives a platform this app has no name for, and the same answer
+ * lo's own page gives (see workName in lo/src/utils/work.js).
+ */
+function workName(work: string, t: PageContext["t"]): string {
+  return WORK.has(work) ? t(`work.${work}`) : work;
+}
+
+/**
  * The two figures, written as one reading. Both follower keys exist in every
  * dictionary so languages can distinguish the singular where they need to.
  */
@@ -123,6 +165,18 @@ export function personBody(presence: string, page: Feed<LoPersonPage>, { locale,
   }
 
   const lines = [presence];
+  // What they do, as high up the page as the presence line leaves room for —
+  // which is where lo's own page puts it, directly under the name, and for lo's
+  // reason: a name and a trade is how a person is introduced on paper, and it is
+  // the one thing here that says what somebody would be about before a word of
+  // their own is read.
+  //
+  // Bare, with no label in front of it, where a contact carries one. A contact
+  // is a reading and needs saying which reading it is — an address is an address
+  // whether it is email or a website — and a trade is the answer itself, the same
+  // as the bio under it.
+  const work = profile.work?.trim();
+  if (work) lines.push(workName(work, t));
   if (page.data?.follows) lines.push(figures(page.data.follows, t));
   if (profile.bio) lines.push(profile.bio);
 

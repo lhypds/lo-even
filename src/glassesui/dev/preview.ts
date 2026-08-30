@@ -253,8 +253,8 @@ const ctx: PageContext = {
         }
       : { status: "idle" as const, data: null },
   // The same pair for the other group that is about a person: one name opened and
-  // one not. The filled one carries everything a profile can carry — the two
-  // figures, a bio, contacts of both kinds and more posts than the screen draws —
+  // one not. The filled one carries everything a profile can carry — a trade, the
+  // two figures, a bio, contacts of both kinds and more posts than the screen draws —
   // because this sheet exists to show what the fullest screen looks like, and a
   // profile is the longest thing on the nearby page now that a post is not.
   profile: (username: string) =>
@@ -264,6 +264,7 @@ const ctx: PageContext = {
           data: {
             user: {
               username: "mari",
+              work: "photographer",
               bio: "古本屋めぐりと、だれも見ていない路地の写真。だいたい渋谷か下北のあたりにいます。",
               email: "mari@example.com",
               website: "https://example.com/mari",

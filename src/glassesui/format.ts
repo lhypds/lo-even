@@ -34,11 +34,17 @@ export function formatUsername(username: string): string {
   return `@${username}`;
 }
 
+// Hard against the figure, as every unit in this app now is: `±12m`, not `±12 m`.
+// A space between a figure and its unit is a cell of a line that has none to give
+// — the standing page puts four readings and a limit on one row, and a list of
+// venues carries a distance in the margin of every one of them — and it buys
+// nothing on a screen this size, where what follows a figure could not be
+// mistaken for a word of its own.
 export function formatAccuracy(meters: number | undefined | null): string {
   if (!Number.isFinite(meters)) return "";
   const value = meters as number;
-  if (value < 1000) return `±${Math.round(value)} m`;
-  return `±${(value / 1000).toFixed(1)} km`;
+  if (value < 1000) return `±${Math.round(value)}m`;
+  return `±${(value / 1000).toFixed(1)}km`;
 }
 
 const EARTH_RADIUS_M = 6_371_008.8;
@@ -53,12 +59,12 @@ export function distanceMeters(a: Coordinates, b: { latitude: number; longitude:
   return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-// Three significant figures at every scale: a 4 m gap reads as 4.2 m, a city
-// crossing as 12.3 km.
+// Three significant figures at every scale: a four-metre gap reads as 4.2m, a city
+// crossing as 12.3km. The unit sits against the figure — see formatAccuracy.
 export function formatDistance(meters: number): string {
   if (!Number.isFinite(meters)) return "";
-  if (meters < 1000) return `${meters < 10 ? meters.toFixed(1) : Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(meters < 10000 ? 2 : 1)} km`;
+  if (meters < 1000) return `${meters < 10 ? meters.toFixed(1) : Math.round(meters)}m`;
+  return `${(meters / 1000).toFixed(meters < 10000 ? 2 : 1)}km`;
 }
 
 /**
@@ -86,11 +92,12 @@ export function relativeTime(iso: string | null | undefined, locale: string, t: 
  * There are two of these because there is one line in the app where a bare unit
  * is not safe. Everywhere the narrow form is used it stands beside a name —
  * `@mari · 39m` — and nothing near it is a measurement. The fix row is the
- * exception: it reads `35.6580°N 139.7016°E · ±12 m · 39 m · 39m`, and the last
- * two of those are a height in metres and an age in minutes written with the
- * same letter. A reader standing 39 metres up, 39 minutes after their last fix,
- * is looking at the same figure twice and can only tell them apart by knowing
- * which order this file writes them in.
+ * exception: it reads `35.6580°N 139.7016°E · ±12m · 39m · 39m ago`, and the last
+ * two of those are a height in metres and an age in minutes written with the same
+ * letter and nothing else between them. A reader standing 39 metres up, 39
+ * minutes after their last fix, is looking at the same three characters twice,
+ * and the word is the whole of what tells them apart — which is why it is here
+ * and not left to the space the units used to carry (see formatDistance).
  *
  * `Intl.RelativeTimeFormat` rather than the dictionary, because it is lo's own
  * way of saying this on the phone and because the word is the language's
@@ -127,17 +134,22 @@ export function formatAge(iso: string | null | undefined, locale: string, t: Tra
  * the day: "3h" is anything from three hours to four, and a reader deciding
  * whether to walk home wants the minutes as well.
  *
- * The units are the reader's own, taken from the same two keys the trail column
- * uses, and set hard against each other: "3時間48分" is how Japanese writes it,
- * and a space between the two would be a space in the middle of one figure.
+ * The units are the reader's own and set hard against each other: "3時間48分" is
+ * how Japanese writes it, and a space between the two would be a space in the
+ * middle of one figure.
+ *
+ * They are their own two keys rather than the trail column's, because a language
+ * need not tell a length in the words it tells an age in — Chinese says 39分钟
+ * for an age standing beside a name and h/m for a span sharing a line with four
+ * other readings (see the note over `span.hours` in the dictionary).
  */
 export function formatSpan(minutes: number, t: Translate): string {
   const whole = Math.max(0, Math.round(minutes));
   const hours = Math.floor(whole / 60);
   const rest = whole % 60;
-  if (hours === 0) return t("time.minutes", { n: rest });
-  if (rest === 0) return t("time.hours", { n: hours });
-  return `${t("time.hours", { n: hours })}${t("time.minutes", { n: rest })}`;
+  if (hours === 0) return t("span.minutes", { n: rest });
+  if (rest === 0) return t("span.hours", { n: hours });
+  return `${t("span.hours", { n: hours })}${t("span.minutes", { n: rest })}`;
 }
 
 /**

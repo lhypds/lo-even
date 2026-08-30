@@ -524,7 +524,7 @@ function postFoot(postId: number, empty: boolean, { comments, t }: PageContext):
  * pages/person.ts).
  *
  * The three at the end are the whole of what the summary's last three lines
- * could only name three or four of. A line that says `Doutor 240 m +11` is the
+ * could only name three or four of. A line that says `Doutor 240m +11` is the
  * reason to step in here, and this is the eleven.
  */
 function nearbyItems(context: PageContext): Item[] {
@@ -609,11 +609,12 @@ function nearbyItems(context: PageContext): Item[] {
           head: formatUsername(person.username),
           line: said,
           // And who that is, which is the one question a position cannot answer:
-          // the two follow figures, the line they wrote about themselves, the ways
-          // to reach them off lo and their last few posts — lo's own profile page,
-          // in the lines this screen has (see pages/person.ts). It is a read that
-          // costs a request, and the request is made by the reader opening this
-          // one name rather than by the list being drawn (see main.ts).
+          // what they do, the two follow figures, the line they wrote about
+          // themselves, the ways to reach them off lo and their last few posts —
+          // lo's own profile page, in the lines this screen has (see
+          // pages/person.ts). It is a read that costs a request, and the request
+          // is made by the reader opening this one name rather than by the list
+          // being drawn (see main.ts).
           body: personBody(said, profile(person.username), context),
           // The verb this screen has and the two above it have not. It is the same
           // sentence in the same corner as a letter's, because it is the same
