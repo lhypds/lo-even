@@ -171,6 +171,33 @@ const ctx: PageContext = {
       { id: "node/7", name: "吉野家", category: "fast_food", cuisine: "gyudon", latitude: 35.6563, longitude: 139.6996, distance: 640 },
     ],
   },
+  // The third of the ground-level groups, off Wikipedia rather than OpenStreetMap
+  // — packed by `wikiLine` the same way the two venue lines above it are, and
+  // fixtured with a real long title and a real short one for the same reason
+  // theirs are (see the note over `cafe`).
+  wikipedia: {
+    status: "ready",
+    data: [
+      {
+        id: "wikipedia/1",
+        title: "Shibuya Crossing",
+        description: "One of the busiest pedestrian crossings in the world.",
+        latitude: 35.6595,
+        longitude: 139.7005,
+        url: "https://en.wikipedia.org/wiki/Shibuya_Crossing",
+        distance: 210,
+      },
+      {
+        id: "wikipedia/2",
+        title: "Hachikō",
+        description: "A dog remembered for his loyalty to his owner.",
+        latitude: 35.6590,
+        longitude: 139.7005,
+        url: "https://en.wikipedia.org/wiki/Hachik%C5%8D",
+        distance: 240,
+      },
+    ],
+  },
   warnings: {
     status: "ready",
     data: {

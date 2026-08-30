@@ -74,6 +74,7 @@ import type {
   LoTrend,
   LoVenue,
   LoWarningsResult,
+  LoWikiPlace,
 } from "../types";
 import type { Feed } from "../glassesui/pages/types";
 import type { LoApi } from "./api";
@@ -206,6 +207,12 @@ export class Feeds {
   // for the other.
   private cafeSlot = slot<LoVenue[]>();
   private foodSlot = slot<LoVenue[]>();
+  // Nearby Wikipedia articles, a third read of the same ground and on the same
+  // coarse key as the two above — an article does not move and its lead
+  // paragraph does not change by the hour, so what makes it a new question is
+  // the reader having walked somewhere rather than time passing (see
+  // `readVenues`, which now starts this alongside the other two).
+  private wikiSlot = slot<LoWikiPlace[]>();
   // One per exchange the reader has opened, keyed by the correspondent — the same
   // shape as the stories above and for the same reason: there is no telling in
   // advance which of a list they will open, and each of them is worth keeping once
@@ -273,6 +280,9 @@ export class Feeds {
   }
   get food(): Feed<LoVenue[]> {
     return view(this.foodSlot);
+  }
+  get wikipedia(): Feed<LoWikiPlace[]> {
+    return view(this.wikiSlot);
   }
 
   /**
@@ -343,6 +353,7 @@ export class Feeds {
       this.inboxSlot,
       this.cafeSlot,
       this.foodSlot,
+      this.wikiSlot,
     ]) {
       each.key = "";
     }
@@ -443,11 +454,11 @@ export class Feeds {
   }
 
   /**
-   * Where to eat and where to sit down with a coffee. One key for both, because
-   * they are one question about the ground asked about two sets of amenities —
-   * and the coarsest key in this file, in place and in time alike: a ~1 km square
-   * and half an hour, which is lo's own square and rather less than lo's own hour
-   * (see VENUES_MS).
+   * Where to eat, where to sit down with a coffee, and what is worth reading
+   * nearby. One key for all three, because they are one question about the
+   * ground asked three ways — and the coarsest key in this file, in place and
+   * in time alike: a ~1 km square and half an hour, which is lo's own square
+   * and rather less than lo's own hour (see VENUES_MS).
    *
    * Quietly, for the reason the posts and the people are: this is re-asked when
    * the reader has walked a square's width, and a slot flipping back to "looking
@@ -459,6 +470,7 @@ export class Feeds {
     const key = `${round(coords, 2)}:${language}:${within(VENUES_MS)}`;
     void this.fill(this.cafeSlot, key, () => this.api.cafes(coords).then((answer) => answer.items), true);
     void this.fill(this.foodSlot, key, () => this.api.food(coords).then((answer) => answer.items), true);
+    void this.fill(this.wikiSlot, key, () => this.api.wikipedia(coords).then((answer) => answer.items), true);
   }
 
   /** What is on the ground here, asked for as coarsely as the answer keeps. */
@@ -690,6 +702,7 @@ export class Feeds {
     this.peopleSlot = slot();
     this.cafeSlot = slot();
     this.foodSlot = slot();
+    this.wikiSlot = slot();
     this.threadSlots.clear();
     this.profileSlots.clear();
     this.commentSlots.clear();

@@ -11,6 +11,7 @@ import type {
   LoUser,
   LoVenuesResult,
   LoWarningsResult,
+  LoWikiPlacesResult,
 } from "../types";
 import { detectLanguage, isLanguage, type Language } from "../i18n";
 
@@ -396,6 +397,18 @@ export class LoApi {
   cafes({ latitude, longitude }: Coordinates) {
     return this.request<LoVenuesResult>(
       `/api/cafe?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
+    );
+  }
+
+  /**
+   * Wikipedia articles carrying a coordinate near here, nearest first — the
+   * third read on this page that stops at no border, off the same upstream the
+   * newswire falls back to when it has nothing (see `LoFeedItem`) but asked its
+   * own richer question: a lead paragraph and a picture, not just a title.
+   */
+  wikipedia({ latitude, longitude }: Coordinates) {
+    return this.request<LoWikiPlacesResult>(
+      `/api/wikipedia?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
     );
   }
 

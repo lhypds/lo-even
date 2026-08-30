@@ -41,6 +41,7 @@ import type {
   LoVenue,
   LoWarningsResult,
   LoWeather,
+  LoWikiPlace,
 } from "../../types";
 import type { Translate } from "../../i18n";
 
@@ -90,6 +91,13 @@ export interface PageContext {
    */
   cafe: Feed<LoVenue[]>;
   food: Feed<LoVenue[]>;
+  /**
+   * Wikipedia articles carrying a coordinate near here, nearest first — the
+   * third reading on this page with no country list in front of it, off the
+   * same upstream the newswire falls back to when it has nothing of its own
+   * (see `news` above and `LoWikiPlace`).
+   */
+  wikipedia: Feed<LoWikiPlace[]>;
   warnings: Feed<LoWarningsResult>;
   messages: Feed<LoThread[]>;
   /** How much is waiting to be read, which rides in on the presence trade. */

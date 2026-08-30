@@ -205,6 +205,7 @@ async function main() {
       trends: feeds.trends,
       cafe: feeds.cafe,
       food: feeds.food,
+      wikipedia: feeds.wikipedia,
       warnings: feeds.warnings,
       messages: feeds.messages,
       unread: feeds.unread,
