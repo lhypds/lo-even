@@ -40,8 +40,7 @@ export const en = {
   "auth.forgotNoAdmin": "No administrator address is set. Add VITE_ADMIN_EMAIL to .env.",
   "auth.forgotSend": "Write to them",
   "auth.forgotSubject": "lo — forgotten password for {{name}}",
-  "auth.forgotMail":
-    "My lo account is {{name}}. I have forgotten my password — please set a new one for me.",
+  "auth.forgotMail": "My lo account is {{name}}. I have forgotten my password — please set a new one for me.",
   "auth.cancel": "Cancel",
   "clock.title": "Time",
   "clock.offset": "UTC{{offset}}",
@@ -453,9 +452,9 @@ const ja: Translations = {
   "warnings.title": "警報・注意報",
   "warnings.unavailable": "Yahoo!天気・災害に接続できません。",
   "mark.saving": "保存中。",
-  "mark.saved": "記録しました。",
-  "post.saving": "投稿中。",
-  "post.saved": "投稿しました。",
+  "mark.saved": "mark しました。",
+  "post.saving": "post 中。",
+  "post.saved": "post しました。",
   "post.failed": "ここに残せません。",
   "compose.title": "post か mark か？",
   "compose.said": "聞き取り",
@@ -467,7 +466,7 @@ const ja: Translations = {
   "compose.replyTitle": "この返信を送る？",
   "compose.sendTo": "宛先",
   "compose.replyHint": "タップで送信 · 2回で破棄。",
-  "compose.commentTitle": "この返信を投稿する？",
+  "compose.commentTitle": "このコメントを送る？",
   "compose.replyUnder": "返信先",
   "compose.quoted": "「{{post}}」",
   "reply.sending": "送信中。",
@@ -547,7 +546,7 @@ const ja: Translations = {
   "glasses.noSpeech": "音声を認識できません。",
   "glasses.noMic": "マイクを開けませんでした。",
   "glasses.transcribeFailed": "音声認識に接続できません。",
-  "glasses.markFailed": "この場所を記録できません。",
+  "glasses.markFailed": "この場所を mark できません。",
   "glasses.empty": "表示できるものがありません。",
   "glasses.noScreen": "メガネに何も表示されていません。lo を閉じて、Even App から開き直してください。",
 };
@@ -782,12 +781,10 @@ const fr: Translations = {
   "auth.forgotTitle": "Mot de passe oublié",
   "auth.forgotBody":
     "lo ne peut pas vous en envoyer un nouveau. Écrivez à l’administrateur à {{email}}, indiquez-lui votre compte et il en définira un.",
-  "auth.forgotNoAdmin":
-    "Aucune adresse d’administrateur n’est configurée. Ajoutez VITE_ADMIN_EMAIL au fichier .env.",
+  "auth.forgotNoAdmin": "Aucune adresse d’administrateur n’est configurée. Ajoutez VITE_ADMIN_EMAIL au fichier .env.",
   "auth.forgotSend": "Écrire à l’administrateur",
   "auth.forgotSubject": "lo — mot de passe oublié pour {{name}}",
-  "auth.forgotMail":
-    "Mon compte lo est {{name}}. J’ai oublié mon mot de passe — merci de m’en définir un nouveau.",
+  "auth.forgotMail": "Mon compte lo est {{name}}. J’ai oublié mon mot de passe — merci de m’en définir un nouveau.",
   "auth.cancel": "Annuler",
   "clock.title": "Heure",
   "clock.offset": "UTC{{offset}}",
@@ -962,8 +959,7 @@ const fr: Translations = {
   "glasses.transcribeFailed": "Service vocal inaccessible.",
   "glasses.markFailed": "Impossible de repérer cet endroit.",
   "glasses.empty": "Rien à afficher pour le moment.",
-  "glasses.noScreen":
-    "Rien ne s’affiche sur les lunettes. Fermez lo et rouvrez-la depuis Even App.",
+  "glasses.noScreen": "Rien ne s’affiche sur les lunettes. Fermez lo et rouvrez-la depuis Even App.",
 };
 
 const es: Translations = {
@@ -991,12 +987,10 @@ const es: Translations = {
   "auth.forgotTitle": "Contraseña olvidada",
   "auth.forgotBody":
     "lo no puede enviarte una nueva. Escribe al administrador en {{email}}, indícale cuál es tu cuenta y establecerá una.",
-  "auth.forgotNoAdmin":
-    "No se ha configurado la dirección del administrador. Añade VITE_ADMIN_EMAIL al archivo .env.",
+  "auth.forgotNoAdmin": "No se ha configurado la dirección del administrador. Añade VITE_ADMIN_EMAIL al archivo .env.",
   "auth.forgotSend": "Escribir al administrador",
   "auth.forgotSubject": "lo — contraseña olvidada de {{name}}",
-  "auth.forgotMail":
-    "Mi cuenta de lo es {{name}}. He olvidado mi contraseña; por favor, establece una nueva para mí.",
+  "auth.forgotMail": "Mi cuenta de lo es {{name}}. He olvidado mi contraseña; por favor, establece una nueva para mí.",
   "auth.cancel": "Cancelar",
   "clock.title": "Hora",
   "clock.offset": "UTC{{offset}}",
@@ -1171,8 +1165,7 @@ const es: Translations = {
   "glasses.transcribeFailed": "No se puede acceder al servicio de voz.",
   "glasses.markFailed": "No se pudo marcar este lugar.",
   "glasses.empty": "Aún no hay nada que mostrar.",
-  "glasses.noScreen":
-    "No se muestra nada en las gafas. Cierra lo y vuelve a abrirla desde Even App.",
+  "glasses.noScreen": "No se muestra nada en las gafas. Cierra lo y vuelve a abrirla desde Even App.",
 };
 
 const de: Translations = {
@@ -1200,12 +1193,10 @@ const de: Translations = {
   "auth.forgotTitle": "Passwort vergessen",
   "auth.forgotBody":
     "lo kann kein neues Passwort senden. Schreibe an {{email}}, nenne dein Konto, und die Administration legt eines fest.",
-  "auth.forgotNoAdmin":
-    "Es ist keine Administratoradresse eingerichtet. Füge VITE_ADMIN_EMAIL zur .env-Datei hinzu.",
+  "auth.forgotNoAdmin": "Es ist keine Administratoradresse eingerichtet. Füge VITE_ADMIN_EMAIL zur .env-Datei hinzu.",
   "auth.forgotSend": "E-Mail schreiben",
   "auth.forgotSubject": "lo — vergessenes Passwort für {{name}}",
-  "auth.forgotMail":
-    "Mein lo-Konto ist {{name}}. Ich habe mein Passwort vergessen — bitte lege ein neues für mich fest.",
+  "auth.forgotMail": "Mein lo-Konto ist {{name}}. Ich habe mein Passwort vergessen — bitte lege ein neues für mich fest.",
   "auth.cancel": "Abbrechen",
   "clock.title": "Zeit",
   "clock.offset": "UTC{{offset}}",
@@ -1380,8 +1371,7 @@ const de: Translations = {
   "glasses.transcribeFailed": "Der Sprachdienst ist nicht erreichbar.",
   "glasses.markFailed": "Dieser Ort konnte nicht markiert werden.",
   "glasses.empty": "Noch nichts anzuzeigen.",
-  "glasses.noScreen":
-    "Auf der Brille wird nichts angezeigt. Schließe lo und öffne es erneut über die Even App.",
+  "glasses.noScreen": "Auf der Brille wird nichts angezeigt. Schließe lo und öffne es erneut über die Even App.",
 };
 
 export const TRANSLATIONS = { en, zh, ja, fr, es, de } satisfies Record<string, Translations>;
