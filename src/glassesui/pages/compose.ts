@@ -53,11 +53,18 @@
 // that said so would be teaching the reader the one thing they already know.
 //
 // **What the preview is for.** It shows what was heard, as much of it as the
-// screen will hold: five of the seven body lines, with the answers on the two
-// underneath them. The reader is checking a transcript — the one thing they
-// cannot do here is retype a word the transcriber got wrong — so the words are
-// what the space goes to, and the answers are pinned to the foot of the body
-// where they are always in the same place.
+// screen will hold: four of the seven body lines, with the spot it would be filed
+// at on the one above and the answers on the two underneath. The reader is
+// checking a transcript — the one thing they cannot do here is retype a word the
+// transcriber got wrong — so the words are what the rest of the space goes to,
+// and the spot and the answers are pinned to the ends of the body where they are
+// always in the same place.
+//
+// The spot is on the screen that asks which of two things a sentence is and not
+// on the screen that asks whether an answer goes, because that is the screen it
+// is a fact about: a mark and a post are both pinned to the ground, and a letter
+// and a remark are pinned to a person and a post and carry no fix at all (see
+// `Draft`).
 //
 // It used to show the sentence as the answer under the wheel would *save* it,
 // cut where lo cuts it: 48 characters for the name of a mark, 300 for a remark,
@@ -75,7 +82,7 @@
 // said a great deal. Then the last line ends in an ellipsis, which is `wrap`
 // saying the screen ran out rather than lo saying the sentence will be cut.
 
-import { formatUsername } from "../format";
+import { formatCoords, formatUsername } from "../format";
 import { READING_VALUES } from "../theme";
 import { wrap } from "../metrics";
 import type { Translate } from "../../i18n";
@@ -147,13 +154,13 @@ export type Draft =
     }
   | ({ text: string } & Answering);
 
-// How much of the sentence is shown on the screen with two answers on it. Five of
-// the body's seven lines, the answers taking the two under them — which is the
+// How much of the sentence is shown on the screen with two answers on it. Four of
+// the body's seven lines, the spot above them and the answers below — which is the
 // whole body, and deliberately: the answers read as a different kind of thing from
 // the sentence above them because they are labelled and marked, not because there
 // is air between them, and a blank line held back for that costs a line of the one
 // thing on this screen the reader has to check.
-const SAID_LINES = 5;
+const SAID_LINES = 4;
 
 // And on the screen with one answer on it, where the last line names who it is
 // going to rather than offering a choice. That one keeps its blank line: a single
@@ -179,6 +186,36 @@ function heard(draft: Draft, t: Translate, height: number): ReadingRow[] {
     label: index === 0 ? t("compose.said") : "",
     value: lines[index] ?? "",
   }));
+}
+
+/**
+ * The spot the sentence would be filed at, which is the fact both answers on this
+ * screen turn on and the one fact about them the words cannot carry.
+ *
+ * A mark and a post are the same sentence pinned to the same ground and differ
+ * only in who may walk up to it, so the reader choosing between them is deciding
+ * what to leave *here* — and until this row existed the screen never said where
+ * here was. It matters most when the two disagree with each other: the fix was
+ * taken when the hold began rather than now (see `Draft`), so a reader who spoke
+ * on the move is filing at the doorway they were standing in and not the corner
+ * they have walked on to while deciding. This row is the only place that is
+ * visible.
+ *
+ * Above the words rather than under them, which is the order the sentence is
+ * answerable in: where, then what was heard, then who gets to read it. It also
+ * puts it out of reach of the transcript, which is the one thing on this screen
+ * that changes length — a spot that sat under a dictation would land on a
+ * different line every time, and it is a fact about the answers below it.
+ *
+ * lo's own word for this reading and lo's own way of writing it (`location.fix`,
+ * `formatCoords`), so the coordinates on this screen read exactly as the ones on
+ * the standing page do. Nothing beside them: the accuracy, the height and the age
+ * that ride along on that page are answers to "how well does this screen know
+ * where I am", and the question here is the plainer one of where the thing is
+ * going.
+ */
+function where(coords: Coordinates, t: Translate): ReadingRow {
+  return { label: t("location.fix"), value: formatCoords(coords.latitude, coords.longitude) };
 }
 
 /**
@@ -255,7 +292,12 @@ export function composeView(draft: Draft, t: Translate): PageView {
     };
   }
 
-  const rows = heard(draft, t, SAID_LINES);
+  // Where it would land, the words, and then what to do with them — the seven
+  // lines of the body exactly, which is why the transcript is four rather than
+  // five (see SAID_LINES). The line the spot costs comes off the end of a
+  // sentence that mostly does not reach it; the spot is a fact about both answers
+  // and would have been missing from every dictation.
+  const rows = [where(draft.coords, t), ...heard(draft, t, SAID_LINES)];
   // Straight under the words, on the last two lines of the body. There used to be
   // a blank line between them, and what it was holding apart is held apart by the
   // label and the two discs anyway (see `answer`) — where the line it cost came
