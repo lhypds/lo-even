@@ -181,11 +181,56 @@ got a fix to post.
 arriving — the reader turned location off in the site, or signed out of it, or is
 on a build of lo older than the notice. Forty-five seconds is a beat and a half of
 lo's clock, so an ordinary one is always in hand and a frame that has gone quiet
-is noticed inside a single turn of this app's own beat. Nothing else moves: the
-minute beat still runs, and the feeds are still asked for at the cadence they
-always were.
+is noticed inside a single turn of this app's own beat. The beat itself does not
+move: it still runs on the minute and still asks for whatever it has not been
+given.
+
+## And the answers hanging off the fix
+
+The same duplication runs one layer up. The site and this package are two clients
+of one server on one phone, and they ask it nearly the same questions: the place,
+the sky, the newswire, what is on, the trends, where to eat, where the coffee is,
+what is worth reading nearby, what is in force, what is on the ground here and who
+else is standing on it. `shared` in `../lo/src/api.js` wraps each of those reads
+and posts the answer up as it lands:
+
+```js
+window.parent.postMessage({ source: "lo", type: "feed", feed, lang, coords, data }, "*");
+```
+
+`feed` is the name the store on this side holds it under; `coords` and `lang` are
+the question it answers. `Feeds.offer` files it under *exactly* the key the read
+that would have fetched it carries, so `fill` finds the question already answered
+and the request is never made. An answer that does not fit — a feed this build has
+no slot for, ground too far from the venue anchor, a language the glasses are not
+being read in — falls through and is asked for as it always was. It is an offer,
+never an instruction.
+
+Two consequences worth naming. The four things `POST /api/dashboard` alone answers
+(the place, the newswire, what is on, the trends) now have slots of their own, and
+that read is skipped only when all four have been handed over — `dashGiven`. lo's
+own dashboard opens as a block of squares with the newswire, what is on and the
+trends off it, so in practice the dashboard read still goes out, and this is a
+saving that arrives with the panels the reader adds. What *is* saved on every
+launch is the minute beat's `PUT /api/position`, because the site trades positions
+on the same minute this side does, and `GET /api/warnings`, because lo carries
+that card by default where the country has one.
+
+**What does not cross.** Nothing addressed to the reader in person: not the inbox,
+not one exchange, not a column of remarks, not a profile. Those stay this side's
+own reads. The line is drawn on the content rather than on the audience because it
+cannot be drawn on the audience — lo can be framed by anybody and the package's
+origin is not nameable in advance, which is the same reason the sign-out goes out
+to `"*"`. Everything that does cross is either a read lo answers with no session
+at all, or what lo shows to any signed-in reader who walks down that street. If lo
+ever gains a `frame-ancestors` policy naming the Even Hub WebView, this is the
+paragraph that gets to relax.
 
 ## Endpoints used
+
+This is what this side asks for when it has not been handed the answer. Every row
+the site in the frame also fetches is skipped where its answer arrived first — see
+the section above.
 
 | Purpose | Endpoint | When |
 | --- | --- | --- |

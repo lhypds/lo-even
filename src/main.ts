@@ -1079,6 +1079,14 @@ async function main() {
         frameFix = { coords: fix, at };
         if (!coords && api.signedIn) void refresh();
       },
+      // And one answer the site has had from lo, which is one this side was going
+      // to ask for. Handed straight to the store, which decides whether it
+      // answers the question it is holding and files it under that question's own
+      // key if it does — so the saving is a request never made rather than one
+      // made and thrown away (see services/feeds.ts). It repaints on the way,
+      // like every other answer landing there, so a page in view fills in as the
+      // phone learns rather than on the next beat.
+      onFeed: (feed, ground, language, data) => feeds.offer(feed, ground, language, data),
       // A language chosen on the sign-in screen — or in the site behind it, which
       // says so through the frame (see webui.ts) — is the language the glasses are
       // fed in too: every feed is keyed on it, so changing it makes every card a

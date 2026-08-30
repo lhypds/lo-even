@@ -52,6 +52,24 @@
 // written on the ground here is the one thing on these pages that changes while
 // the reader stands still.
 //
+// **And most of them are not made at all.** The site in the frame is a second
+// client of the same server on the same phone, and it asks it nearly all of the
+// same questions to draw its own dashboard: the place, the sky, the newswire,
+// what is on, the trends, where to eat, where the coffee is, what is worth
+// reading nearby, what is in force, what is on the ground here and who else is
+// standing on it. Every answer it lands it posts up over the frame (see `shared`
+// in lo/src/api.js), and `offer` below files it under the very key the read that
+// would have fetched it carries — so `fill` finds the question answered and the
+// request is simply never made. What the site does not send, because it is
+// addressed to the reader rather than to the ground, is the inbox and everything
+// behind it: those stay this file's own reads.
+//
+// It is an offer and never an instruction. A feed this build has no slot for, an
+// answer about ground too far off, one looked up in a language the glasses are
+// not being read in, or a site whose reader has simply not put that panel on
+// their dashboard — every one of those falls through to the read below, made
+// exactly as it always was.
+//
 // **How coarse a question is.** A fix jitters by metres while a hand is still,
 // and re-asking on every jitter would be the same question over and over — so
 // each feed is keyed as coarsely as its answer actually is, in place *and* in
@@ -66,6 +84,7 @@ import type {
   LoComment,
   LoDashboard,
   LoFeedItem,
+  LoLocal,
   LoMessage,
   LoPerson,
   LoPersonPage,
@@ -204,6 +223,21 @@ export class Feeds {
   private readonly changed: () => void;
 
   private dashSlot = slot<LoDashboard>();
+  // The four things the dashboard read is the only source of here, each with a
+  // slot of its own — filled by nothing this file asks for, and only ever by an
+  // answer the site in the frame has already had (see `offer`). Each stands in
+  // front of the dashboard's copy the way the posts and the people below do, and
+  // between them they are what decides whether that read is worth making at all
+  // (see `dashGiven`).
+  private localSlot = slot<LoLocal>();
+  private newsSlot = slot<LoFeedItem[]>();
+  private eventsSlot = slot<LoFeedItem[]>();
+  private trendsSlot = slot<LoTrend[]>();
+  // The question those four are being kept against: the dashboard key of the fix
+  // this store is working on. A given part is taken only while it answers this
+  // one, and stands only until it does not — which is the whole of what keeps a
+  // free answer from outranking a fresher bought one (see `standDown`).
+  private dashAsking = "";
   private postsSlot = slot<LoPost[]>();
   private warningsSlot = slot<LoWarningsResult>();
   private inboxSlot = slot<LoThread[]>();
@@ -253,15 +287,25 @@ export class Feeds {
     this.changed = changed;
   }
 
+  /**
+   * The place, the sky and what this country can feed, from whichever of the two
+   * has them: the site's own answer where it has handed one over, and the
+   * dashboard's copy otherwise. The same preference the posts and the people are
+   * read under, and it is written once here because three getters share it.
+   */
+  private localData(): LoLocal | null {
+    return this.localSlot.status === "idle" ? this.dashSlot.data?.local ?? null : this.localSlot.data;
+  }
+
   get place() {
-    return this.dashSlot.data?.local?.place ?? null;
+    return this.localData()?.place ?? null;
   }
   get weather() {
-    return this.dashSlot.data?.local?.weather ?? null;
+    return this.localData()?.weather ?? null;
   }
   /** Which regional feeds the country the reader is standing in has. */
   get components(): string[] {
-    return this.dashSlot.data?.local?.components ?? [];
+    return this.localData()?.components ?? [];
   }
 
   /**
@@ -273,13 +317,13 @@ export class Feeds {
     return this.postsSlot.status === "idle" ? part(this.dashSlot, "posts") : view(this.postsSlot);
   }
   get news(): Feed<LoFeedItem[]> {
-    return part(this.dashSlot, "nearby");
+    return this.newsSlot.status === "idle" ? part(this.dashSlot, "nearby") : view(this.newsSlot);
   }
   get events(): Feed<LoFeedItem[]> {
-    return part(this.dashSlot, "events");
+    return this.eventsSlot.status === "idle" ? part(this.dashSlot, "events") : view(this.eventsSlot);
   }
   get trends(): Feed<LoTrend[]> {
-    return part(this.dashSlot, "trends");
+    return this.trendsSlot.status === "idle" ? part(this.dashSlot, "trends") : view(this.trendsSlot);
   }
 
   /**
@@ -359,17 +403,174 @@ export class Feeds {
    * makes the next read re-ask.
    */
   forget(): void {
-    for (const each of [
+    const all: Slot<unknown>[] = [
       this.dashSlot,
+      this.localSlot,
+      this.newsSlot,
+      this.eventsSlot,
+      this.trendsSlot,
       this.postsSlot,
       this.warningsSlot,
       this.inboxSlot,
       this.cafeSlot,
       this.foodSlot,
       this.wikiSlot,
-    ]) {
+    ];
+    // The four given ones included. An answer the site looked up in the language
+    // this reader has just left is exactly the stale answer this is about, and a
+    // key left standing would let it go on saving a read it has no business
+    // saving; `standDown` takes it off the page on the next fix.
+    for (const each of all) {
       each.key = "";
     }
+  }
+
+  /* ------------------------------------------------------------- the keys -- */
+
+  // Each written once, because two things compute them now: the reads below, and
+  // the answers that arrive from the frame already made (see `offer`). A given
+  // answer only saves a request if it is filed under exactly the key that request
+  // would have carried, so these two must not be able to drift apart.
+
+  private dashKey(coords: Coordinates, language: string): string {
+    return `${round(coords, 3)}:${language}:${within(DASHBOARD_MS)}`;
+  }
+  private postsKey(coords: Coordinates, language: string): string {
+    return `${round(coords, 3)}:${language}:${within(POSTS_MS)}`;
+  }
+  private warningsKey(coords: Coordinates): string {
+    return `${round(coords, 2)}:${within(WARNINGS_MS)}`;
+  }
+  private peopleKey(): string {
+    return within(POSTS_MS);
+  }
+
+  /**
+   * The key the three venue reads stand on, for an answer about `coords` — or
+   * null where that ground is too far from this store's anchor to be an answer to
+   * the same question.
+   *
+   * The anchor does not move to meet it. Café, food and Wikipedia share one key,
+   * and shifting it because one of the three arrived would change the question
+   * the other two have already been answered for — two reads spent to save one.
+   * Nor is one adopted before this store has stood anywhere: a launch asks within
+   * the second, and an answer that arrives ahead of that is one saving missed
+   * rather than a reason to let a message decide where we are standing.
+   */
+  private venueKeyFor(coords: Coordinates, language: string): string | null {
+    const anchor = this.venueAnchor;
+    if (!anchor || this.venueLanguage !== language) return null;
+    if (distanceMeters(anchor, coords) > VENUE_MOVED_M) return null;
+    return `${anchor.latitude},${anchor.longitude}:${language}`;
+  }
+
+  /* ------------------------------------------------ answers already in hand -- */
+
+  /**
+   * One answer the site in the frame has just had from lo, put where the read
+   * this store would have made was going to put it.
+   *
+   * The two of them are clients of one server on one phone and they ask it most
+   * of the same questions, so the site landing an answer is this store's question
+   * answered as well — the whole of what makes it one is that it goes in under
+   * the key the request carries. `fill` then finds the question answered and does
+   * nothing, which is the request saved. Anything this build has no slot for, or
+   * that is about ground too far off, or that was looked up in a language the
+   * glasses are not being read in, falls through and is asked for as it always
+   * was: what arrives here is an offer, never an instruction.
+   *
+   * The language does most of that work by itself, because it is part of every
+   * key that has one. The two that have none — what is in force, and who else is
+   * about — are answers in no language at all, so a site being read in French
+   * still saves the glasses both of those.
+   */
+  offer(feed: string, coords: Coordinates | null, language: string, data: unknown): void {
+    if (!data || typeof data !== "object") return;
+    const rows = <T>(): T[] => {
+      const list = (data as { items?: unknown }).items;
+      return Array.isArray(list) ? (list as T[]) : [];
+    };
+    switch (feed) {
+      case "local":
+        if (coords) this.givePart(this.localSlot, this.dashKey(coords, language), data as LoLocal);
+        break;
+      case "nearby":
+        if (coords) this.givePart(this.newsSlot, this.dashKey(coords, language), rows<LoFeedItem>());
+        break;
+      case "events":
+        if (coords) this.givePart(this.eventsSlot, this.dashKey(coords, language), rows<LoFeedItem>());
+        break;
+      case "trends":
+        if (coords) this.givePart(this.trendsSlot, this.dashKey(coords, language), rows<LoTrend>());
+        break;
+      case "posts": {
+        const posts = (data as { posts?: unknown }).posts;
+        if (coords && Array.isArray(posts)) {
+          this.give(this.postsSlot, this.postsKey(coords, language), posts as LoPost[]);
+        }
+        break;
+      }
+      case "people": {
+        // The one that carries something besides its own list: how much is
+        // waiting to be read rides in on the presence trade at both ends of the
+        // frame, which is why the badge in the corner keeps itself current
+        // without a read of its own (see `unread`).
+        const answer = data as { people?: unknown; unread?: unknown };
+        if (typeof answer.unread === "number") this.unreadCount = answer.unread;
+        if (Array.isArray(answer.people)) {
+          this.give(this.peopleSlot, this.peopleKey(), answer.people as LoPerson[]);
+        }
+        break;
+      }
+      case "warnings":
+        if (coords) this.give(this.warningsSlot, this.warningsKey(coords), data as LoWarningsResult);
+        break;
+      case "cafe":
+        if (coords) this.give(this.cafeSlot, this.venueKeyFor(coords, language), rows<LoVenue>());
+        break;
+      case "food":
+        if (coords) this.give(this.foodSlot, this.venueKeyFor(coords, language), rows<LoVenue>());
+        break;
+      case "wikipedia":
+        if (coords) this.give(this.wikiSlot, this.venueKeyFor(coords, language), rows<LoWikiPlace>());
+        break;
+      default:
+        // A feed this build has no slot for. The site and this package are
+        // shipped apart and one of the two is always the newer of them.
+        break;
+    }
+  }
+
+  /**
+   * One of the four the dashboard would otherwise answer, taken only while it is
+   * an answer to the question this store is actually asking.
+   *
+   * These four are the only slots read through a preference — the given copy in
+   * front of the dashboard's — so they are the only ones where a stale answer
+   * could outrank a fresher one instead of merely being replaced by it. A launch
+   * before the first fix has no question yet and takes none of them; the first
+   * beat is a second away.
+   */
+  private givePart<T>(target: Slot<T>, key: string, data: T): void {
+    if (key !== this.dashAsking) return;
+    this.give(target, key, data);
+  }
+
+  /**
+   * An answer that cost nothing, put in the slot the asking would have filled.
+   *
+   * The ticket is bumped as though this were a read of our own, because it may be
+   * racing one: a request already in flight for this slot must not land on top of
+   * an answer that arrived while it was out. A null key is an answer that turned
+   * out not to fit the question this store is asking, and is dropped.
+   */
+  private give<T>(target: Slot<T>, key: string | null, data: T): void {
+    if (key === null) return;
+    target.ticket += 1;
+    target.key = key;
+    target.status = "ready";
+    target.data = data;
+    this.changed();
   }
 
   private async fill<T>(
@@ -414,20 +615,71 @@ export class Feeds {
     // Both answer through `changed` like everything else here, so the lines
     // appear underneath a page the reader is already reading.
     this.readVenues(coords, language);
+    const dash = this.dashKey(coords, language);
+    this.dashAsking = dash;
+    this.standDown();
     await Promise.all([
-      this.fill(
-        this.dashSlot,
-        `${round(coords, 3)}:${language}:${within(DASHBOARD_MS)}`,
-        () => this.api.dashboard(coords),
-      ),
+      // Not made at all where the site has already handed over everything this
+      // read is the only source of (see `dashGiven`).
+      this.dashGiven(dash) ? Promise.resolve() : this.fill(this.dashSlot, dash, () => this.api.dashboard(coords)),
       // Not asked for outside Japan, where Yahoo has nothing to say and the
       // answer would be an all clear nobody checked.
-      this.fill(
-        this.warningsSlot,
-        `${round(coords, 2)}:${within(WARNINGS_MS)}`,
-        () => this.api.warnings(coords),
-      ),
+      this.fill(this.warningsSlot, this.warningsKey(coords), () => this.api.warnings(coords)),
     ]);
+  }
+
+  /**
+   * Whether the dashboard has anything left to answer.
+   *
+   * It carries six things and four of them come from nowhere else here: the
+   * place, the newswire, what is on and what is trending. The other two — the
+   * posts and the people — are re-read on the minute beat, which keeps a fresher
+   * copy than a fix does and is already preferred over this one, so a dashboard
+   * not asked for costs them nothing. On a launch the beat follows within the
+   * same turn (see `runBeat` in main.ts).
+   *
+   * Which makes this true rarely rather than never, and that is the site's doing
+   * rather than a shortcoming here: lo's own dashboard opens as a block of
+   * squares, and the newswire, what is on and the trends are panels the reader
+   * adds to it (see `CARDS` in lo/src/utils/cards.js). A phone showing none of
+   * them hands over the place alone, and this read is made exactly as it was —
+   * one round trip that answers four questions still beats three that answer
+   * three.
+   *
+   * It also files our fix on the way past, and skipping it loses nothing there
+   * either: what the site handed over is what it got back from the same trade,
+   * made against the same account a moment earlier.
+   */
+  private dashGiven(key: string): boolean {
+    return this.givenParts().every((each) => each.status === "ready" && each.key === key);
+  }
+
+  /** The four the site can answer for this read, and nothing else fills. */
+  private givenParts(): Slot<unknown>[] {
+    return [this.localSlot, this.newsSlot, this.eventsSlot, this.trendsSlot];
+  }
+
+  /**
+   * Given parts that turn out to be answers to some other question, dropped.
+   *
+   * The site re-reads the place on a coarser step than this store asks about it —
+   * about a kilometre against a hundred metres (see `coordKey` in
+   * lo/src/utils/location.js) — so a reader walking a long street can leave a
+   * given answer standing in front of a dashboard that has since been asked about
+   * the ground actually under them. Standing in front of it is the point of these
+   * slots, but not there: preferring that one would be preferring the older of
+   * two answers because it happened to be free.
+   *
+   * So a part stands down as the question moves on, and the dashboard's own copy
+   * shows through until the site has caught up and offered another.
+   */
+  private standDown(): void {
+    for (const each of this.givenParts()) {
+      if (each.status === "idle" || each.key === this.dashAsking) continue;
+      each.status = "idle";
+      each.data = null;
+      each.key = "";
+    }
   }
 
   /**
@@ -439,7 +691,7 @@ export class Feeds {
     await Promise.all([
       this.fill(
         this.peopleSlot,
-        within(POSTS_MS),
+        this.peopleKey(),
         async () => {
           const answer = await this.api.publishPosition(coords);
           this.unreadCount = answer.unread ?? 0;
@@ -495,7 +747,7 @@ export class Feeds {
   private readPosts(coords: Coordinates, language: Language): Promise<void> {
     return this.fill(
       this.postsSlot,
-      `${round(coords, 3)}:${language}:${within(POSTS_MS)}`,
+      this.postsKey(coords, language),
       () => this.api.posts(coords).then((answer) => answer.posts),
       true,
     );
@@ -714,6 +966,10 @@ export class Feeds {
   /** Signed out: nothing here belongs to whoever signs in next. */
   clear(): void {
     this.dashSlot = slot();
+    this.localSlot = slot();
+    this.newsSlot = slot();
+    this.eventsSlot = slot();
+    this.trendsSlot = slot();
     this.postsSlot = slot();
     this.warningsSlot = slot();
     this.inboxSlot = slot();
@@ -723,6 +979,7 @@ export class Feeds {
     this.wikiSlot = slot();
     this.venueAnchor = null;
     this.venueLanguage = null;
+    this.dashAsking = "";
     this.threadSlots.clear();
     this.profileSlots.clear();
     this.commentSlots.clear();

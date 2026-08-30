@@ -24,6 +24,11 @@ export interface WebUIActions {
   // `at` is when the sensor answered rather than when the line arrived, so a fix
   // that spent a moment crossing the frame is still the age it actually is.
   onFix(coords: Coordinates, at: number): void;
+  // One answer the site has had from lo, which is an answer this side was going
+  // to ask for. `feed` is the name the store holds it under, and the two beside
+  // it are the question it answers: the ground it is about, where it is about
+  // any, and the language it was asked in.
+  onFeed(feed: string, coords: Coordinates | null, language: string, data: unknown): void;
 }
 
 export interface WebUI {
@@ -45,38 +50,42 @@ export interface WebUI {
 }
 
 /**
- * One `fix` line off the frame, taken apart. A latitude and a longitude are the
- * whole of what is required; the other three are a reading or nothing, which is
- * the bargain every fix in this app is read under — a device that cannot claim an
+ * A position off the frame, taken apart — the fix the site has read, or the
+ * ground one of its answers is about. A latitude and a longitude are the whole of
+ * what is required; the other three are a reading or nothing, which is the
+ * bargain every fix in this app is read under — a device that cannot claim an
  * altitude says so by not claiming one (see main.ts). Anything here that is not a
  * finite number is nothing, whatever the site meant by it.
- *
- * The stamp is the site's own, taken when its sensor answered rather than when
- * the line landed here — the freshness test at the far end is about the age of
- * the reading, not the age of the message. A line carrying no usable stamp is
- * taken as having been read on arrival, which is the oldest a message that has
+ */
+function readCoords(value: unknown): Coordinates | null {
+  const number = (from: unknown): number | null =>
+    typeof from === "number" && Number.isFinite(from) ? from : null;
+  if (typeof value !== "object" || value === null) return null;
+  const fix = value as Record<string, unknown>;
+  const latitude = number(fix.latitude);
+  const longitude = number(fix.longitude);
+  if (latitude === null || longitude === null) return null;
+  return {
+    latitude,
+    longitude,
+    accuracy: number(fix.accuracy) ?? undefined,
+    altitude: number(fix.altitude),
+    speed: number(fix.speed),
+  };
+}
+
+/**
+ * That, and the site's own stamp on it: when its sensor answered, rather than
+ * when the line landed here — the freshness test at the far end is about the age
+ * of the reading and not the age of the message. A line carrying no usable stamp
+ * is taken as having been read on arrival, which is the oldest a message that has
  * just crossed a frame could honestly be.
  */
 function readFix(value: unknown): { coords: Coordinates; at: number } | null {
-  if (typeof value !== "object" || value === null) return null;
-  const fix = value as Record<string, unknown>;
-  const reading = (key: string): number | null => {
-    const each = fix[key];
-    return typeof each === "number" && Number.isFinite(each) ? each : null;
-  };
-  const latitude = reading("latitude");
-  const longitude = reading("longitude");
-  if (latitude === null || longitude === null) return null;
-  return {
-    coords: {
-      latitude,
-      longitude,
-      accuracy: reading("accuracy") ?? undefined,
-      altitude: reading("altitude"),
-      speed: reading("speed"),
-    },
-    at: reading("at") ?? Date.now(),
-  };
+  const coords = readCoords(value);
+  if (!coords) return null;
+  const at = (value as { at?: unknown }).at;
+  return { coords, at: typeof at === "number" && Number.isFinite(at) ? at : Date.now() };
 }
 
 // The phone view is the website itself. Nothing on this side draws lo any more,
@@ -163,6 +172,15 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
   // been told. What lands here is that reading, and the read this side would have
   // made is dropped for as long as they keep arriving (see main.ts).
   //
+  // `feed` — the same thing one layer up. Two clients of one server on one phone
+  // ask it most of the same questions: the place, the sky, what is on, where to
+  // eat, what is on the ground here, who else is standing on it. Every answer the
+  // site lands it posts up (see `shared` in lo/src/api.js), and the store keeps
+  // it under the same key the request would have carried — so the request is
+  // simply never made (see services/feeds.ts). What the site does not send is
+  // anything addressed to the reader in person, which is why the inbox is still
+  // this side's own read.
+  //
   // So lo posts a line for each (see lo/src/utils/host.js) and this is where they
   // land. Three things have to be true before any of them is acted on: it came
   // from lo's origin, it came from the frame this file put there rather than from
@@ -171,7 +189,16 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
   // dull about who is allowed through it.
   window.addEventListener("message", (event) => {
     if (event.origin !== SITE_ORIGIN || event.source !== frame.contentWindow) return;
-    const message = event.data as { source?: unknown; type?: unknown; language?: unknown; fix?: unknown } | null;
+    const message = event.data as {
+      source?: unknown;
+      type?: unknown;
+      language?: unknown;
+      fix?: unknown;
+      feed?: unknown;
+      lang?: unknown;
+      coords?: unknown;
+      data?: unknown;
+    } | null;
     if (message?.source !== "lo") return;
 
     if (message.type === "logout") {
@@ -182,6 +209,18 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
     if (message.type === "fix") {
       const fix = readFix(message.fix);
       if (fix) actions.onFix(fix.coords, fix.at);
+      return;
+    }
+
+    if (message.type === "feed") {
+      // Passed on as the site said it, rather than checked against this side's
+      // three: lo reads in six, and the language belongs to the question rather
+      // than to this app. An answer looked up in French is no answer to one asked
+      // in English and the store will not take it — but what is in force and who
+      // is about are answers in no language at all, and those it takes from a
+      // site being read in any of the six (see services/feeds.ts).
+      if (typeof message.feed !== "string" || typeof message.lang !== "string") return;
+      actions.onFeed(message.feed, readCoords(message.coords), message.lang, message.data);
       return;
     }
 
