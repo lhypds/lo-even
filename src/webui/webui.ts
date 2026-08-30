@@ -1,5 +1,5 @@
 import { isLanguage, type Language } from "../i18n";
-import type { LoUser } from "../types";
+import type { Coordinates, LoUser } from "../types";
 import { trackVisualViewport } from "../utils/viewport";
 import { createLogin, type LoginScreen } from "./login";
 import "./styles.css";
@@ -20,6 +20,10 @@ export interface WebUIActions {
   onLogout(): Promise<void>;
   onRefresh(): void;
   onLanguage(language: Language): void;
+  // Where the site has just read that it is, which is where this side is too.
+  // `at` is when the sensor answered rather than when the line arrived, so a fix
+  // that spent a moment crossing the frame is still the age it actually is.
+  onFix(coords: Coordinates, at: number): void;
 }
 
 export interface WebUI {
@@ -38,6 +42,41 @@ export interface WebUI {
    * missing there is one screen left, and it is this one (see main.ts).
    */
   setNotice(message: string): void;
+}
+
+/**
+ * One `fix` line off the frame, taken apart. A latitude and a longitude are the
+ * whole of what is required; the other three are a reading or nothing, which is
+ * the bargain every fix in this app is read under — a device that cannot claim an
+ * altitude says so by not claiming one (see main.ts). Anything here that is not a
+ * finite number is nothing, whatever the site meant by it.
+ *
+ * The stamp is the site's own, taken when its sensor answered rather than when
+ * the line landed here — the freshness test at the far end is about the age of
+ * the reading, not the age of the message. A line carrying no usable stamp is
+ * taken as having been read on arrival, which is the oldest a message that has
+ * just crossed a frame could honestly be.
+ */
+function readFix(value: unknown): { coords: Coordinates; at: number } | null {
+  if (typeof value !== "object" || value === null) return null;
+  const fix = value as Record<string, unknown>;
+  const reading = (key: string): number | null => {
+    const each = fix[key];
+    return typeof each === "number" && Number.isFinite(each) ? each : null;
+  };
+  const latitude = reading("latitude");
+  const longitude = reading("longitude");
+  if (latitude === null || longitude === null) return null;
+  return {
+    coords: {
+      latitude,
+      longitude,
+      accuracy: reading("accuracy") ?? undefined,
+      altitude: reading("altitude"),
+      speed: reading("speed"),
+    },
+    at: reading("at") ?? Date.now(),
+  };
 }
 
 // The phone view is the website itself. Nothing on this side draws lo any more,
@@ -100,7 +139,7 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
     document.addEventListener(eventName, (event) => event.preventDefault(), { passive: false });
   }
 
-  // What the site has to say back to the frame it is in. Both notices are the
+  // What the site has to say back to the frame it is in. The first two are the
   // same shape of problem: the phone view is lo's own website, the reader acts on
   // it there, and this side would never hear about it. Two origins, two tokens,
   // and no cookie between them.
@@ -117,19 +156,32 @@ export function createWebUI(actions: WebUIActions, language: Language = "en"): W
   // A reader who picks ZH on the phone means the glasses as well; without this
   // they would get a site in one language and a display in another.
   //
+  // `fix` — not a problem of any kind, but work already done. The site reads the
+  // phone's position twice a minute to draw its own dashboard, and this side was
+  // reading it again on a beat of its own to feed the glasses: one pocket, one
+  // GPS, two apps waking it, and the second of them told what the first had just
+  // been told. What lands here is that reading, and the read this side would have
+  // made is dropped for as long as they keep arriving (see main.ts).
+  //
   // So lo posts a line for each (see lo/src/utils/host.js) and this is where they
-  // land. Three things have to be true before either is acted on: it came from
-  // lo's origin, it came from the frame this file put there rather than from any
-  // other window holding a handle on this one, and it is one of the two notices
+  // land. Three things have to be true before any of them is acted on: it came
+  // from lo's origin, it came from the frame this file put there rather than from
+  // any other window holding a handle on this one, and it is one of the notices
   // this frame listens for. A message port is a door, and it is worth being this
   // dull about who is allowed through it.
   window.addEventListener("message", (event) => {
     if (event.origin !== SITE_ORIGIN || event.source !== frame.contentWindow) return;
-    const message = event.data as { source?: unknown; type?: unknown; language?: unknown } | null;
+    const message = event.data as { source?: unknown; type?: unknown; language?: unknown; fix?: unknown } | null;
     if (message?.source !== "lo") return;
 
     if (message.type === "logout") {
       void actions.onLogout();
+      return;
+    }
+
+    if (message.type === "fix") {
+      const fix = readFix(message.fix);
+      if (fix) actions.onFix(fix.coords, fix.at);
       return;
     }
 

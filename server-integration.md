@@ -148,6 +148,43 @@ screens here. `setToken("")` finishes it by taking the token out of storage, so
 the next launch asks rather than letting itself back into the account the reader
 has just left.
 
+## The fix crosses the frame too
+
+Both halves of this app were reading the same GPS. The site inside the WebView
+reads the phone's position every thirty seconds to keep its own dashboard current
+(`LOCATION_REFRESH_MS`, in `../lo/src/components/LocationProvider`), and this side
+read it again every minute to feed the glasses — one pocket, one sensor, and two
+apps waking it to be told the same thing.
+
+So `requestPosition` in `../lo/src/utils/location.js` posts every fix it lands, on
+the same channel and in the same shape as the two notices above:
+
+```js
+window.parent.postMessage({ source: "lo", type: "fix", fix: coords }, "*");
+```
+
+`coords` is lo's own reading — `latitude`, `longitude`, `accuracy`, `altitude`,
+`speed`, and `at`, the moment the sensor answered. The stamp is the point of
+carrying it: [src/main.ts](src/main.ts) spends a fix rather than a message, so the
+line that says how old the fix is counts from the reading and not from when it
+crossed the frame.
+
+`"*"` again, for the reason the sign-out uses it, and the position is safe on the
+same terms rather than by exception: a cross-origin frame has no geolocation of
+its own, only what the page around it delegates with `allow="geolocation"`. A host
+that can be told where the reader is standing is a host that already had the
+permission to ask; one that did not delegate is listening to a frame that never
+got a fix to post.
+
+`phoneLocation` then takes a posted fix under 45 seconds old instead of calling
+`getAppLocation`, and falls straight back to the bridge the moment they stop
+arriving — the reader turned location off in the site, or signed out of it, or is
+on a build of lo older than the notice. Forty-five seconds is a beat and a half of
+lo's clock, so an ordinary one is always in hand and a frame that has gone quiet
+is noticed inside a single turn of this app's own beat. Nothing else moves: the
+minute beat still runs, and the feeds are still asked for at the cadence they
+always were.
+
 ## Endpoints used
 
 | Purpose | Endpoint | When |

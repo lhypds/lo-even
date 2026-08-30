@@ -90,10 +90,31 @@ const LINK_KEY_TTL_MS = 60_000;
 // The beat lo's own dashboard keeps: a fresh fix, published, and everyone else's
 // back in the same answer.
 const PRESENCE_MS = 60_000;
+// How fresh a fix posted up by the frame has to be to stand in for a read of the
+// phone's own sensor. lo reads twice a minute (LOCATION_REFRESH_MS, in
+// lo/src/components/LocationProvider), so this is a beat and a half of its clock:
+// long enough that an ordinary one is always in hand, short enough that a frame
+// which has stopped sending — the reader turned location off in the site, signed
+// out of it, or is running a build of lo that predates the notice — is noticed
+// inside a single turn of this app's own beat, which then reads the sensor as it
+// always did.
+const FRAME_FIX_MS = 45_000;
 // A bearing changes continuously and the screen cannot; twice a second is past
 // the point where a reader could tell, and every frame past it is a BLE write
 // bought for nothing.
 const SENSOR_PAINT_MS = 500;
+
+/**
+ * A position and when it was read, which are two separate facts now that one can
+ * arrive from the frame having been taken half a minute before it was posted. The
+ * page that draws the fix says how old it is (see pages/here.ts), and it can only
+ * say so honestly if the reading carries its own hour rather than the hour it
+ * reached this file.
+ */
+interface Fix {
+  coords: Coordinates;
+  at: number;
+}
 
 function browserLocation(): Promise<Coordinates | null> {
   if (!navigator.geolocation) return Promise.resolve(null);
@@ -145,6 +166,9 @@ async function main() {
   let user: LoUser | null = null;
   let coords: Coordinates | null = null;
   let fixAt: number | null = null;
+  // The last fix the site in the frame said it had read, which is where this side
+  // is standing too (see phoneLocation, and webui.ts where it arrives).
+  let frameFix: Fix | null = null;
   let status = "";
   let statusTimer = 0;
   let locating = false;
@@ -328,7 +352,18 @@ async function main() {
     }
   }
 
-  async function phoneLocation(highAccuracy = false): Promise<Coordinates | null> {
+  async function phoneLocation(highAccuracy = false): Promise<Fix | null> {
+    // The site in the frame is standing on the same ground, and it reads that
+    // ground twice a minute to draw its own dashboard — so a fix it has just
+    // posted up is this app's fix as well, and asking the phone again would be
+    // waking one GPS in one pocket to be told what it has only just said.
+    //
+    // High accuracy is not asked for separately against this: every fix lo
+    // publishes is a high-accuracy read (refreshLocation, in
+    // lo/src/utils/location.js). The first of a launch is the one exception — lo
+    // lets that one come out of the browser's cache — and the sensor replaces it
+    // within thirty seconds.
+    if (frameFix && Date.now() - frameFix.at < FRAME_FIX_MS) return frameFix;
     try {
       const location: AppLocation | null = await bridge.getAppLocation({
         accuracy: highAccuracy ? AppLocationAccuracy.High : AppLocationAccuracy.Medium,
@@ -336,25 +371,30 @@ async function main() {
       });
       if (location) {
         return {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy,
-          // The two the bridge is allowed to carry and usually does not. Passed
-          // on rather than dropped because both are read the same way at the far
-          // end — a reading, or nothing — and a fix that did come with an
-          // altitude on it was arriving here and being thrown away for a model's
-          // ground elevation that is right about the valley and silent about
-          // which storey you are on (see pages/here.ts).
-          altitude: location.altitude,
-          speed: location.speed,
+          coords: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            // The two the bridge is allowed to carry and usually does not. Passed
+            // on rather than dropped because both are read the same way at the far
+            // end — a reading, or nothing — and a fix that did come with an
+            // altitude on it was arriving here and being thrown away for a model's
+            // ground elevation that is right about the valley and silent about
+            // which storey you are on (see pages/here.ts).
+            altitude: location.altitude,
+            speed: location.speed,
+          },
+          at: Date.now(),
         };
       }
     } catch {
       // Ordinary browser preview has no native Even bridge.
     }
     const browser = await browserLocation();
-    if (browser) return browser;
-    if (import.meta.env.DEV) return { latitude: 35.681236, longitude: 139.767125, accuracy: 12 };
+    if (browser) return { coords: browser, at: Date.now() };
+    if (import.meta.env.DEV) {
+      return { coords: { latitude: 35.681236, longitude: 139.767125, accuracy: 12 }, at: Date.now() };
+    }
     return null;
   }
 
@@ -377,10 +417,13 @@ async function main() {
         if (!coords) setStatus(t("glasses.noFix"), 2500);
         return;
       }
-      coords = next;
-      fixAt = Date.now();
+      coords = next.coords;
+      // When it was read, which is not always now: a fix that came up from the
+      // frame was taken before it was posted, and the line that says how old the
+      // fix is has to be counting from the reading (see pages/here.ts).
+      fixAt = next.at;
       setStatus("");
-      await feeds.here(next, api.language);
+      await feeds.here(next.coords, api.language);
       // A page already in view whose feed is keyed on a fix that has now moved
       // has to be re-asked; ensureVisible is the same gate the scroll uses.
       ensureVisible();
@@ -526,6 +569,10 @@ async function main() {
     user = null;
     coords = null;
     fixAt = null;
+    // The frame is about to be blanked and will post nothing more. What it last
+    // said goes with it rather than being left to stand in for a reading during
+    // whatever the next sign-in turns out to be.
+    frameFix = null;
     feeds.clear();
     ui.setKey("");
     ui.setUser(null);
@@ -979,14 +1026,14 @@ async function main() {
         showDraft();
         return;
       }
-      const fix = (await fixPromise) ?? coords;
+      const fix = (await fixPromise) ?? (coords ? { coords, at: fixAt ?? Date.now() } : null);
       if (ticket !== dictation) return;
       if (!fix) {
         setStatus(t("glasses.noFix"), 2200);
         return;
       }
-      coords = fix;
-      fixAt = Date.now();
+      coords = fix.coords;
+      fixAt = fix.at;
       // Not saved — asked about. A hold used to be one verb: record, and file this
       // spot under what was said. There turn out to be two things a sentence said
       // out here can be, and only the reader knows which, so it stands on the
@@ -996,7 +1043,7 @@ async function main() {
       // that can still be taken back by nobody having seen it; a wheel that
       // started on the public one would make "everybody nearby reads this" the
       // thing that happens when a reader taps the touchpad once without looking.
-      draft = { text, coords: fix, kind: "mark" };
+      draft = { text, coords: fix.coords, kind: "mark" };
       showDraft();
     } catch (error) {
       console.error(error);
@@ -1019,6 +1066,19 @@ async function main() {
       onCreate: register,
       onLogout: logout,
       onRefresh: () => void refresh(true),
+      // Where the site has just read that it is. Written down rather than acted
+      // on: the beat asks for a fix when it wants one and finds this waiting,
+      // which is the whole of the saving — one GPS read a minute instead of two
+      // (see phoneLocation).
+      //
+      // The exception is a launch standing on nothing at all, which is a phone
+      // whose bridge refused or answered too slowly and a display still saying
+      // so. There is nothing to keep that reader waiting a minute for: the fix is
+      // here, and everything hanging off one can be asked for now.
+      onFix: (fix, at) => {
+        frameFix = { coords: fix, at };
+        if (!coords && api.signedIn) void refresh();
+      },
       // A language chosen on the sign-in screen — or in the site behind it, which
       // says so through the frame (see webui.ts) — is the language the glasses are
       // fed in too: every feed is keyed on it, so changing it makes every card a
