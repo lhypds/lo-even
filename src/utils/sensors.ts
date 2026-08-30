@@ -31,6 +31,11 @@ const SILENCE_MS = 2000;
 // own noise is a few degrees a second and a different few every sample; a third
 // of a second of them averaged is the hand rather than the instrument.
 const TURN_TAU_MS = 300;
+// The glasses repaint at most twice a second. Ten instrument samples a second is
+// already comfortably above that and avoids doing the same trigonometry and
+// store notification for every native 60 Hz event — twice, on browsers that
+// report both orientation event names.
+const SAMPLE_MS = 100;
 // Under this the phone is being held rather than turned. A figure flickering
 // between two and five while nothing is happening reads as an instrument that
 // cannot make its mind up, which is the one thing a reading must never look like.
@@ -40,8 +45,11 @@ let state: SensorState = { status: "idle", heading: null, headingAccuracy: null,
 const listeners = new Set<() => void>();
 
 let attached = false;
+let authorized = false;
+let wanted = false;
 let silenceTimer = 0;
 let motionAt = 0;
+let orientationAt = 0;
 let smoothed: number | null = null;
 
 function emit(next: Partial<SensorState>): void {
@@ -86,6 +94,9 @@ function onOrientation(event: DeviceOrientationEvent): void {
       ? headingFromAlpha(event.alpha)
       : null;
   if (heading == null) return;
+  const now = Date.now();
+  if (now - orientationAt < SAMPLE_MS) return;
+  orientationAt = now;
 
   window.clearTimeout(silenceTimer);
   silenceTimer = 0;
@@ -99,10 +110,11 @@ function onOrientation(event: DeviceOrientationEvent): void {
 }
 
 function onMotion(event: DeviceMotionEvent): void {
+  const now = Date.now();
+  if (now - motionAt < SAMPLE_MS) return;
   const rate = event.rotationRate;
   if (!rate) return;
   const magnitude = Math.hypot(rate.alpha ?? 0, rate.beta ?? 0, rate.gamma ?? 0);
-  const now = Date.now();
   // A one-pole filter over however long actually elapsed, rather than over a
   // sample count: these events do not arrive on a steady beat and a fixed
   // coefficient would smooth by a different amount on every device.
@@ -114,7 +126,7 @@ function onMotion(event: DeviceMotionEvent): void {
 }
 
 function attach(): void {
-  if (attached) return;
+  if (attached || !authorized || !wanted || document.hidden) return;
   attached = true;
   window.addEventListener("deviceorientationabsolute", onOrientation);
   window.addEventListener("deviceorientation", onOrientation);
@@ -124,6 +136,32 @@ function attach(): void {
     if (state.status === "listening") emit({ status: "unsupported" });
   }, SILENCE_MS);
 }
+
+function detach(): void {
+  if (!attached) return;
+  window.removeEventListener("deviceorientationabsolute", onOrientation);
+  window.removeEventListener("deviceorientation", onOrientation);
+  window.removeEventListener("devicemotion", onMotion);
+  window.clearTimeout(silenceTimer);
+  attached = false;
+  silenceTimer = 0;
+  motionAt = 0;
+  orientationAt = 0;
+  smoothed = null;
+}
+
+function sync(): void {
+  if (wanted && authorized && !document.hidden) attach();
+  else detach();
+}
+
+/** Listen only while the glasses page that displays these readings is visible. */
+export function setSensorsActive(active: boolean): void {
+  wanted = active;
+  sync();
+}
+
+document.addEventListener("visibilitychange", sync);
 
 /**
  * Turn the instruments on.
@@ -137,13 +175,18 @@ function attach(): void {
  * than an explanation of why it is empty.
  */
 export async function startSensors(): Promise<void> {
-  if (attached || state.status === "asking") return;
+  if (authorized) {
+    sync();
+    return;
+  }
+  if (state.status === "asking") return;
   const requestPermission = (
     window.DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> }
   )?.requestPermission;
 
   if (typeof requestPermission !== "function") {
-    attach();
+    authorized = true;
+    sync();
     return;
   }
 
@@ -154,7 +197,8 @@ export async function startSensors(): Promise<void> {
       emit({ status: "denied" });
       return;
     }
-    attach();
+    authorized = true;
+    sync();
   } catch {
     // Asked from outside a gesture, or refused outright. Either way there is
     // nothing to show and the card says so.

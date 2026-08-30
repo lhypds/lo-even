@@ -16,6 +16,10 @@ import type {
 import { detectLanguage, isLanguage, type Language } from "../i18n";
 
 const API_BASE = "https://lo.gcc3.com";
+const REQUEST_TIMEOUT_MS = 30 * 1000;
+const VENUE_REQUEST_TIMEOUT_MS = 90 * 1000;
+
+type RequestOptions = RequestInit & { timeoutMs?: number };
 
 // What lo will take as the name of a mark, as the words of a post, as a remark
 // under one and as the words of a letter, character for character (see
@@ -198,22 +202,51 @@ export class LoApi {
     return Boolean(this.token);
   }
 
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const headers = new Headers(options.headers);
+  private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const { timeoutMs = REQUEST_TIMEOUT_MS, signal: sourceSignal, ...fetchOptions } = options;
+    const headers = new Headers(fetchOptions.headers);
     if (this.token) headers.set("Authorization", `Bearer ${this.token}`);
-    if (options.body && typeof options.body === "string") headers.set("Content-Type", "application/json");
+    if (fetchOptions.body && typeof fetchOptions.body === "string") headers.set("Content-Type", "application/json");
 
-    const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
-    if (response.status === 204) return undefined as T;
-    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (!response.ok) {
-      throw new ApiError(
-        typeof data.error === "string" ? data.error : `Request failed (${response.status})`,
-        response.status,
-        typeof data.code === "string" ? data.code : undefined,
-      );
+    const controller = new AbortController();
+    let timedOut = false;
+    const abort = () => controller.abort(sourceSignal?.reason);
+    if (sourceSignal?.aborted) abort();
+    else sourceSignal?.addEventListener("abort", abort, { once: true });
+    const timer = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      const response = await fetch(`${API_BASE}${path}`, {
+        ...fetchOptions,
+        headers,
+        signal: controller.signal,
+      });
+      if (response.status === 204) return undefined as T;
+      let data: Record<string, unknown>;
+      try {
+        data = (await response.json()) as Record<string, unknown>;
+      } catch (error) {
+        if (controller.signal.aborted) throw error;
+        data = {};
+      }
+      if (!response.ok) {
+        throw new ApiError(
+          typeof data.error === "string" ? data.error : `Request failed (${response.status})`,
+          response.status,
+          typeof data.code === "string" ? data.code : undefined,
+        );
+      }
+      return data as T;
+    } catch (error) {
+      if (!timedOut) throw error;
+      throw new Error("Request timed out");
+    } finally {
+      window.clearTimeout(timer);
+      sourceSignal?.removeEventListener("abort", abort);
     }
-    return data as T;
   }
 
   /* ------------------------------------------------------------ the session */
@@ -391,12 +424,14 @@ export class LoApi {
   food({ latitude, longitude }: Coordinates) {
     return this.request<LoVenuesResult>(
       `/api/food?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
+      { timeoutMs: VENUE_REQUEST_TIMEOUT_MS },
     );
   }
 
   cafes({ latitude, longitude }: Coordinates) {
     return this.request<LoVenuesResult>(
       `/api/cafe?lat=${latitude}&lon=${longitude}&lang=${this.language}`,
+      { timeoutMs: VENUE_REQUEST_TIMEOUT_MS },
     );
   }
 

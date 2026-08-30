@@ -9,7 +9,7 @@ import {
 import { ApiError, LoApi, type Session } from "./services/api";
 import { Feeds } from "./services/feeds";
 import { conditionPcm, transcribe } from "./utils/audio";
-import { sensorState, startSensors, subscribeSensors } from "./utils/sensors";
+import { sensorState, setSensorsActive, startSensors, subscribeSensors } from "./utils/sensors";
 import { createBrowserDisplay, createGlassesDisplay, type GlassesDisplay } from "./glassesui/glasses";
 import { PageRefused } from "./glassesui/paint";
 import { composeView, type Answering, type Draft } from "./glassesui/pages/compose";
@@ -148,6 +148,7 @@ async function main() {
   let status = "";
   let statusTimer = 0;
   let locating = false;
+  let appActive = true;
 
   let burnTimer = 0;
   let recording = false;
@@ -245,6 +246,7 @@ async function main() {
   // store decides whether any of them is actually a new question (see feeds.ts)
   // and does nothing when it is not.
   function ensureVisible(): void {
+    setSensorsActive(appActive && user != null && display.current() === "here");
     // First, because this one is about a screen going away as much as about one
     // arriving, and a signed-out app has a clock to stop rather than nothing to do.
     watchOpen();
@@ -520,6 +522,7 @@ async function main() {
    */
   async function logout(): Promise<void> {
     discard();
+    setSensorsActive(false);
     user = null;
     coords = null;
     fixAt = null;
@@ -1199,12 +1202,14 @@ async function main() {
         ensureVisible();
         return;
       }
+      stopRecurringWork();
       void bridge.shutDownPageContainer(1);
       return;
     }
 
     if (eventType === OsEventTypeList.SYSTEM_EXIT_EVENT || eventType === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
       discard();
+      stopRecurringWork();
       // A letter half read when the app was closed is a letter half read. The
       // clock is stopped rather than left to say otherwise on the way out.
       window.clearTimeout(dwellTimer);
@@ -1231,10 +1236,19 @@ async function main() {
     render();
   });
 
-  // On the minute, because the clock shows minutes: aligned to the wall clock
-  // rather than to launch, so the face turns over when the minute does.
+  let recurringStopped = false;
+  let minuteTimer = 0;
+  let beatTimer = 0;
+  let beatRunning = false;
+  let nextBeatAt = Date.now() + PRESENCE_MS;
+
+  // On the minute, because the clock shows minutes: aligned to the wall clock.
+  // Hidden time draws nothing and schedules nothing; returning aligns it again.
   function scheduleMinute(): void {
-    window.setTimeout(
+    window.clearTimeout(minuteTimer);
+    minuteTimer = 0;
+    if (recurringStopped || document.hidden) return;
+    minuteTimer = window.setTimeout(
       () => {
         if (!recording) render();
         scheduleMinute();
@@ -1242,19 +1256,63 @@ async function main() {
       60_000 - (Date.now() % 60_000) + 50,
     );
   }
-  scheduleMinute();
+  // lo's own beat: one completion-aware cycle. A dead connection cannot leave a
+  // new location and feed request behind every minute, and the phone's GPS stays
+  // asleep while the WebView is hidden.
+  function scheduleBeat(): void {
+    window.clearTimeout(beatTimer);
+    beatTimer = 0;
+    if (recurringStopped || document.hidden) return;
+    beatTimer = window.setTimeout(() => void runBeat(), Math.max(0, nextBeatAt - Date.now()));
+  }
 
-  // lo's own beat: a fresh fix, published, everyone else's back with it, and what
-  // has been left on the ground here since the last one.
-  window.setInterval(() => {
+  async function runBeat(): Promise<void> {
+    beatTimer = 0;
+    if (recurringStopped || document.hidden || beatRunning) return;
     // Not while there is a sentence in the air. A reader holding the touchpad, or
     // reading back what they just said, is not a reader who needs the street
     // re-read underneath them — and the draft is filed at the fix it was spoken
     // at, so moving that fix now could only make the saving wrong.
-    if (!api.signedIn || recording || transcribing || draft) return;
-    void refresh();
-    if (coords) void feeds.beat(coords, api.language);
-  }, PRESENCE_MS);
+    if (!api.signedIn || recording || transcribing || draft) {
+      nextBeatAt = Date.now() + PRESENCE_MS;
+      scheduleBeat();
+      return;
+    }
+    beatRunning = true;
+    try {
+      await refresh();
+      if (coords) await feeds.beat(coords, api.language);
+    } finally {
+      beatRunning = false;
+      nextBeatAt = Date.now() + PRESENCE_MS;
+      scheduleBeat();
+    }
+  }
+
+  function watchVisibility(): void {
+    setSensorsActive(appActive && user != null && display.current() === "here");
+    window.clearTimeout(minuteTimer);
+    window.clearTimeout(beatTimer);
+    minuteTimer = 0;
+    beatTimer = 0;
+    if (document.hidden || recurringStopped) return;
+    scheduleMinute();
+    if (Date.now() >= nextBeatAt) void runBeat();
+    else scheduleBeat();
+  }
+
+  function stopRecurringWork(): void {
+    appActive = false;
+    recurringStopped = true;
+    window.clearTimeout(minuteTimer);
+    window.clearTimeout(beatTimer);
+    setSensorsActive(false);
+    document.removeEventListener("visibilitychange", watchVisibility);
+  }
+
+  scheduleMinute();
+  scheduleBeat();
+  document.addEventListener("visibilitychange", watchVisibility);
 }
 
 main().catch((error) => {

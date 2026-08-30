@@ -107,6 +107,21 @@ function round(coords: Coordinates, places: number): string {
   return `${coords.latitude.toFixed(places)},${coords.longitude.toFixed(places)}`;
 }
 
+const EARTH_RADIUS_M = 6_371_000;
+const VENUE_MOVED_M = 100;
+
+function distanceMeters(from: Coordinates, to: Coordinates): number {
+  const radians = Math.PI / 180;
+  const lat1 = from.latitude * radians;
+  const lat2 = to.latitude * radians;
+  const deltaLat = (to.latitude - from.latitude) * radians;
+  const deltaLon = (to.longitude - from.longitude) * radians;
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) ** 2;
+  return 2 * EARTH_RADIUS_M * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // How long an answer stands before the same question is worth asking again.
 //
 // A key that is only a place is a question that is never asked twice while the
@@ -122,14 +137,6 @@ const POSTS_MS = 60_000;
 const INBOX_MS = 60_000;
 const WARNINGS_MS = 5 * 60_000;
 const DASHBOARD_MS = 10 * 60_000;
-
-// And the longest of them, for the two that hardly go stale at all: a restaurant
-// is not news, and tomorrow's list of them is today's. lo keeps its own answer
-// for an hour per ~1 km square (see lookupVenues in lo/server/geo.js), so what
-// makes either of these a new question is the reader having walked somewhere
-// rather than time passing — which is why the key below is rounded two decimals,
-// onto that same square, where everything else about the street is rounded three.
-const VENUES_MS = 30 * 60_000;
 
 // How many stories are kept at once. Not a stretch of time like the rest of
 // this: a published story is the same story tomorrow, so what bounds this is the
@@ -213,6 +220,12 @@ export class Feeds {
   // the reader having walked somewhere rather than time passing (see
   // `readVenues`, which now starts this alongside the other two).
   private wikiSlot = slot<LoWikiPlace[]>();
+  // Café, food and Wikipedia share one exact movement anchor. A rounded grid can
+  // flip after a metre when somebody is standing beside its boundary, while a
+  // time bucket re-asks even if they have not moved at all. Neither describes
+  // these lists; more than 100 metres from the last requested fix does.
+  private venueAnchor: Coordinates | null = null;
+  private venueLanguage: Language | null = null;
   // One per exchange the reader has opened, keyed by the correspondent — the same
   // shape as the stories above and for the same reason: there is no telling in
   // advance which of a list they will open, and each of them is worth keeping once
@@ -456,9 +469,8 @@ export class Feeds {
   /**
    * Where to eat, where to sit down with a coffee, and what is worth reading
    * nearby. One key for all three, because they are one question about the
-   * ground asked three ways — and the coarsest key in this file, in place and
-   * in time alike: a ~1 km square and half an hour, which is lo's own square
-   * and rather less than lo's own hour (see VENUES_MS).
+   * ground asked three ways. Their shared anchor moves only after the reader has
+   * moved more than 100 metres; standing still has no time-based refresh.
    *
    * Quietly, for the reason the posts and the people are: this is re-asked when
    * the reader has walked a square's width, and a slot flipping back to "looking
@@ -467,10 +479,16 @@ export class Feeds {
    * — an idle slot has nothing to replace.
    */
   private readVenues(coords: Coordinates, language: Language): void {
-    const key = `${round(coords, 2)}:${language}:${within(VENUES_MS)}`;
-    void this.fill(this.cafeSlot, key, () => this.api.cafes(coords).then((answer) => answer.items), true);
-    void this.fill(this.foodSlot, key, () => this.api.food(coords).then((answer) => answer.items), true);
-    void this.fill(this.wikiSlot, key, () => this.api.wikipedia(coords).then((answer) => answer.items), true);
+    const moved = this.venueAnchor ? distanceMeters(this.venueAnchor, coords) : Infinity;
+    if (!this.venueAnchor || this.venueLanguage !== language || moved > VENUE_MOVED_M) {
+      this.venueAnchor = { ...coords };
+      this.venueLanguage = language;
+    }
+    const anchor = this.venueAnchor;
+    const key = `${anchor.latitude},${anchor.longitude}:${language}`;
+    void this.fill(this.cafeSlot, key, () => this.api.cafes(anchor).then((answer) => answer.items), true);
+    void this.fill(this.foodSlot, key, () => this.api.food(anchor).then((answer) => answer.items), true);
+    void this.fill(this.wikiSlot, key, () => this.api.wikipedia(anchor).then((answer) => answer.items), true);
   }
 
   /** What is on the ground here, asked for as coarsely as the answer keeps. */
@@ -703,6 +721,8 @@ export class Feeds {
     this.cafeSlot = slot();
     this.foodSlot = slot();
     this.wikiSlot = slot();
+    this.venueAnchor = null;
+    this.venueLanguage = null;
     this.threadSlots.clear();
     this.profileSlots.clear();
     this.commentSlots.clear();
