@@ -103,6 +103,19 @@ const FRAME_FIX_MS = 45_000;
 // the point where a reader could tell, and every frame past it is a BLE write
 // bought for nothing.
 const SENSOR_PAINT_MS = 500;
+// How often the ground is re-read while a venue's map is in front of the
+// reader. The rest of the app stands on the site's half-minute reads and its
+// own minute beat, which is the right cadence for a dashboard and a wrong one
+// for a dot somebody is steering by: at walking pace half a minute is forty
+// metres of the dot standing still and then jumping. So an open map asks the
+// host to push fixes on a beat of its own — high accuracy, because this is the
+// one screen where metres are the point — and the asking stops the moment the
+// map is no longer up (see `watchNav`).
+const NAV_FIX_MS = 15_000;
+// And how long a refused start waits before the next paint may ask again — the
+// same shape as the microphone's retries and for the same reason: the host
+// answers `false` when it is busy, and a paint arrives often enough to hammer.
+const NAV_RETRY_MS = 10_000;
 
 /**
  * A position and when it was read, which are two separate facts now that one can
@@ -269,6 +282,65 @@ async function main() {
     return display.current() === "here" || openedVenue() !== null;
   }
 
+  // Whether the host is currently pushing fixes for the map, and whether a
+  // start or stop is still crossing the bridge. Two flags rather than one,
+  // because the calls are round trips and a paint arrives while one is out:
+  // acting on the stale answer would start twice or stop what was never started.
+  // The stamp is when a start was last *refused*, and only that: a reader who
+  // closes one café and opens the next inside ten seconds is not the case the
+  // cooldown is for, and must not be handed a stale dot by it.
+  let navOn = false;
+  let navBusy = false;
+  let navRefusedAt = 0;
+
+  /**
+   * The map's own beat, started and stopped by what is on the screen. While a
+   * venue is open the host is asked to push a high-accuracy fix every fifteen
+   * seconds — the site's half-minute reads and the minute beat stay as they
+   * are, and these arrive on top, so the dot the reader is steering by moves at
+   * walking pace rather than in forty-metre jumps. The moment the map is no
+   * longer up the pushing is stopped, because this is the most expensive read
+   * the phone has and the rest of the app has no use for it.
+   *
+   * Called after every paint, like the clocks beside it: what is on the glass
+   * is what decides, and a paint is when that changes. A start the host
+   * refuses waits NAV_RETRY_MS before the next paint may ask again (see the
+   * microphone's tries, which are this same shape against the same host).
+   */
+  function watchNav(): void {
+    const wanted = appActive && !document.hidden && api.signedIn && openedVenue() !== null;
+    if (wanted === navOn || navBusy) return;
+    if (wanted && Date.now() - navRefusedAt < NAV_RETRY_MS) return;
+    navBusy = true;
+    void (async () => {
+      try {
+        if (wanted) {
+          navOn = await bridge.startAppLocationUpdates({
+            accuracy: AppLocationAccuracy.High,
+            intervalMs: NAV_FIX_MS,
+            // Metres, and the host's to honour: a reader standing in the queue
+            // is a dot that has not moved, and a push saying so is a push the
+            // map redraws nothing for.
+            distanceFilter: 5,
+          });
+          if (!navOn) navRefusedAt = Date.now();
+        } else {
+          await bridge.stopAppLocationUpdates();
+          navOn = false;
+        }
+      } catch {
+        // An ordinary browser has no host to ask. Off is the truthful state
+        // either way: a start that threw never started, and a stop that threw
+        // has no host left listening — and a throw on the way in waits its turn
+        // like a refusal, so a hostless page is not asked on every paint.
+        if (wanted) navRefusedAt = Date.now();
+        navOn = false;
+      } finally {
+        navBusy = false;
+      }
+    })();
+  }
+
   // What is in front of the reader is what is worth paying for. Two reads work
   // that way, and none of them has anything to do with where anybody is standing:
   //
@@ -297,6 +369,7 @@ async function main() {
   // and does nothing when it is not.
   function ensureVisible(): void {
     setSensorsActive(sensorsWanted());
+    watchNav();
     // First, because this one is about a screen going away as much as about one
     // arriving, and a signed-out app has a clock to stop rather than nothing to do.
     watchOpen();
@@ -1329,6 +1402,31 @@ async function main() {
     }
   });
 
+  // What the host pushes back while the map's beat is on: a fix, at most every
+  // NAV_FIX_MS and only when the reader has actually moved (the distance filter
+  // above). Taken as this app's own fix — it is the same sensor `phoneLocation`
+  // reads, read fresher — and painted at once, which is the point of the whole
+  // arrangement: the dot moves when the reader does. Not while a sentence is in
+  // the air, for the reason the beat holds off (see `runBeat`); the fix itself
+  // is still written down, so the next paint stands on it.
+  bridge.onAppLocationChanged((location) => {
+    // Pushes are only sent while the beat is on, so this is about the edges: a
+    // push racing the start's own answer across the bridge is kept — it is the
+    // fresh fix this arrangement exists for — and a straggler after a stop has
+    // landed is dropped.
+    if (!navOn && !navBusy) return;
+    coords = {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      accuracy: location.accuracy,
+      altitude: location.altitude,
+      speed: location.speed,
+    };
+    fixAt = Date.now();
+    if (recording || transcribing || draft) return;
+    render();
+  });
+
   // The bearing, and only while it is on screen — which is two screens now: the
   // line it is on the standing page, and the arrow it turns on the map beside an
   // open venue. These events arrive sixty times a second; the throttle keeps the
@@ -1399,6 +1497,7 @@ async function main() {
 
   function watchVisibility(): void {
     setSensorsActive(sensorsWanted());
+    watchNav();
     window.clearTimeout(minuteTimer);
     window.clearTimeout(beatTimer);
     minuteTimer = 0;
@@ -1415,6 +1514,11 @@ async function main() {
     window.clearTimeout(minuteTimer);
     window.clearTimeout(beatTimer);
     setSensorsActive(false);
+    // Directly rather than through `watchNav`, which is polite about calls in
+    // flight: this is the way out, and a GPS left running behind a closed app
+    // is the one thing this function exists to prevent.
+    navOn = false;
+    void bridge.stopAppLocationUpdates().catch(() => {});
     document.removeEventListener("visibilitychange", watchVisibility);
   }
 
