@@ -9,8 +9,15 @@
   "permissions": [
     {
       "name": "network",
-      "desc": "lo reaches its own server to sign you in and to load and publish posts, and a transcription service to turn a spoken post into text.",
-      "whitelist": ["https://lo.gcc3.com", "https://cli.simple-ai.io", "https://api.openai.com"]
+      "desc": "lo reaches its own server to sign you in and to load and publish posts, a transcription service to turn a spoken post into text, open map services for the walking route and streets drawn on the map beside a place, and a public CDN for the font the phone screen is set in.",
+      "whitelist": [
+        "https://lo.gcc3.com",
+        "https://cli.simple-ai.io",
+        "https://api.openai.com",
+        "https://tiles.openfreemap.org",
+        "https://valhalla1.openstreetmap.de",
+        "https://cdn.jsdelivr.net"
+      ]
     },
     {
       "name": "location",
