@@ -42,7 +42,9 @@ import type {
   LoWarningsResult,
   LoWeather,
   LoWikiPlace,
+  NavPoint,
 } from "../../types";
+import type { NavMapImage } from "../navmap";
 import type { Translate } from "../../i18n";
 
 /**
@@ -149,6 +151,23 @@ export interface PageContext {
    * question about it (see feeds.ts).
    */
   comments(postId: string): Feed<LoComment[]>;
+  /**
+   * The streets between the reader and one venue they have opened, for the map
+   * beside its reading screen. A read and never a request, exactly as the four
+   * above are and for their common reason — and what starts the fetch is the
+   * reader arriving on that screen, the same moment a profile's is started (see
+   * `navigate` in feeds.ts and ensureVisible in main.ts). Idle until then, and
+   * the map draws a dashed straight line over an answer that has not come.
+   */
+  route(venueId: string): Feed<NavPoint[]>;
+  /**
+   * And the streets around that walk — the same map's background layer, off
+   * public vector tiles rather than off the router (see services/roads.ts).
+   * Started by the same arrival, read on the same terms, and separate because
+   * either can land, or fail, without the other: a route on dark ground and
+   * bare streets under a dashed line are both whole screens.
+   */
+  roads(venueId: string): Feed<NavPoint[][]>;
 }
 
 /**
@@ -223,6 +242,14 @@ export interface Item {
    * pages/feed.ts), and this is what turns that into the story.
    */
   link?: string;
+  /**
+   * Where this entry stands on the ground, for the one kind that is a place
+   * before it is anything said: a venue. It is what earns the reading screen its
+   * map — the driver builds one for any open entry that carries this and none
+   * for the rest (see glasses.ts) — and it is deliberately not set on people or
+   * posts, whose positions this app is careful never to draw that precisely.
+   */
+  spot?: NavPoint;
 }
 
 /**
@@ -253,6 +280,13 @@ export interface PageView {
   /** The right end of the heading. Every page wears the same pair: where, and when. */
   meta?: string;
   block: Block;
+  /**
+   * The square map beside the body, already drawn — set by the driver on a
+   * venue's reading screen and by nothing else (see glasses.ts). It rides on the
+   * view rather than on the block because it is beside the prose, not a shape of
+   * body of its own: the words and the picture answer one question together.
+   */
+  map?: NavMapImage;
   /**
    * What the footer says while this page is up. The place you are standing in
    * unless the page has something better, which is lo's HereStrip moved to the

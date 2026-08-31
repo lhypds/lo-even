@@ -241,14 +241,16 @@ function venueItems(group: "cafe" | "food", feed: Feed<LoVenue[]>, { t }: PageCo
       key: item.id,
       head: item.name,
       line: says,
-      // And underneath, the one thing on this screen a reader can act on: there
-      // is no map up here to open and no line to draw on one, so where it is is a
-      // pair of coordinates or it is nothing. It is the only position this app
-      // still writes out in full, and that is the difference between a shopfront
-      // and a person — what came off the people screens came off because four
-      // decimal places is eleven metres of where somebody is standing (see
-      // pages/person.ts).
+      // And underneath, what it is and where. The coordinates are written out in
+      // full because a shopfront's position is nobody's secret — the difference
+      // between a venue and a person, whose screens are careful never to say it
+      // this precisely (see pages/person.ts).
       body: [says, formatCoords(item.latitude, item.longitude)].join("\n\n"),
+      // Which is also what earns this screen its map: the one entry in the app
+      // that is a place before it is anything said gets the square beside its
+      // words — the reader, the door and the streets between, drawn rather than
+      // spelled (see glasses.ts, which builds it, and navmap.ts, which draws it).
+      spot: { latitude: item.latitude, longitude: item.longitude },
     };
   });
 }

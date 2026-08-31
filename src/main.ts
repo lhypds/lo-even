@@ -17,7 +17,7 @@ import { threadRef } from "./glassesui/pages/nearby";
 import type { ItemRef, PageContext } from "./glassesui/pages/types";
 import { postSays } from "./glassesui/format";
 import { detectLanguage, localeFor, translator } from "./i18n";
-import type { Coordinates, LoUser } from "./types";
+import type { Coordinates, LoUser, LoVenue } from "./types";
 import { createWebUI, type WebUI } from "./webui/webui";
 
 const SAMPLE_RATE = 16_000;
@@ -240,7 +240,33 @@ async function main() {
       thread: (username) => feeds.thread(username),
       profile: (username) => feeds.profile(username),
       comments: (postId) => feeds.comments(postId),
+      route: (venueId) => feeds.route(venueId),
+      roads: (venueId) => feeds.roads(venueId),
     };
+  }
+
+  /**
+   * The venue whose reading screen is up, or null on every other screen in the
+   * app — which is most of them. It is what two things below hang off: the route
+   * fetch that the map beside it draws, and the compass staying on while it is
+   * up (see `sensorsWanted`), so the arrow on the map turns with the reader.
+   */
+  function openedVenue(): LoVenue | null {
+    const entry = display.opened();
+    if (!entry || (entry.group !== "cafe" && entry.group !== "food")) return null;
+    const list = entry.group === "cafe" ? feeds.cafe.data : feeds.food.data;
+    return (list ?? []).find((venue) => venue.id === entry.key) ?? null;
+  }
+
+  /**
+   * Whether the handset's instruments are worth listening to right now. Two
+   * screens want them: the standing page, whose compass line is the reading
+   * itself, and an open venue, whose map wears the bearing as an arrow. They are
+   * expensive to leave on — sixty events a second — so everywhere else they stop.
+   */
+  function sensorsWanted(): boolean {
+    if (!appActive || user == null) return false;
+    return display.current() === "here" || openedVenue() !== null;
   }
 
   // What is in front of the reader is what is worth paying for. Two reads work
@@ -270,7 +296,7 @@ async function main() {
   // store decides whether any of them is actually a new question (see feeds.ts)
   // and does nothing when it is not.
   function ensureVisible(): void {
-    setSensorsActive(appActive && user != null && display.current() === "here");
+    setSensorsActive(sensorsWanted());
     // First, because this one is about a screen going away as much as about one
     // arriving, and a signed-out app has a clock to stop rather than nothing to do.
     watchOpen();
@@ -288,6 +314,15 @@ async function main() {
     // is files nothing, so there is nothing to be careful of in asking.
     const entry = display.opened();
     if (entry?.group === PEOPLE) feeds.meet(entry.key);
+    // And the way to an open door. The same moment as the profile and for the
+    // same reason — the reader arriving on the screen is what makes the read
+    // worth its request — and no clock in front of it either: a route files
+    // nothing anywhere, and the store re-asks only once the reader has walked a
+    // street's width from where they last asked (see feeds.navigate). The map is
+    // up from the first paint regardless, dashing a straight line until this
+    // answer replaces it.
+    const venue = openedVenue();
+    if (venue && coords) feeds.navigate(venue, coords);
   }
 
   /**
@@ -1294,10 +1329,15 @@ async function main() {
     }
   });
 
-  // The bearing, and only while it is on screen. These events arrive sixty times
-  // a second, and the line they feed is one line of the standing page.
+  // The bearing, and only while it is on screen — which is two screens now: the
+  // line it is on the standing page, and the arrow it turns on the map beside an
+  // open venue. These events arrive sixty times a second; the throttle keeps the
+  // repaint to twice a second, and on the venue screen the map itself quantises
+  // the bearing to fifteen degrees, so most of those repaints move no bytes at
+  // all (see navmap.ts).
   subscribeSensors(() => {
-    if (display.current() !== "here" || recording) return;
+    if (recording) return;
+    if (display.current() !== "here" && openedVenue() === null) return;
     const now = Date.now();
     if (now - sensorPaintAt < SENSOR_PAINT_MS) return;
     sensorPaintAt = now;
@@ -1358,7 +1398,7 @@ async function main() {
   }
 
   function watchVisibility(): void {
-    setSensorsActive(appActive && user != null && display.current() === "here");
+    setSensorsActive(sensorsWanted());
     window.clearTimeout(minuteTimer);
     window.clearTimeout(beatTimer);
     minuteTimer = 0;

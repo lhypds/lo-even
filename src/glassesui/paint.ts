@@ -27,17 +27,20 @@
 
 import {
   CreateStartUpPageContainer,
+  ImageContainerProperty,
+  ImageRawDataUpdate,
+  ImageRawDataUpdateResult,
   RebuildPageContainer,
   TextContainerProperty,
   TextContainerUpgrade,
   type EvenAppBridge,
 } from "@evenrealities/even_hub_sdk";
-import { signature, type Panel } from "./layout";
+import { signature, type ImagePanel, type Panel, type Screenful } from "./layout";
 import { CONTAINER, FRAME_BORDER_COLOR, FRAME_BORDER_RADIUS, FRAME_BORDER_WIDTH } from "./theme";
 
 export interface Painter {
   /** Put this on the glasses. Returns at once; the writing is queued. */
-  paint(panels: Panel[]): void;
+  paint(screenful: Screenful): void;
   shutdown(): Promise<void>;
 }
 
@@ -82,6 +85,22 @@ const UPGRADE_LIMIT = 3;
 // that the two can never disagree — the firmware matches on both.
 function nameFor(id: number): string {
   return `lo${id}`;
+}
+
+// An image container is geometry and nothing else: the protocol makes it empty
+// and `updateImageRawData` fills it afterwards, which is why `apply` below sends
+// every picture again after any rebuild — the containers it was written into
+// have just been thrown away.
+function toImageProperty(panel: ImagePanel): ImageContainerProperty {
+  return new ImageContainerProperty({
+    xPosition: panel.rect.x,
+    yPosition: panel.rect.y,
+    width: panel.rect.width,
+    height: panel.rect.height,
+    containerID: panel.id,
+    containerName: nameFor(panel.id),
+    zOrderIndex: panel.zOrder,
+  });
 }
 
 function toProperty(panel: Panel): TextContainerProperty {
@@ -141,34 +160,62 @@ export async function createPainter(bridge: EvenAppBridge, boot: Panel[]): Promi
 
   let shape = signature(boot);
   let shown = new Map(boot.map((panel) => [panel.id, panel.text]));
+  // Which picture each image container is showing, by the key the rasteriser
+  // minted for it — the same job `shown` does for text, kept apart because a
+  // rebuild empties images where it re-fills text.
+  const shownImages = new Map<number, string>();
 
-  async function apply(panels: Panel[]): Promise<void> {
-    const next = signature(panels);
+  async function apply({ panels, images }: Screenful): Promise<void> {
+    const next = signature(panels, images);
     const changed = next === shape ? panels.filter((panel) => shown.get(panel.id) !== panel.text) : panels;
 
     if (next !== shape || changed.length > UPGRADE_LIMIT) {
       await bridge.rebuildPageContainer(
         new RebuildPageContainer({
-          containerTotalNum: panels.length,
+          containerTotalNum: panels.length + images.length,
           textObject: panels.map(toProperty),
+          ...(images.length ? { imageObject: images.map(toImageProperty) } : {}),
         }),
       );
       shape = next;
       shown = new Map(panels.map((panel) => [panel.id, panel.text]));
-      return;
+      // The containers the pictures were in have just been remade empty, so
+      // every one of them is owed its bytes again whatever the keys say.
+      shownImages.clear();
+    } else {
+      for (const panel of changed) {
+        await bridge.textContainerUpgrade(
+          new TextContainerUpgrade({
+            containerID: panel.id,
+            containerName: nameFor(panel.id),
+            contentOffset: 0,
+            contentLength: panel.text.length,
+            content: panel.text,
+          }),
+        );
+        shown.set(panel.id, panel.text);
+      }
     }
 
-    for (const panel of changed) {
-      await bridge.textContainerUpgrade(
-        new TextContainerUpgrade({
-          containerID: panel.id,
-          containerName: nameFor(panel.id),
-          contentOffset: 0,
-          contentLength: panel.text.length,
-          content: panel.text,
+    // The pictures, after the containers exist either way. Only the ones whose
+    // key has moved: the bytes are the largest single write this app makes, and
+    // the rasteriser's key is exactly "would these bytes differ" (see navmap.ts).
+    for (const image of images) {
+      if (shownImages.get(image.id) === image.key) continue;
+      const answer = await bridge.updateImageRawData(
+        new ImageRawDataUpdate({
+          containerID: image.id,
+          containerName: nameFor(image.id),
+          imageData: image.bytes,
         }),
       );
-      shown.set(panel.id, panel.text);
+      // A refused picture stays unrecorded, so the next paint offers it again —
+      // the same shrug a dropped frame gets below, for the same reason.
+      if (ImageRawDataUpdateResult.isSuccess(ImageRawDataUpdateResult.normalize(answer))) {
+        shownImages.set(image.id, image.key);
+      } else {
+        console.error("the glasses would not take the map", answer);
+      }
     }
   }
 
@@ -177,11 +224,11 @@ export async function createPainter(bridge: EvenAppBridge, boot: Panel[]): Promi
   // queue of every one of them would keep drawing pages the reader has already
   // scrolled past; holding just the latest means the display lands on where they
   // actually stopped.
-  let pending: Panel[] | null = null;
+  let pending: Screenful | null = null;
   let writing = false;
 
-  function paint(panels: Panel[]): void {
-    pending = panels;
+  function paint(screenful: Screenful): void {
+    pending = screenful;
     if (writing) return;
     writing = true;
     void (async () => {

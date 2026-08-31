@@ -130,6 +130,17 @@ export interface LoTrendsResult {
 /* ----------------------------------------------------------------- venues -- */
 
 /**
+ * A bare position on the ground — the two numbers and nothing else, where
+ * `Coordinates` above is a reading off an instrument and carries how good a one
+ * it was. A route is a line of these (see services/route.ts), and the little map
+ * beside an open venue is drawn out of them (see glassesui/navmap.ts).
+ */
+export interface NavPoint {
+  latitude: number;
+  longitude: number;
+}
+
+/**
  * Somewhere to eat, or somewhere for a coffee: one row of `GET /api/food` or
  * `GET /api/cafe`, which are the same answer asked about two sets of amenities
  * (see lookupVenues in lo/server/geo.js).

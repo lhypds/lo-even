@@ -13,28 +13,49 @@ import { fail } from "./host";
 
 const calls: string[] = [];
 
-// What the firmware will take in one page: `textObject` is capped at eight items
-// (see the SDK's RebuildPageContainer). Every page here now spends all eight, so
-// the ninth container nobody meant to add is a real possibility and would be
+// What the firmware will take in one page: `textObject` is capped at eight
+// items, `imageObject` at four, and the page at twelve containers in all (see
+// the SDK's RebuildPageContainer). Every page here now spends all eight texts,
+// so the ninth container nobody meant to add is a real possibility and would be
 // dropped by the protocol rather than refused by anything in this repo — which is
 // to say it would go missing on glass and nowhere else.
-const CONTAINER_LIMIT = 8;
-let widest = 0;
+const TEXT_LIMIT = 8;
+const IMAGE_LIMIT = 4;
+const TOTAL_LIMIT = 12;
+let widestTexts = 0;
+let widestImages = 0;
+let widestTotal = 0;
+
+interface PageShape {
+  containerTotalNum?: number;
+  textObject?: unknown[];
+  imageObject?: unknown[];
+}
+
+function measure(c: PageShape): void {
+  widestTexts = Math.max(widestTexts, c.textObject?.length ?? 0);
+  widestImages = Math.max(widestImages, c.imageObject?.length ?? 0);
+  widestTotal = Math.max(widestTotal, c.containerTotalNum ?? 0);
+}
 
 const bridge = {
-  createStartUpPageContainer: async (c: { containerTotalNum?: number }) => {
-    widest = Math.max(widest, c.containerTotalNum ?? 0);
+  createStartUpPageContainer: async (c: PageShape) => {
+    measure(c);
     calls.push(`create(${c.containerTotalNum})`);
     return 0;
   },
-  rebuildPageContainer: async (c: { containerTotalNum?: number }) => {
-    widest = Math.max(widest, c.containerTotalNum ?? 0);
+  rebuildPageContainer: async (c: PageShape) => {
+    measure(c);
     calls.push(`rebuild(${c.containerTotalNum})`);
     return true;
   },
   textContainerUpgrade: async (c: { containerID?: number }) => {
     calls.push(`upgrade(${c.containerID})`);
     return true;
+  },
+  updateImageRawData: async (c: { containerID?: number }) => {
+    calls.push(`image(${c.containerID})`);
+    return 0;
   },
   shutDownPageContainer: async () => true,
 } as never;
@@ -81,6 +102,12 @@ function context(over: Partial<PageContext> = {}): PageContext {
     thread: () => ({ status: "idle", data: null }),
     profile: () => ({ status: "idle", data: null }),
     comments: () => ({ status: "idle", data: null }),
+    // Idle for the same reason the four above are, and it is also the state a
+    // venue's screen is met in for the moment before the router and the tiles
+    // answer: the map dashes a straight line over dark ground, so the screen is
+    // whole either way.
+    route: () => ({ status: "idle", data: null }),
+    roads: () => ({ status: "idle", data: null }),
     news: { status: "idle", data: null },
     events: { status: "idle", data: null },
     trends: { status: "idle", data: null },
@@ -839,6 +866,46 @@ check(
   `${answered?.context ?? "(none)"} / ${quiet?.context ?? "(none)"}`,
 );
 
+// --- and the venue in front of the reader ------------------------------------
+// The one entry with a picture behind it: an open venue's reading screen carries
+// the little map, which is an image container beside the six of text and a write
+// of its bytes after the rebuild (see navmap.ts and paint.ts). The bytes go out
+// once — the same inputs draw the same frame, and a repaint that moved nothing
+// must not spend the biggest write this app makes on saying so.
+while (display.back()) await settle();
+display.render(busy());
+await settle();
+while (display.current() !== "nearby") {
+  display.scroll(1);
+  await settle();
+}
+display.enter();
+await settle();
+while ((await opens()) !== "lo/nearby/cafe") await roll(1);
+display.enter();
+await settle();
+calls.length = 0;
+display.enter();
+await settle();
+check(
+  "an open venue is named, and its screen carries the map in both slices",
+  display.opened()?.group === "cafe" &&
+    calls.some((call) => call.startsWith("rebuild")) &&
+    calls.includes("image(9)") &&
+    calls.includes("image(10)"),
+  `${display.opened()?.key ?? "null"}: ${calls.join(" ") || "(nothing written)"}`,
+);
+
+calls.length = 0;
+display.render(busy());
+await settle();
+check(
+  "an unchanged repaint re-sends no map bytes",
+  !calls.includes("image(9)") && !calls.includes("image(10)"),
+  calls.join(" ") || "(nothing written)",
+);
+while (display.back()) await settle();
+
 // And the one check in this file about what must *not* be on a screen. A
 // person's fix to four decimal places is eleven metres of where somebody
 // actually is, and it stood on both of these screens until it was taken off:
@@ -888,11 +955,21 @@ check(
 // --- what the protocol will carry -------------------------------------------
 // Every page above has been through the painter by now, the fullest of them being
 // the standing page with its compass in the heading. None of them may have asked
-// for a ninth container.
+// for a ninth text container, a fifth image, or a thirteenth of anything.
 check(
-  "no screen asks for more containers than the firmware takes",
-  widest > 0 && widest <= CONTAINER_LIMIT,
-  `${widest} of ${CONTAINER_LIMIT}`,
+  "no screen asks for more text containers than the firmware takes",
+  widestTexts > 0 && widestTexts <= TEXT_LIMIT,
+  `${widestTexts} of ${TEXT_LIMIT}`,
+);
+check(
+  "nor more image containers",
+  widestImages <= IMAGE_LIMIT,
+  `${widestImages} of ${IMAGE_LIMIT}`,
+);
+check(
+  "nor more containers in all",
+  widestTotal > 0 && widestTotal <= TOTAL_LIMIT,
+  `${widestTotal} of ${TOTAL_LIMIT}`,
 );
 
 console.log("\ndone");

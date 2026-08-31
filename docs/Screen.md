@@ -200,6 +200,25 @@ From the SDK's own constraints rather than from measurement (see
 and one from the simulator's changelog rather than the SDK: a text container's
 content is capped at **999 bytes**.
 
+An image container is **20–288 wide and 20–144 tall** (the SDK's own ranges), is
+created empty, and is filled by `updateImageRawData` with **raw Gray8 bytes** —
+one byte a pixel, row by row, exactly width × height of them. Measured on
+simulator 0.9.3 by sending rendered squares (the venue map, see `navmap.ts`):
+the call answers `success` and the bytes draw at the container's position with
+0 as unlit and 255 as full ink. The simulator's own error strings say it also
+takes Gray4 at half the length; that path has not been exercised.
+
+A picture taller than 144 goes out as **stacked containers tiling one bitmap**,
+and they tile exactly: the 190 px venue map is two 95-row slices at `y` and
+`y + 95`, and a screenshot across the join shows every diagonal street crossing
+it unbroken — no gap, no repeated row, no inset. (A 1 px error either way would
+kink every diagonal, so the join is its own measurement.)
+
+The host LZ4s the bytes on their way to the glass, so a
+mostly-dark square is a small write — but it is still the biggest single write
+this app makes, which is why the painter compares keys rather than re-sending
+frames (see paint.ts).
+
 Eight text containers is the budget the whole layout is drawn against, and it is
 spent to the last one. Five go on the chrome — the frame with the heading in it,
 whatever the screen says about itself, the badge and clock in one corner, the

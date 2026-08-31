@@ -38,6 +38,7 @@ import { listView, readView } from "../pages/list";
 import { spans } from "../pages/stack";
 import type { PageContext } from "../pages/types";
 import { layout, screens } from "../layout";
+import { navMap } from "../navmap";
 import { localeFor, translator, type Language } from "../../i18n";
 import { formatPlace } from "../format";
 import { clockFace, pathOf } from "../pages/chrome";
@@ -308,12 +309,18 @@ const ctx: PageContext = {
           ],
         }
       : { status: "idle" as const, data: null },
+  // No route and no tiles fetched: the sheet draws the venue screens in the
+  // state they are met in, which is the dashed straight line on dark ground the
+  // map stands on until both answer (see navmap.ts) — and a char grid could not
+  // tell any of it apart anyway.
+  route: () => ({ status: "idle" as const, data: null }),
+  roads: () => ({ status: "idle" as const, data: null }),
   unread: 2,
   heading: { status: "on", heading: 127.4, headingAccuracy: 8, turnRate: 14.2 },
   username: "heyang",
 };
 
-function raster(panels: ReturnType<typeof layout>): string {
+function raster({ panels, images }: ReturnType<typeof layout>): string {
   const grid: string[][] = Array.from({ length: ROWS }, () => Array<string>(COLS).fill(" "));
   const box: boolean[][] = Array.from({ length: ROWS }, () => Array<boolean>(COLS).fill(false));
   // The rows the box round a chosen group covers. Kept apart from the frame's,
@@ -388,6 +395,21 @@ function raster(panels: ReturnType<typeof layout>): string {
         col += cells(ch);
       }
     });
+  }
+
+  // The map's footprint, shaded rather than drawn: a picture has no cells, so
+  // what the sheet can prove is where it stands and that no line of type runs
+  // into it — which is the whole of what a layout proof is for.
+  for (const image of images) {
+    const col0 = Math.max(0, Math.round(image.rect.x / CHAR_WIDTH));
+    const row0 = Math.max(0, Math.round((image.rect.y - 1) / LINE_HEIGHT));
+    const colN = Math.min(COLS - 1, Math.round((image.rect.x + image.rect.width) / CHAR_WIDTH));
+    const rowN = Math.min(ROWS - 1, Math.round((image.rect.y + image.rect.height - 1) / LINE_HEIGHT));
+    for (let r = row0; r <= rowN; r += 1) {
+      for (let c = col0; c < colN; c += 1) {
+        if (grid[r][c] === " ") grid[r][c] = "░";
+      }
+    }
   }
 
   return grid
@@ -544,6 +566,18 @@ for (const page of PAGES) {
     const item = mine.reduce((longest, entry) => (entry.body.length > longest.body.length ? entry : longest));
     if (!item.body) return;
     const read = readView(item);
+    // The map beside a venue's words, exactly as the driver builds it (see
+    // glasses.ts) — no route and no streets, which is the state the screen is
+    // met in.
+    if (item.spot && ctx.coords) {
+      read.map = navMap({
+        user: ctx.coords,
+        heading: ctx.heading.heading,
+        target: item.spot,
+        route: null,
+        roads: null,
+      });
+    }
     const total = screens(read);
     for (let screen = 0; screen < total; screen += 1) {
       const panels = layout(read, screen, { ...chrome, path, index: screen + 1, total });

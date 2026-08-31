@@ -94,9 +94,12 @@ import type {
   LoVenue,
   LoWarningsResult,
   LoWikiPlace,
+  NavPoint,
 } from "../types";
 import type { Feed } from "../glassesui/pages/types";
 import type { LoApi } from "./api";
+import { fetchRoads } from "./roads";
+import { fetchRoute } from "./route";
 
 type Status = Feed<unknown>["status"];
 
@@ -191,6 +194,18 @@ const COMMENTS_KEPT = 10;
 // back on, where they left one and the key below has been dropped.
 const COMMENTS_MS = 60_000;
 
+// And how many routes. The same bound as the profiles, the exchanges and the
+// columns, for the fourth time and the same reason: this store grows with which
+// doors the reader has opened rather than with where they are standing.
+const ROUTES_KEPT = 10;
+
+// A route is re-asked when its origin has moved this many rounding steps —
+// which is to say when the reader has walked about a street's width. There is
+// no stretch of time on it: streets do not move, the destination does not
+// either, and the live dot on the map is drawn from the fix rather than from
+// this answer, so a route asked a hundred metres ago still shows the walk.
+const ROUTE_ORIGIN_DECIMALS = 3;
+
 /** The stretch of time an answer belongs to, which is the rest of every key. */
 function within(every: number): string {
   return String(Math.floor(Date.now() / every));
@@ -280,6 +295,16 @@ export class Feeds {
   // list they will read, and insertion order is what makes the cap above a
   // sensible one to enforce.
   private articleSlots = new Map<string, Slot<LoArticle>>();
+  // One per venue the reader has opened, keyed by the venue's id — the streets
+  // between them and that one door, off a public router rather than off lo (see
+  // services/route.ts). The same shape as the four stores above and bounded for
+  // their common reason.
+  private routeSlots = new Map<string, Slot<NavPoint[]>>();
+  // And the streets around that walk, for the same map to draw the route over —
+  // off public vector tiles rather than off the router, because the two answer
+  // different questions of different upstreams and either can arrive without
+  // the other (see services/roads.ts). Same key, same bound, same reason.
+  private roadSlots = new Map<string, Slot<NavPoint[][]>>();
   private unreadCount = 0;
 
   constructor(api: LoApi, changed: () => void) {
@@ -963,6 +988,47 @@ export class Feeds {
     );
   }
 
+  /**
+   * The streets between the reader and one venue, if they have been asked for.
+   * A pure read, like `article`, `thread`, `profile` and `comments` above and
+   * for their common reason: the driver builds the map on every paint of a
+   * venue's screen, and drawing it must not be the thing that asks a router
+   * anything (see glasses.ts).
+   */
+  route(venueId: string): Feed<NavPoint[]> {
+    const found = this.routeSlots.get(venueId);
+    return found ? view(found) : { status: "idle", data: null };
+  }
+
+  /** And the streets around it — the same pure read for the map's other layer. */
+  roads(venueId: string): Feed<NavPoint[][]> {
+    const found = this.roadSlots.get(venueId);
+    return found ? view(found) : { status: "idle", data: null };
+  }
+
+  /**
+   * The reader has opened one venue, and the map beside its words wants the way
+   * there and the streets around it. The two reads in this app that go past lo —
+   * a public pedestrian router and public vector tiles, both keyless and open to
+   * this origin (see services/route.ts and services/roads.ts) — and both started
+   * here, once per door and street's-width of origin, rather than by the map
+   * being drawn: a paint happens twice a minute and a walk survives both
+   * answers. Two slots rather than one because either can land, or fail,
+   * without the other, and the map draws whatever it has.
+   *
+   * Quietly, because the map is already showing something — a dashed straight
+   * line to the door on dark ground — and honest about it: the dash is the
+   * crow's answer and the dark is no answer, and each layer replaces its own
+   * when it lands. Where an upstream cannot answer at all its layer simply
+   * stays what it was, which is why nothing here reports anything.
+   */
+  navigate(venue: LoVenue, from: Coordinates): void {
+    const key = `${venue.id}:${round(from, ROUTE_ORIGIN_DECIMALS)}`;
+    const spot = { latitude: venue.latitude, longitude: venue.longitude };
+    void this.fill(keyed(this.routeSlots, venue.id, ROUTES_KEPT), key, () => fetchRoute(from, spot), true);
+    void this.fill(keyed(this.roadSlots, venue.id, ROUTES_KEPT), key, () => fetchRoads(from, spot), true);
+  }
+
   /** Signed out: nothing here belongs to whoever signs in next. */
   clear(): void {
     this.dashSlot = slot();
@@ -984,6 +1050,8 @@ export class Feeds {
     this.profileSlots.clear();
     this.commentSlots.clear();
     this.articleSlots.clear();
+    this.routeSlots.clear();
+    this.roadSlots.clear();
     this.unreadCount = 0;
     this.changed();
   }

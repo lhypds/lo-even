@@ -45,6 +45,7 @@ import {
   INK,
   ITEMS_PER_SCREEN,
   MUTED,
+  NAV_MAP,
   PROSE,
   READING_LABELS,
   READING_VALUES,
@@ -82,6 +83,35 @@ export interface Panel {
    */
   padding: number;
   zOrder: number;
+}
+
+/**
+ * One image container, which is the other thing a screenful can carry. The
+ * geometry is part of the page and goes out with the rebuild; the bytes go out
+ * separately, because that is how the protocol is shaped — a container is made
+ * empty and `updateImageRawData` fills it (see paint.ts). The key is what says
+ * whether the bytes have changed without anybody comparing twenty thousand of
+ * them (see navmap.ts, which mints it from the picture's own inputs).
+ */
+export interface ImagePanel {
+  id: number;
+  rect: Rect;
+  /** Gray8, one byte a pixel, row by row — exactly rect.width × rect.height. */
+  bytes: Uint8Array;
+  key: string;
+  zOrder: number;
+}
+
+/**
+ * Everything one screenful asks the glasses to hold: the type, and the picture
+ * where there is one. Two lists rather than one with a kind on each entry,
+ * because everything downstream treats them differently anyway — text is
+ * created, compared and updated as text, and an image goes out as geometry plus
+ * a separate write of its bytes.
+ */
+export interface Screenful {
+  panels: Panel[];
+  images: ImagePanel[];
 }
 
 /**
@@ -433,7 +463,7 @@ function notePanels(block: Extract<Block, { kind: "note" }>): Panel[] {
  * a box round it, where the reader is choosing between them. Left off everywhere
  * else, which is every screen but that one.
  */
-export function layout(view: PageView, screen: number, chrome: Chrome, select?: number): Panel[] {
+export function layout(view: PageView, screen: number, chrome: Chrome, select?: number): Screenful {
   const panels = chromePanels(view, chrome);
   const { block } = view;
   panels.push(
@@ -448,6 +478,53 @@ export function layout(view: PageView, screen: number, chrome: Chrome, select?: 
   if (select != null && block.kind === "readings") {
     panels.push(...selectPanel(shownRows(block, screen), select));
   }
+  // The map, where the driver drew one — beside the prose of a venue's reading
+  // screen, in the half of it that was always air (see NAV_MAP in theme.ts). On
+  // the first screenful only: a venue's body never runs to a second, and a map
+  // that paged along with longer prose would sit on top of it.
+  const images: ImagePanel[] = view.map && screen === 0 ? mapPanels(view.map.bytes) : [];
+  return { panels, images };
+}
+
+// The tallest an image container may be (the SDK's 20–144), which the map now
+// overruns: it is one bitmap the body's height, cut here into stacked slices of
+// a container each — even slices, so the write a changed slice costs is the
+// same whichever half it lands in.
+const IMAGE_ROWS_LIMIT = 144;
+
+/**
+ * What the bytes of one slice are, cheaply — FNV-1a over the slice. It is the
+ * slice's whole key on purpose: two frames that differ only where the reader's
+ * arrow turned differ in one slice's bytes, and the other half's write — the
+ * larger half of the biggest write this app makes — is saved by its key not
+ * moving. The picture's own key already decided whether to draw at all (see
+ * navmap.ts); this decides which halves of the drawing to send.
+ */
+function fingerprint(bytes: Uint8Array): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i += 1) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
+}
+
+function mapPanels(bytes: Uint8Array): ImagePanel[] {
+  const { width, height } = NAV_MAP;
+  const slices = Math.ceil(height / IMAGE_ROWS_LIMIT);
+  const rows = Math.ceil(height / slices);
+  const panels: ImagePanel[] = [];
+  for (let slice = 0, row = 0; row < height; slice += 1, row += rows) {
+    const tall = Math.min(rows, height - row);
+    const cut = bytes.subarray(row * width, (row + tall) * width);
+    panels.push({
+      id: CONTAINER.map[slice],
+      rect: { x: NAV_MAP.x, y: NAV_MAP.y + row, width, height: tall },
+      bytes: cut,
+      key: fingerprint(cut),
+      zOrder: 9 + slice,
+    });
+  }
   return panels;
 }
 
@@ -457,10 +534,11 @@ export function layout(view: PageView, screen: number, chrome: Chrome, select?: 
  * text can be written straight into the containers already on the glasses;
  * different ones mean the page has to be built again (see paint.ts).
  */
-export function signature(panels: Panel[]): string {
+export function signature(panels: Panel[], images: ImagePanel[] = []): string {
   return panels
     .map(({ id, rect, brightness, bordered, padding, zOrder }) =>
       [id, rect.x, rect.y, rect.width, rect.height, brightness, bordered ? 1 : 0, padding, zOrder].join(","),
     )
+    .concat(images.map(({ id, rect, zOrder }) => ["i", id, rect.x, rect.y, rect.width, rect.height, zOrder].join(",")))
     .join("|");
 }

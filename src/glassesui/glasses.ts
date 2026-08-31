@@ -60,6 +60,7 @@ import { spans, type Span } from "./pages/stack";
 import { formatPlace } from "./format";
 import { ROOT, clockFace, pathOf } from "./pages/chrome";
 import { layout, screens, type Chrome, type Panel } from "./layout";
+import { navMap } from "./navmap";
 import { createPainter, type Painter } from "./paint";
 import {
   BODY_LINES,
@@ -393,6 +394,23 @@ export async function createGlassesDisplay(
     }
 
     const read = readView(item);
+    // The map, for the one kind of entry that stands somewhere: a venue carries
+    // its spot and nothing else does (see pages/types.ts). Built here rather
+    // than by the page because it needs three things no page holds together —
+    // the reader's own fix, the handset's compass, and the router's answer,
+    // which arrives on the feed store like everything else and is started by
+    // main.ts when this screen goes up. Until it lands, `data` is null and the
+    // map dashes a straight line; the rasteriser memoises against its own
+    // inputs, so a repaint that moved nothing draws nothing (see navmap.ts).
+    if (item.spot && context.coords) {
+      read.map = navMap({
+        user: context.coords,
+        heading: context.heading.heading,
+        target: item.spot,
+        route: context.route(item.key).data,
+        roads: context.roads(item.key).data,
+      });
+    }
     const total = screens(read);
     // A post that was four screenfuls when the reader stepped into it and is two
     // now — because the language changed under it, or because this is a repaint
@@ -458,7 +476,7 @@ export async function createGlassesDisplay(
     const steps = sequence(latest);
     if (steps.length === 0) {
       shownPath = ROOT;
-      painter.paint(bootPanels(latest.t("glasses.empty")));
+      painter.paint({ panels: bootPanels(latest.t("glasses.empty")), images: [] });
       return;
     }
 

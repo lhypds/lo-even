@@ -406,6 +406,27 @@ export function itemRect(slot: number): Rect {
  */
 export const PROSE: Rect = { x: EDGE, y: BODY_Y, width: BODY_WIDTH, height: BODY_HEIGHT };
 
+// The square map beside an open venue — the one picture in the app, drawn into
+// image containers rather than out of type (see navmap.ts). It stands where
+// the right-hand half of a venue's reading screen was always empty: the body
+// there is two short lines, a distance and a pair of coordinates, and the rest
+// of the prose rect was air.
+//
+// The body's own height, top and bottom on the body's own lines — the same
+// vertical the text on its left runs between, so the picture and the column
+// read as two answers sharing one page rather than a page with a sticker on it.
+// That is taller than the 144 the firmware allows one image container (20–144,
+// where text has no such ceiling), so the square goes to the glasses as two
+// stacked slices of one bitmap, cut where the containers are made (see
+// layout.ts). Hung two pixels off the inside of the border, so the picture's
+// own edge and the frame do not read as one thick line.
+export const NAV_MAP: Rect = {
+  x: INNER_RIGHT - BODY_HEIGHT - 2,
+  y: BODY_Y,
+  width: BODY_HEIGHT,
+  height: BODY_HEIGHT,
+};
+
 // The box round whatever the wheel is pointing at: a group on a summary page, an
 // entry on a list. The one piece of ink in this app that is not the frame and not
 // type.
@@ -581,4 +602,13 @@ export const CONTAINER = {
   // and neither of those has anything to point at. Give a page with groups a
   // `meta` and this is the line that has to change.
   select: 2,
+  /**
+   * The map beside an open venue — the app's image containers, so they share no
+   * id with any of the text above: the eight-text budget is spent on type, and
+   * the firmware counts images against a ceiling of their own (four, of which
+   * these are two). Two, because the square is taller than one container may
+   * be: it is one bitmap cut into stacked slices, one id per slice, in order
+   * from the top (see NAV_MAP above and layout.ts).
+   */
+  map: [9, 10],
 } as const;
