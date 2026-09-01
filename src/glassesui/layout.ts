@@ -47,6 +47,7 @@ import {
   MUTED,
   NAV_MAP,
   PROSE,
+  PROSE_MAP_WIDTH,
   READING_LABELS,
   READING_VALUES,
   footLineRect,
@@ -142,10 +143,21 @@ export interface Screenful {
  * every paragraph would spend a fifth of the screen saying nothing; a paragraph
  * starting at the margin after a short line is break enough at this size.
  */
-function proseLines(text: string): string[] {
+function proseLines(text: string, width: number): string[] {
   return text
     .split(/\n+/)
-    .flatMap((paragraph) => wrap(paragraph, BODY_WIDTH));
+    .flatMap((paragraph) => wrap(paragraph, width));
+}
+
+/**
+ * What a view's prose is wrapped against: the full body, or — where the map
+ * stands beside it — only what is left to the picture's left, so a line long
+ * enough to reach it breaks into the column instead of running under it. One
+ * width for the whole view rather than per screenful, because the count of
+ * screens and the slicing into them are the same arithmetic and have to agree.
+ */
+function proseWidth(view: PageView): number {
+  return view.map ? PROSE_MAP_WIDTH : BODY_WIDTH;
 }
 
 export function screens(view: PageView): number {
@@ -155,7 +167,7 @@ export function screens(view: PageView): number {
     case "items":
       return Math.max(1, view.block.items.length);
     case "prose":
-      return Math.max(1, Math.ceil(proseLines(view.block.text).length / BODY_LINES));
+      return Math.max(1, Math.ceil(proseLines(view.block.text, proseWidth(view)).length / BODY_LINES));
     default:
       return Math.max(1, Math.ceil(view.block.rows.length / BODY_LINES));
   }
@@ -437,8 +449,8 @@ function itemPanels(items: Item[], focus: number): Panel[] {
  * as one: a note is the screen apologising for having nothing, and this is the
  * one screen in the app that has exactly what the reader asked for.
  */
-function prosePanels(block: Extract<Block, { kind: "prose" }>, screen: number): Panel[] {
-  const lines = proseLines(block.text).slice(screen * BODY_LINES, screen * BODY_LINES + BODY_LINES);
+function prosePanels(block: Extract<Block, { kind: "prose" }>, screen: number, width: number): Panel[] {
+  const lines = proseLines(block.text, width).slice(screen * BODY_LINES, screen * BODY_LINES + BODY_LINES);
   if (lines.length === 0) return [];
   return [panel(CONTAINER.prose, PROSE, lines.join("\n"), INK, 5)];
 }
@@ -472,7 +484,7 @@ export function layout(view: PageView, screen: number, chrome: Chrome, select?: 
       : block.kind === "items"
         ? itemPanels(block.items, screen)
         : block.kind === "prose"
-          ? prosePanels(block, screen)
+          ? prosePanels(block, screen, proseWidth(view))
           : readingPanels(block, screen)),
   );
   if (select != null && block.kind === "readings") {

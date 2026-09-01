@@ -418,14 +418,23 @@ export const PROSE: Rect = { x: EDGE, y: BODY_Y, width: BODY_WIDTH, height: BODY
 // That is taller than the 144 the firmware allows one image container (20–144,
 // where text has no such ceiling), so the square goes to the glasses as two
 // stacked slices of one bitmap, cut where the containers are made (see
-// layout.ts). Hung two pixels off the inside of the border, so the picture's
-// own edge and the frame do not read as one thick line.
+// layout.ts). Hung on the same ten-pixel gutter the type keeps at the left of
+// the screen, so the picture's right margin and the column's left margin are
+// one number — and the picture's own edge never sits close enough to the frame
+// to read as one thick line.
 export const NAV_MAP: Rect = {
-  x: INNER_RIGHT - BODY_HEIGHT - 2,
+  x: SCREEN_WIDTH - EDGE - BODY_HEIGHT,
   y: BODY_Y,
   width: BODY_HEIGHT,
   height: BODY_HEIGHT,
 };
+
+// How wide a line of the body is where the map stands beside it: the same
+// gutter to a character of air short of the picture. The words on a venue's
+// screen are short — a distance, then a pair of coordinates — but short is a
+// fact about today's data, and a name or a cuisine written long would
+// otherwise wrap at the full body and run under the picture (see layout.ts).
+export const PROSE_MAP_WIDTH = NAV_MAP.x - CHAR_WIDTH - EDGE;
 
 // The box round whatever the wheel is pointing at: a group on a summary page, an
 // entry on a list. The one piece of ink in this app that is not the frame and not
