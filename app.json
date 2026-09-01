@@ -28,5 +28,5 @@
       "desc": "Press and hold on the glasses to record a spoken post."
     }
   ],
-  "supported_languages": ["en", "ja", "zh"]
+  "supported_languages": ["en", "ja", "zh", "fr", "es", "de"]
 }
