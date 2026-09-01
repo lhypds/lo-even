@@ -1,4 +1,5 @@
-# What the screen actually does
+What the screen actually does
+=============================
 
 Every vertical number in [theme.ts](../src/glassesui/theme.ts) and every width in
 [metrics.ts](../src/glassesui/metrics.ts) is derived from the measurements below.
@@ -17,7 +18,8 @@ the pager are positioned with them).
 Measured on simulator **0.9.3** unless noted. The panel is **576 × 288**.
 
 
-## Method
+Method
+------
 
 Launch the simulator with its automation server and drive it over HTTP:
 
@@ -64,7 +66,8 @@ probe rotates a set every three seconds and the capture polls `/api/console` for
 which set is up.
 
 
-## The line
+The line
+--------
 
 | What | Value |
 | --- | --- |
@@ -82,7 +85,8 @@ box down, and the room left over is all at the bottom. Anything overlaid on a li
 of text has to be positioned on that line, not centred in the box that holds it.
 
 
-## Boxes, padding and the scroll bar
+Boxes, padding and the scroll bar
+---------------------------------
 
 `paddingLength` is charged on **all four sides**, top and bottom included. This is
 the one that had the heading and the footer wearing scroll bars: a 34 px band with
@@ -121,7 +125,8 @@ and `paddingLength: 0` put its text 9 px in — the corner radius, not the borde
 not rely on zero padding to put text at the edge of a rounded box.
 
 
-## The face
+The face
+--------
 
 The face is **not fixed-width**, which the layout assumed for a long time and paid
 for in two ways: columns clipped a line earlier than they had to, and anything
@@ -185,7 +190,8 @@ clock beside it sixteen pixels adrift of the corner. Anything new and
 non-alphabetic goes through the probe before it goes on the screen.
 
 
-## Container limits
+Container limits
+----------------
 
 From the SDK's own constraints rather than from measurement (see
 `@evenrealities/even_hub_sdk`):
@@ -270,7 +276,8 @@ in height, and takes the pair to four above and three below, which is as even as
 pixel grid gets.
 
 
-## Simulator versions
+Simulator versions
+------------------
 
 The simulator has to be new enough for the SDK the app uses (`0.0.14`):
 

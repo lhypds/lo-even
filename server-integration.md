@@ -1,4 +1,5 @@
-# lo.gcc3.com integration
+lo.gcc3.com integration
+=======================
 
 The Even package runs from an Even App WebView origin, so it cannot be sent the
 website's `lo_session` cookie — `SameSite=Lax` keeps that cookie off cross-site
@@ -21,7 +22,8 @@ The companion server (`../lo`) supports this with two things:
    a wildcard origin makes a credentialed response unreadable anyway. Adding
    `Access-Control-Allow-Credentials: true` would undo both.
 
-## The link key signs both frames in
+The link key signs both frames in
+---------------------------------
 
 The phone view is `lo.gcc3.com` in an iframe, and an iframe cannot be handed a
 token by its parent — there is no API surface between the two, and the site is on
@@ -72,7 +74,8 @@ The cost is worth stating: a token in `localStorage` is readable by any script
 injected into the page, where an `httpOnly` cookie was not. Sessions last 30 days
 (`sessionAgeMs`), so that is how long a stolen one is good for.
 
-## The key is withdrawn a minute later
+The key is withdrawn a minute later
+-----------------------------------
 
 A link key does not expire and carries full account authority, so it is not left
 lying in a frame's URL once it has been spent. Sixty seconds after each sign-in —
@@ -85,7 +88,8 @@ Withdrawing a key signs nobody out. `setLinkKey(user.id, null)` clears the key
 alone; both sessions it opened outlive it, and the next mint puts a fresh one in
 its place.
 
-## Coming back without the password
+Coming back without the password
+--------------------------------
 
 The password is asked for once. `LoApi.setToken` writes the token to
 `localStorage` under `token`, and a launch that finds one there makes a single
@@ -119,7 +123,8 @@ The trade is the one `../lo` already makes for its own copy: a token in
 `localStorage` is readable by any script injected into the page, where nothing
 stored at all was not, and sessions last 30 days (`sessionAgeMs`).
 
-## Signing out happens in the frame
+Signing out happens in the frame
+--------------------------------
 
 The sign-out button belongs to lo's own account sheet, inside the WebView. The
 two frames hold two separate sessions against the same account — two origins, two
@@ -148,7 +153,8 @@ screens here. `setToken("")` finishes it by taking the token out of storage, so
 the next launch asks rather than letting itself back into the account the reader
 has just left.
 
-## The fix crosses the frame too
+The fix crosses the frame too
+-----------------------------
 
 Both halves of this app were reading the same GPS. The site inside the WebView
 reads the phone's position every thirty seconds to keep its own dashboard current
@@ -185,7 +191,8 @@ is noticed inside a single turn of this app's own beat. The beat itself does not
 move: it still runs on the minute and still asks for whatever it has not been
 given.
 
-## And the answers hanging off the fix
+And the answers hanging off the fix
+-----------------------------------
 
 The same duplication runs one layer up. The site and this package are two clients
 of one server on one phone, and they ask it nearly the same questions: the place,
@@ -226,7 +233,8 @@ at all, or what lo shows to any signed-in reader who walks down that street. If 
 ever gains a `frame-ancestors` policy naming the Even Hub WebView, this is the
 paragraph that gets to relax.
 
-## Endpoints used
+Endpoints used
+--------------
 
 This is what this side asks for when it has not been handed the answer. Every row
 the site in the frame also fetches is skipped where its answer arrived first — see
@@ -528,7 +536,8 @@ it files where we are and answers with who else is about and how much is waiting
 be read, so presence and the unread count cost the minute loop nothing beyond what
 it was already spending.
 
-## Caveat
+Caveat
+------
 
 Sessions live in an in-memory `Map`, so restarting the server signs everyone out.
 A stored token survives that and is worth nothing when it does: `POST
