@@ -3,6 +3,7 @@ import {
   AudioInputSource,
   EventSourceType,
   OsEventTypeList,
+  appLocationFromJson,
   waitForEvenAppBridge,
   type AppLocation,
 } from "@evenrealities/even_hub_sdk";
@@ -1415,12 +1416,24 @@ async function main() {
     // fresh fix this arrangement exists for — and a straggler after a stop has
     // landed is dropped.
     if (!navOn && !navBusy) return;
+    // And a push is whatever the host serialized, taken at its word by the SDK:
+    // unlike `getAppLocation`, which answers null for a fix the host does not
+    // have, nothing stands between this event and here. So the SDK's own
+    // normaliser stands here instead — it reads numbers out of strings and
+    // answers null for a payload with no coordinates on the planet in it — and
+    // the one cold answer it lets through, the (0,0) of a receiver that has
+    // nothing yet, is dropped alongside. Adopting one of these moved the map's
+    // origin to null island: the picture collapsed to a dot and the route was
+    // re-asked for a walk across the ocean, which is how an open café lost the
+    // way to its own door. A bad push simply keeps the fix we already had.
+    const fix = appLocationFromJson(location);
+    if (!fix || (fix.latitude === 0 && fix.longitude === 0)) return;
     coords = {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      accuracy: location.accuracy,
-      altitude: location.altitude,
-      speed: location.speed,
+      latitude: fix.latitude,
+      longitude: fix.longitude,
+      accuracy: fix.accuracy,
+      altitude: fix.altitude,
+      speed: fix.speed,
     };
     fixAt = Date.now();
     if (recording || transcribing || draft) return;

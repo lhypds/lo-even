@@ -110,10 +110,12 @@ interface Slot<T> {
   key: string;
   /** Which request is the live one, so a slow answer cannot overwrite a fast newer one. */
   ticket: number;
+  /** When the last try at this key failed, so the next try is not on the next paint. */
+  failedAt: number;
 }
 
 function slot<T>(): Slot<T> {
-  return { status: "idle", data: null, key: "", ticket: 0 };
+  return { status: "idle", data: null, key: "", ticket: 0, failedAt: 0 };
 }
 
 function view<T>(from: Slot<T>): Feed<T> {
@@ -160,6 +162,18 @@ const INBOX_MS = 60_000;
 const WARNINGS_MS = 5 * 60_000;
 const DASHBOARD_MS = 10 * 60_000;
 
+// And how long a *failed* read stands before the same question may be asked
+// again. It has to stand for some stretch, because a failure repaints: `fill`
+// says so through `changed`, the paint calls `ensureVisible` (see main.ts),
+// and the reads started there — the route and its streets above all — would be
+// started again on the spot. A router that answered an error inside a second
+// was this app in a loop, hammering a public instance for as long as the
+// reader stood in front of one door. Ten seconds is the pause the host's own
+// refusals already taught it (see NAV_RETRY_MS in main.ts): long enough to be
+// civil to an upstream having a moment, short enough that a hiccup heals
+// mid-walk.
+const FAILED_RETRY_MS = 10_000;
+
 // How many stories are kept at once. Not a stretch of time like the rest of
 // this: a published story is the same story tomorrow, so what bounds this is the
 // reader's afternoon rather than the answer going stale. Twenty is the length of
@@ -199,16 +213,31 @@ const COMMENTS_MS = 60_000;
 // doors the reader has opened rather than with where they are standing.
 const ROUTES_KEPT = 10;
 
-// A route is re-asked when its origin has moved this many rounding steps —
-// which is to say when the reader has walked about a street's width. There is
-// no stretch of time on it: streets do not move, the destination does not
-// either, and the live dot on the map is drawn from the fix rather than from
-// this answer, so a route asked a hundred metres ago still shows the walk.
-const ROUTE_ORIGIN_DECIMALS = 3;
+// A route is re-asked when its origin is this far from the one it was asked
+// from — about a street's width of walking. Distance from the asked origin
+// rather than a rounded grid, for the reason the venue anchor is (see
+// `venueAnchor`): a grid flips after a metre beside its boundary, and a
+// jittering fix on one re-asked the router on every push. There is no stretch
+// of time on it: streets do not move, the destination does not either, and
+// the live dot on the map is drawn from the fix rather than from this answer,
+// so a route asked a hundred metres ago still shows the walk.
+const ROUTE_MOVED_M = 100;
 
 /** The stretch of time an answer belongs to, which is the rest of every key. */
 function within(every: number): string {
   return String(Math.floor(Date.now() / every));
+}
+
+/**
+ * The origin a route slot's standing answer was asked from, read back out of
+ * its key — `navigate` writes it there at full precision for exactly this
+ * read. Null for a slot that has not been asked anything yet.
+ */
+function routeOrigin(key: string, venueId: string): NavPoint | null {
+  if (!key.startsWith(`${venueId}:`)) return null;
+  const [latitude, longitude] = key.slice(venueId.length + 1).split(",").map(Number);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
 }
 
 /**
@@ -608,6 +637,9 @@ export class Feeds {
     quiet = false,
   ): Promise<void> {
     if (target.key === key && (target.status === "loading" || target.status === "ready")) return;
+    if (target.key === key && target.status === "failed" && Date.now() - target.failedAt < FAILED_RETRY_MS) {
+      return;
+    }
     const ticket = ++target.ticket;
     target.key = key;
     if (!quiet || target.status === "idle") target.status = "loading";
@@ -620,6 +652,7 @@ export class Feeds {
     } catch (error) {
       if (ticket !== target.ticket) return;
       target.status = "failed";
+      target.failedAt = Date.now();
       console.error("lo could not answer", error);
     }
     this.changed();
@@ -1023,10 +1056,21 @@ export class Feeds {
    * stays what it was, which is why nothing here reports anything.
    */
   navigate(venue: LoVenue, from: Coordinates): void {
-    const key = `${venue.id}:${round(from, ROUTE_ORIGIN_DECIMALS)}`;
+    const routeSlot = keyed(this.routeSlots, venue.id, ROUTES_KEPT);
+    const roadSlot = keyed(this.roadSlots, venue.id, ROUTES_KEPT);
+    // The origin the standing answer was asked from, kept while the reader is
+    // within a street's width of it — so the key holds still under a jittering
+    // fix and `fill` finds the question already answered. The route slot's key
+    // speaks for both slots: they are only ever filled together, under one key.
+    const held = routeOrigin(routeSlot.key, venue.id);
+    const origin =
+      held && distanceMeters(held, from) <= ROUTE_MOVED_M
+        ? held
+        : { latitude: from.latitude, longitude: from.longitude };
+    const key = `${venue.id}:${origin.latitude},${origin.longitude}`;
     const spot = { latitude: venue.latitude, longitude: venue.longitude };
-    void this.fill(keyed(this.routeSlots, venue.id, ROUTES_KEPT), key, () => fetchRoute(from, spot), true);
-    void this.fill(keyed(this.roadSlots, venue.id, ROUTES_KEPT), key, () => fetchRoads(from, spot), true);
+    void this.fill(routeSlot, key, () => fetchRoute(origin, spot), true);
+    void this.fill(roadSlot, key, () => fetchRoads(origin, spot), true);
   }
 
   /** Signed out: nothing here belongs to whoever signs in next. */
