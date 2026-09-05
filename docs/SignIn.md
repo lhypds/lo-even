@@ -5,9 +5,13 @@ Signing in
 The password is asked for once, on the first launch. The session that comes back
 is written down, and every launch after it takes that session up again without
 asking anybody anything — both halves of the app, the glasses on the token itself
-and the phone view on a fresh link key minted from it. A session lo no longer
-knows, because it aged out or the server restarted, brings the password screen
-back and is forgotten in the same breath.
+and the phone view on a fresh link key minted from it. lo renews the session
+every time it is presented, so using the glasses is what keeps it alive: it
+stands until the reader signs out, and the only session that ages out is one
+nobody has presented for a month. A session lo actually refuses brings the
+password screen back and is forgotten in the same breath; a lo that could not be
+reached, or answered with a fault of its own, refuses nothing, and the session is
+kept for the launch that can ask properly.
 
 The asking is lo's own screen, in two goes: the name, and then the password. The
 name is put to lo before the second screen comes up, so a mistyped one is answered

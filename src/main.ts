@@ -586,12 +586,15 @@ async function main() {
     // up: everything after it is this launch getting on with itself, and a fix or
     // a feed that fails is not a session that failed.
     const session = await api.resume().catch((error: unknown) => {
-      // Forgotten only where lo actually answered — a token it no longer knows,
-      // or an account that has none of this. A launch that could not reach lo at
-      // all has learned nothing about the session and keeps it written down for
-      // the next one; this launch asks for the password either way, and a
+      // Forgotten only where lo actually refused the token — a 401, which is the
+      // one answer that is about the session rather than about the request. A
+      // launch that could not reach lo at all has learned nothing about the
+      // session, and neither has one lo answered with its own fault: a 500, or a
+      // proxy's 502 while the server restarts, is a lo that could not say — and a
+      // token thrown away on it is a password asked for over a hiccup that had
+      // nothing to do with the session. Either way this launch asks, and a
       // sign-in overwrites whatever was being kept.
-      api.setToken("", error instanceof ApiError);
+      api.setToken("", error instanceof ApiError && error.status === 401);
       return null;
     });
     if (!session) return false;

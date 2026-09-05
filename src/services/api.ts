@@ -89,8 +89,10 @@ const LANGUAGE_KEY = "lang";
 
 // And the session token, which is a credential and is written down anyway,
 // because the alternative is a password at every launch of a package that is
-// opened from a pair of glasses. It is the same 30-day session lo keeps in its
-// own storage on its own origin (see lo/src/api.js), and out here it buys back
+// opened from a pair of glasses. It is the same session lo keeps in its own
+// storage on its own origin (see lo/src/api.js) — renewed by lo every time it is
+// presented, so it stands until the reader signs out rather than for a fixed
+// month (see currentSession in lo/server/index.js) — and out here it buys back
 // both frames rather than one: `POST /api/me/link` names the account it belongs
 // to and mints the fresh link key the WebView is entered on.
 //
@@ -155,8 +157,8 @@ export interface Session {
  */
 export class LoApi {
   // Whatever the last launch left behind, which is a session to try rather than
-  // one to trust: it may have aged out, been signed out from the phone, or been
-  // dropped by a server restart. `resume` is what asks (see main.ts).
+  // one to trust: it may have been signed out from the phone, or aged out of a
+  // month with nobody using it. `resume` is what asks (see main.ts).
   private token = savedToken();
   // Which language everything the glasses are fed comes back in, and the one the
   // sign-in screen is read in. Not readonly: the switcher in that screen's corner
@@ -181,11 +183,13 @@ export class LoApi {
    * next launch will start from: signing in writes it down, signing out takes it
    * back out again, and there is one copy of it either way.
    *
-   * `write` is false in exactly one place. A launch that could not reach lo at
-   * all has learned nothing about whether the stored session is still good, and
-   * forgetting it over a dead tunnel would cost a password on the next launch
-   * for a fault that had nothing to do with the session — on a launch where the
-   * sign-in screen could not have signed anybody in either (see main.ts).
+   * `write` is false in exactly one place. A launch lo did not actually refuse
+   * the token on — one that could not reach lo at all, or that lo answered with
+   * a fault of its own — has learned nothing about whether the stored session
+   * is still good, and forgetting it over a dead tunnel or a restarting server
+   * would cost a password on the next launch for a fault that had nothing to do
+   * with the session — on a launch where the sign-in screen could not have
+   * signed anybody in either (see main.ts).
    */
   setToken(token: string, write = true) {
     this.token = token;

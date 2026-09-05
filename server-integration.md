@@ -71,8 +71,10 @@ a header — by fetching the bytes with the header and handing the tag an object
 URL. The server keeps `/api/images` behind the session; no endpoint was opened up.
 
 The cost is worth stating: a token in `localStorage` is readable by any script
-injected into the page, where an `httpOnly` cookie was not. Sessions last 30 days
-(`sessionAgeMs`), so that is how long a stolen one is good for.
+injected into the page, where an `httpOnly` cookie was not. A session is renewed
+every time it is presented and lasts 30 days unused (`sessionAgeMs`), so a stolen
+one is good for as long as it keeps being spent — the same standing the token it
+was stolen from has — and one left in a drawer ages out in a month.
 
 The key is withdrawn a minute later
 -----------------------------------
@@ -114,14 +116,17 @@ the frame, and the sixty-second withdrawal goes back on the clock exactly as it
 does after a password.
 
 Every failure ends at the sign-in screen — there is no half of this worth keeping.
-Where lo actually answered (a token it no longer knows, a session aged out, a
-server restarted) the stored token is erased with it; where the request never
-arrived at all, it is left written down, because a launch that could not reach lo
-has learned nothing about the session and could not have signed anybody in either.
+Where lo actually refused the token (a 401: a session it no longer knows, or an
+account that is gone) the stored token is erased with it; anywhere else — the
+request never arrived, or lo answered with a fault of its own, a 500 or a proxy's
+502 while the server restarts — it is left written down, because that launch has
+learned nothing about the session and could not have signed anybody in either.
 
 The trade is the one `../lo` already makes for its own copy: a token in
 `localStorage` is readable by any script injected into the page, where nothing
-stored at all was not, and sessions last 30 days (`sessionAgeMs`).
+stored at all was not. The session it names is renewed every time it is presented
+(see `currentSession` in `lo/server/index.js`), so a reader who keeps using the
+glasses is never asked again, and only a month of disuse ages it out.
 
 Signing out happens in the frame
 --------------------------------
