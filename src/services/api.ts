@@ -99,7 +99,24 @@ const LANGUAGE_KEY = "lang";
 // The cost is the one lo already states for its own copy: a token in
 // localStorage is readable by any script injected into this page, where nothing
 // stored at all was not, and it stays good for as long as the session does.
+//
+// Written down twice, because the WebView's own localStorage is not a promise
+// the Even App makes: it is the host's to clear between launches, and a token
+// kept only there is a password asked for at the next one. The SDK's
+// `setLocalStorage` is the copy the host keeps for a package, so that is the one
+// a launch reads first (see `restoreToken`); the WebView's copy stays beside it
+// for an ordinary browser, which has no host to ask.
 const TOKEN_KEY = "token";
+// How long a launch waits on the host for that copy before going on without it.
+// It is a local read on the phone and answers at once; this is only here so that
+// a host that never answers cannot leave the launch saying "resuming" forever.
+const STORE_READ_TIMEOUT_MS = 3000;
+
+/** The host's own storage, as the SDK hands it over (see main.ts). */
+export interface DurableStore {
+  get(key: string): Promise<string>;
+  set(key: string, value: string): Promise<unknown>;
+}
 
 function savedLanguage(): Language | null {
   try {
@@ -158,15 +175,46 @@ export interface Session {
 export class LoApi {
   // Whatever the last launch left behind, which is a session to try rather than
   // one to trust: it may have been signed out from the phone, or aged out of a
-  // month with nobody using it. `resume` is what asks (see main.ts).
+  // month with nobody using it. `resume` is what asks (see main.ts). This is the
+  // WebView's copy; inside the Even App the host's is taken up over it before
+  // anybody asks (see `restoreToken`).
   private token = savedToken();
+  private readonly store: DurableStore | null;
   // Which language everything the glasses are fed comes back in, and the one the
   // sign-in screen is read in. Not readonly: the switcher in that screen's corner
   // is the same control lo has in its own.
   language: Language;
 
-  constructor() {
+  constructor(store: DurableStore | null = null) {
+    this.store = store;
     this.language = savedLanguage() ?? detectLanguage();
+  }
+
+  /**
+   * The token the host kept from the last launch, taken up before anything asks
+   * whether this one is signed in.
+   *
+   * A host that did not answer — an ordinary browser, which has no native handler
+   * to call, or one that let the timeout pass — leaves the WebView's copy
+   * standing. A host that answered with nothing, on a launch whose WebView still
+   * has a copy, is a token written by a build that kept it only there: it is
+   * handed up, so the launch after this one still has it.
+   */
+  async restoreToken(): Promise<void> {
+    const store = this.store;
+    if (!store) return;
+    let timer = 0;
+    const kept = await Promise.race([
+      store.get(TOKEN_KEY),
+      new Promise<null>((resolve) => {
+        timer = window.setTimeout(() => resolve(null), STORE_READ_TIMEOUT_MS);
+      }),
+    ])
+      .catch(() => null)
+      .finally(() => window.clearTimeout(timer));
+    if (kept === null) return;
+    if (kept) this.token = kept;
+    else if (this.token) void store.set(TOKEN_KEY, this.token).catch(() => {});
   }
 
   setLanguage(language: Language) {
@@ -198,8 +246,11 @@ export class LoApi {
       if (token) localStorage.setItem(TOKEN_KEY, token);
       else localStorage.removeItem(TOKEN_KEY);
     } catch {
-      // Storage denied: this session lasts as long as this launch does.
+      // Storage denied: the host's copy below is the one left.
     }
+    // And with the host, which is the copy that outlasts the WebView. The bridge
+    // has no remove, so forgetting is writing nothing down.
+    void this.store?.set(TOKEN_KEY, token).catch(() => {});
   }
 
   get signedIn(): boolean {

@@ -93,9 +93,14 @@ its place.
 Coming back without the password
 --------------------------------
 
-The password is asked for once. `LoApi.setToken` writes the token to
-`localStorage` under `token`, and a launch that finds one there makes a single
-request before it asks the reader anything:
+The password is asked for once. `LoApi.setToken` writes the token under `token`
+twice: to the host through the SDK's `setLocalStorage`, and to the WebView's own
+`localStorage`. The host's copy is the one that counts — a WebView's storage is
+the host's to clear between launches, and a token kept only there came back as a
+password asked for on the glasses — so `LoApi.restoreToken` reads it back
+through `getLocalStorage` first, and the WebView's copy is only what an ordinary
+browser has. A launch that finds one makes a single request before it asks the
+reader anything:
 
 ```
 POST /api/me/link   Authorization: Bearer <stored token>   →  { user, key }

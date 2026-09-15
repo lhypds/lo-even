@@ -150,7 +150,12 @@ function browserLocation(): Promise<Coordinates | null> {
 
 async function main() {
   const bridge = await waitForEvenAppBridge();
-  const api = new LoApi();
+  // The host's storage for the session token, which has to outlast the WebView
+  // it was written in (see api.ts).
+  const api = new LoApi({
+    get: (key) => bridge.getLocalStorage(key),
+    set: (key, value) => bridge.setLocalStorage(key, value),
+  });
   let t = translator(api.language);
 
   let display: GlassesDisplay;
@@ -580,6 +585,10 @@ async function main() {
    * the glasses reading a feed the phone view could not show.
    */
   async function resume(): Promise<boolean> {
+    // The host is asked for the token before anything is asked of it: until this
+    // has answered, `signedIn` only knows what the WebView kept, and that is the
+    // copy that does not survive a relaunch.
+    await api.restoreToken();
     if (!api.signedIn) return false;
     setStatus(t("glasses.resuming"));
     // The one request, and nothing else, decides whether the password screen goes
