@@ -16,7 +16,13 @@ fi
 
 PACKAGE_ID="$(node -p "require('./$APP_JSON').package_id" 2>/dev/null || echo app)"
 VERSION="$(node -p "require('./$APP_JSON').version" 2>/dev/null || echo 0.0.0)"
+PKG_VERSION="$(node -p "require('./package.json').version" 2>/dev/null || echo 0.0.0)"
 OUTPUT="${PACKAGE_ID}-${VERSION}.ehpk"
+
+if [ "$VERSION" != "$PKG_VERSION" ]; then
+  echo "    app.json version ($VERSION) and package.json version ($PKG_VERSION) differ. Bump with: ./bump.sh" >&2
+  exit 1
+fi
 
 echo "==> Building web app"
 npm run build

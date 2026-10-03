@@ -1,7 +1,7 @@
 {
   "name": "lo-even",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.5",
   "license": "UNLICENSED",
   "type": "module",
   "packageManager": "npm@11.6.2",
@@ -15,6 +15,7 @@
     "glasses:check": "TOOL=drive vite build --config vite.tools.config.mjs --logLevel warn && TOOL=drive node src/glassesui/dev/run.mjs",
     "glasses:preview": "TOOL=preview vite build --config vite.tools.config.mjs --logLevel warn && TOOL=preview node src/glassesui/dev/run.mjs",
     "preview": "vite preview --host 0.0.0.0",
+    "version": "node -e 'const fs = require(\"fs\"); const { version } = require(\"./package.json\"); fs.writeFileSync(\"app.json\", fs.readFileSync(\"app.json\", \"utf8\").replace(/\"version\": \"[^\"]*\"/, `\"version\": \"${version}\"`))' && git add app.json",
     "even:pack": "bash ./package.sh"
   },
   "dependencies": {

@@ -17,6 +17,7 @@ The helper scripts mirror `sc-even`:
 - `simulate.sh` — open the simulator against port 5173.
 - `login.sh` — authenticate the Even Hub CLI.
 - `package.sh` — build and produce the versioned `.ehpk`.
+- `bump.sh` — bump the version in `package.json`, `package-lock.json` and `app.json` together.
 - `serve.sh` — foreground production preview.
 - `start.sh`, `stop.sh`, `restart.sh` — optional PM2 staging preview lifecycle.
 
